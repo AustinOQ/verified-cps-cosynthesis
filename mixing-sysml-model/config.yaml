@@ -1,0 +1,19 @@
+# SysML Model Simulation Configuration
+# Parameter names are derived from the model (use --list-parameters to see all)
+
+# Simulation parameters
+timestep: 0.1
+duration: 20.0
+output_interval: 1.0
+
+# Initial state (optional): idle, filling, or full
+# initial_state: idle
+
+# Model parameters (use CLI names from --list-parameters)
+# These override the defaults from the SysML model
+pump-max-flow-rate: 10.0
+valve-position: 1.0
+feeder-tank-capacity: 1000.0
+feeder-tank-current-level: 1000.0
+filling-tank-capacity: 100.0
+filling-tank-current-level: 0.0
