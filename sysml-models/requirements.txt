@@ -1,0 +1,13 @@
+antlr4-python3-runtime==4.10
+anytree==2.13.0
+click==8.3.1
+graphviz==0.20.3
+numpy==1.26.4
+pandas==2.3.3
+pysysml2 @ git+https://github.com/DAF-Digital-Transformation-Office/PySysML2.git@6dfaf83ebe8abe2c988a178e105e73c7e9c56fdf
+python-dateutil==2.9.0.post0
+pytz==2025.2
+PyYAML==6.0.3
+six==1.17.0
+typer==0.7.0
+tzdata==2025.3

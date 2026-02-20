@@ -1,0 +1,25 @@
+# SysML Model Simulation Configuration
+# Parameter names are derived from the model
+
+# Simulation parameters
+timestep: 0.1
+duration: 60.0
+output_interval: 1.0
+
+# Initial state (optional): OFF or ON
+# initial_state: OFF
+
+# Model parameters (override defaults from SysML model)
+
+# Controller inputs
+controller-S: true
+controller-T-set: 22.0
+
+# Room physical parameters
+room-T-room: 18.0
+room-T-ambient: 10.0
+room-thermal-mass: 50.0
+room-leak-rate: 0.01
+
+# Heater parameters
+heater-max-heat-flow: 30.0
