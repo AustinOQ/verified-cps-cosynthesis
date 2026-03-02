@@ -2,14 +2,85 @@ package TankFillingSystem {
 
     // Standard library imports
     private import ScalarValues::*;
-    private import SI::*;
+
+    // Modbus message hierarchy.
+    item def ModbusMsg;
+    item def ModbusReqMsg :> ModbusMsg;
+    item def ModbusResMsg :> ModbusMsg;
+
+    item def ReadInputRegisterReqMsg :> ModbusReqMsg {
+        attribute registerAddress : Integer;
+    }
+
+    item def WriteCoilReqMsg :> ModbusReqMsg {
+        attribute coilAddress : Integer;
+        attribute coilValue : Boolean;
+    }
+
+    item def ReadInputRegisterRespMsg :> ModbusResMsg {
+        attribute response : Integer;
+    }
+
+    item def ExceptionResMsg :> ModbusResMsg;
+
+    // A Modbus message port.
+    port def ModbusMasterPort {
+        out item req : ModbusReqMsg;
+        in item resp : ModbusResMsg;
+    }
+
+    item def VolumeReading {
+        attribute volumeMl : Integer;
+    }
+
+    // A port to connect the volume sensor to a tank.
+    port def VolumeSensorToTankPort {
+        in item reading : VolumeReading;
+    }
+
+    // Represents a Modbus client.
+    part def VolumeSensor {
+        // Connection to Modbus master.
+        port modbusPort : ~ModbusMasterPort;
+
+        // Connection to tank.
+        port tankConnection : VolumeSensorToTankPort;
+
+        state def VolumeSensorBehavior {
+            entry; then waiting;
+
+            state waiting;
+            transition waiting_to_waiting
+                first waiting
+                accept msg : ReadInputRegisterReqMsg via modbusPort.req
+                if msg.registerAddress == 0 
+                do action {
+                    item rsp : ReadInputRegisterRespMsg;
+                    assign rsp.response := tankConnection.reading.volumeMl;
+                    send rsp via modbusPort.resp;
+                }
+                then waiting;
+
+
+            transition wait_to_waiting_invalid_msg
+            first waiting
+            accept msg : ModbusReqMsg via modbusPort.req
+            do action {
+                item rsp : ExceptionResMsg;
+                send rsp via modbusPort.resp;
+            }
+            then waiting;
+        }
+
+        exhibit state behavior : VolumeSensorBehavior;
+    }
 
     // Item that flows through the system
     item def Fluid;
 
     // Port definition with flow rate
     port def FluidPort {
-        attribute flowRate : Real;
+        attribute flowRateMl : Integer;
     }
 
     // Tank with level tracking
@@ -17,15 +88,20 @@ package TankFillingSystem {
         port outlet : FluidPort;
         port inlet : FluidPort;
 
-        attribute capacity : Real;
-        attribute currentLevel : Real;
-        attribute isFull : Boolean = currentLevel >= capacity;
-        attribute isEmpty : Boolean = currentLevel <= 0;
+        port volumeSensorPort : ~VolumeSensorToTankPort;
 
-        // Dynamics: level changes based on net flow
-        constraint dynamics {
-            der(currentLevel) == inlet.flowRate - outlet.flowRate
+        attribute capacityMl : Integer;
+        attribute currentLevelMl : Integer;
+        attribute isFull : Boolean = currentLevelMl >= capacityMl;
+        attribute isEmpty : Boolean = currentLevelMl <= 0;
+
+        // Timestep update: advance currentLevel by net flow * dt
+        action step {
+            in dt : Real;
+            assign currentLevelMl := currentLevelMl + (inlet.flowRateMl - outlet.flowRateMl) * dt;
         }
+
+        bind volumeSensorPort.reading.volumeMl = currentLevelMl;
     }
 
     // Pump with on/off state and flow rate
@@ -33,12 +109,42 @@ package TankFillingSystem {
         port inlet : FluidPort;
         port outlet : FluidPort;
 
+        port modbusPort : ~ModbusMasterPort;
+
         attribute isRunning : Boolean;
-        attribute maxFlowRate : Real;
+        attribute maxFlowRateMl : Integer;
+
+        state def PumpBehavior {
+            entry; then waiting;
+
+            state waiting;
+            transition waiting_to_waiting
+                first waiting 
+                accept coilWriteRequest : WriteCoilReqMsg via modbusPort.req
+                if coilWriteRequest.coilAddress == 0
+                do action { 
+                    assign isRunning := coilWriteRequest.coilValue; 
+                    item res : ModbusResMsg;
+                    send res via modbusPort.resp;
+                }
+                then waiting;
+
+            transition waiting_to_waiting_err
+                first waiting 
+                accept req : ModbusReqMsg via modbusPort.req
+                do action {
+                    item res : ExceptionResMsg;
+                    send res via modbusPort.resp;
+                }
+                then waiting;
+        }
+
+        exhibit state behavior : PumpBehavior;
 
         // When running, outlet flow equals max rate; otherwise zero
         constraint flowConstraint {
-            outlet.flowRate == (isRunning ? maxFlowRate : 0)
+            (isRunning implies outlet.flowRateMl == maxFlowRateMl) and
+            (not isRunning implies outlet.flowRateMl == 0)
         }
     }
 
@@ -48,34 +154,41 @@ package TankFillingSystem {
         port outlet : FluidPort;
 
         attribute isOpen : Boolean;
-        attribute position : Real;  // 0.0 = closed, 1.0 = fully open
+
+        port modbusPort : ~ModbusMasterPort;
+
+        state def ValveBehavior {
+            entry; then waiting;
+
+            state waiting;
+            transition waiting_to_waiting
+                first waiting 
+                accept coilWriteRequest : WriteCoilReqMsg via modbusPort.req
+                if coilWriteRequest.coilAddress == 0
+                do action { 
+                    assign isOpen := coilWriteRequest.coilValue; 
+                    item res : ModbusResMsg;
+                    send res via modbusPort.resp;
+                }
+                then waiting;
+
+            transition waiting_to_waiting_err
+                first waiting 
+                accept req : ModbusReqMsg via modbusPort.req
+                do action {
+                    item res : ExceptionResMsg;
+                    send res via modbusPort.resp;
+                }
+                then waiting;
+        }
+
+        exhibit state behavior : ValveBehavior;
 
         // Outlet flow is inlet flow scaled by position
         constraint flowConstraint {
-            outlet.flowRate == (isOpen ? inlet.flowRate * position : 0)
+            (isOpen implies outlet.flowRateMl == inlet.flowRateMl) and
+            (not isOpen implies outlet.flowRateMl == 0)
         }
-    }
-
-    // State machine for controller behavior
-    state def ControllerBehavior {
-        state idle;
-        state filling;
-        state full;
-
-        transition idle_to_filling
-            first idle
-            accept startCommand
-            then filling;
-
-        transition filling_to_full
-            first filling
-            if tankIsFull
-            then full;
-
-        transition full_to_idle
-            first full
-            accept resetCommand
-            then idle;
     }
 
     // Controller that monitors and commands both feeder paths
@@ -86,65 +199,121 @@ package TankFillingSystem {
         ref valve1 : Valve;
         ref valve2 : Valve;
         ref tank : Tank;
+        ref volumeSensor1 : VolumeSensor;
+        ref volumeSensor2 : VolumeSensor;
 
-        // Commands
-        attribute startCommand : Boolean;
-        attribute resetCommand : Boolean;
+        // Targets.
+        attribute tank1TransferMl : Integer;
+        attribute tank2TransferMl : Integer;
 
-        // Monitored value
-        attribute tankIsFull : Boolean = tank.isFull;
+        // Originals.
+        attribute tank1OriginalLevelMl : Integer;
+        attribute tank2OriginalLevelMl : Integer;
 
-        // Behavior
-        exhibit state behavior : ControllerBehavior;
+        // Scan frequency.
+        attribute scanCycleFrequencyHz : Integer = 10;
+        attribute lastScanTimeSeconds : Real = 0;
+        attribute currentTimeSeconds : Real = 0;
 
-        // Control logic per state
-        constraint idleConstraint {
-            behavior.idle implies (pump1.isRunning == false and valve1.isOpen == false and pump2.isRunning == false and valve2.isOpen == false)
+        // Ports.
+        port pump1Port : ModbusMasterPort;
+        port pump2Port : ModbusMasterPort;
+        port valve1Port : ModbusMasterPort;
+        port valve2Port : ModbusMasterPort;
+        port volumeSensor1Port : ModbusMasterPort;
+        port volumeSensor2Port : ModbusMasterPort;
+
+        action ScanCycle {
+            // Check if we need to run tank 1.
+            item volume1ReadingReq : ReadInputRegisterReqMsg;
+            assign volume1ReadingReq.registerAddress := 0;
+            send volume1ReadingReq via volumeSensor1Port.req;
+            item volume1Res : ReadInputRegisterRespMsg;
+            accept volume1Res : ReadInputRegisterRespMsg via volumeSensor1Port.resp;
+            attribute shouldRunPump1 : Boolean = tank1OriginalLevelMl - volume1Res.response < tank1TransferMl;
+
+            // Open / close valve 1.
+            item valve1CoilReq : WriteCoilReqMsg;
+            assign valve1CoilReq.coilAddress := 0;
+            assign valve1CoilReq.coilValue := shouldRunPump1;
+            send valve1CoilReq via valve1Port.req;
+            accept ModbusResMsg via valve1Port.resp;
+
+            // On / off pump 1.
+            item pump1CoilReq : WriteCoilReqMsg;
+            assign pump1CoilReq.coilAddress := 0;
+            assign pump1CoilReq.coilValue := shouldRunPump1;
+            send pump1CoilReq via pump1Port.req;
+            accept ModbusResMsg via pump1Port.resp;
+
+            // Check if we need to run tank 2.
+            item volume2ReadingReq : ReadInputRegisterReqMsg;
+            assign volume2ReadingReq.registerAddress := 0;
+            send volume2ReadingReq via volumeSensor2Port.req;
+            item volume2Res : ReadInputRegisterRespMsg;
+            accept volume2Res : ReadInputRegisterRespMsg via volumeSensor2Port.resp;
+            attribute shouldRunPump2 : Boolean = tank2OriginalLevelMl - volume2Res.response < tank2TransferMl;
+
+            // Open / close valve 2.
+            item valve2CoilReq : WriteCoilReqMsg;
+            assign valve2CoilReq.coilAddress := 0;
+            assign valve2CoilReq.coilValue := shouldRunPump2;
+            send valve2CoilReq via valve2Port.req;
+            accept ModbusResMsg via valve2Port.resp;
+
+            // On / off pump 2.
+            item pump2CoilReq : WriteCoilReqMsg;
+            assign pump2CoilReq.coilAddress := 0;
+            assign pump2CoilReq.coilValue := shouldRunPump2;
+            send pump2CoilReq via pump2Port.req;
+            accept ModbusResMsg via pump2Port.resp;
         }
 
-        constraint fillingConstraint {
-            behavior.filling implies (pump1.isRunning == true and valve1.isOpen == true and pump2.isRunning == true and valve2.isOpen == true)
+        action step {
+            in dt : Real;
+
+            assign currentTimeSeconds := currentTimeSeconds + dt;
+            if currentTimeSeconds - lastScanTimeSeconds >= 1.0 / scanCycleFrequencyHz {
+                assign lastScanTimeSeconds := currentTimeSeconds;
+                perform action ScanCycle;
+            }
         }
 
-        constraint fullConstraint {
-            behavior.full implies (pump1.isRunning == false and valve1.isOpen == false and pump2.isRunning == false and valve2.isOpen == false)
-        }
     }
 
     // The complete system
     part def FillingSystem {
         // Components - feeder path 1
         part pump1 : Pump {
-            attribute :>> maxFlowRate = 10.0;  // units per second
+            attribute :>> maxFlowRateMl = 10;  // units per second
         }
 
-        part valve1 : Valve {
-            attribute :>> position = 1.0;  // fully open when open
-        }
+        part valve1 : Valve;
 
         part feederTank1 : Tank {
-            attribute :>> capacity = 1000.0;
-            attribute :>> currentLevel = 1000.0;  // starts full
+            attribute :>> capacityMl = 1000;
+            attribute :>> currentLevelMl = 1000;  // starts full
         }
 
         // Components - feeder path 2
         part pump2 : Pump {
-            attribute :>> maxFlowRate = 10.0;  // units per second
+            attribute :>> maxFlowRateMl = 10;  // units per second
         }
 
-        part valve2 : Valve {
-            attribute :>> position = 1.0;  // fully open when open
-        }
+        part valve2 : Valve;
 
         part feederTank2 : Tank {
-            attribute :>> capacity = 1000.0;
-            attribute :>> currentLevel = 1000.0;  // starts full
+            attribute :>> capacityMl = 1000;
+            attribute :>> currentLevelMl = 1000;  // starts full
         }
 
         part fillingTank : Tank {
-            attribute :>> capacity = 100.0;
-            attribute :>> currentLevel = 0.0;  // starts empty
+            attribute :>> capacityMl = 1000;
+            attribute :>> currentLevelMl = 0;  // starts empty
         }
+
+        part volumeSensor1 : VolumeSensor;
+        part volumeSensor2 : VolumeSensor;
 
         part controller : Controller {
             ref :>> pump1 = system::pump1;
@@ -152,6 +321,12 @@ package TankFillingSystem {
             ref :>> valve1 = system::valve1;
             ref :>> valve2 = system::valve2;
             ref :>> tank = system::fillingTank;
+            ref :>> volumeSensor1 = system::volumeSensor1;
+            ref :>> volumeSensor2 = system::volumeSensor2;
+            attribute :>> tank1TransferMl = 50;
+            attribute :>> tank2TransferMl = 100;
+            attribute :>> tank1OriginalLevelMl = 1000;
+            attribute :>> tank2OriginalLevelMl = 1000;
         }
 
         // Flows - feeder path 1
@@ -164,17 +339,28 @@ package TankFillingSystem {
         flow : Fluid from pump2.outlet to valve2.inlet;
         flow : Fluid from valve2.outlet to fillingTank.inlet;
 
+        flow from feederTank1.volumeSensorPort to volumeSensor1.tankConnection;
+        flow from feederTank2.volumeSensorPort to volumeSensor2.tankConnection;
+
+        // Modbus topology.
+        connect controller.pump1Port to pump1.modbusPort;
+        connect controller.pump2Port to pump2.modbusPort;
+        connect controller.valve1Port to valve1.modbusPort;
+        connect controller.valve2Port to valve2.modbusPort;
+        connect controller.volumeSensor1Port to volumeSensor1.modbusPort;
+        connect controller.volumeSensor2Port to volumeSensor2.modbusPort;
+
         // System-level dynamics: tank levels change based on flow
         constraint feeder1DrainRate {
-            feederTank1.outlet.flowRate == valve1.outlet.flowRate
+            feederTank1.outlet.flowRateMl == valve1.outlet.flowRateMl
         }
 
         constraint feeder2DrainRate {
-            feederTank2.outlet.flowRate == valve2.outlet.flowRate
+            feederTank2.outlet.flowRateMl == valve2.outlet.flowRateMl
         }
 
         constraint fillingFillRate {
-            fillingTank.inlet.flowRate == valve1.outlet.flowRate + valve2.outlet.flowRate
+            fillingTank.inlet.flowRateMl == valve1.outlet.flowRateMl + valve2.outlet.flowRateMl
         }
     }
 
