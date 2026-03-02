@@ -60,8 +60,8 @@ from sysml_parser import (
     Expr, LiteralExpr, RefExpr, BinaryExpr, TernaryExpr, UnaryExpr,
     ExpressionParser,
     Constraint, DerivedAttribute, StepAction, Parameter,
-    AssignStmt, ItemDeclStmt, SendStmt,
-    State, Transition, StateMachine, Flow, PartInstance, PartDef,
+    AssignStmt, ItemDeclStmt, SendStmt, AcceptStmt, AttributeDeclStmt, IfStmt, PerformStmt,
+    Action, State, Transition, StateMachine, Flow, PartInstance, PartDef,
     SysMLParser,
 )
 
@@ -419,69 +419,76 @@ class SimulationEngine:
         # Solve constraints
         self.solver.solve(self.current_sm_state)
 
-        # Apply step actions
-        self._apply_step_actions(dt)
-
-        # Send items produced by step actions (e.g. thermometer reading)
-        self._execute_step_sends(dt)
+        # Execute step action bodies (assigns, sends, if/perform, accept)
+        self.state['dt'] = dt
+        for fqn, stmts in self.parser.step_action_bodies:
+            self._execute_action_stmts(stmts, fqn)
 
         self.time += dt
 
-    def _process_state_machines(self) -> None:
-        for inst_fqn, sm in self.parser.instance_state_machines.items():
-            current = self.current_sm_state.get(inst_fqn)
+    def _process_state_machine(self, inst_fqn: str) -> bool:
+        """Try to fire one transition for the given instance. Returns True if fired."""
+        sm = self.parser.instance_state_machines.get(inst_fqn)
+        if not sm:
+            return False
+        current = self.current_sm_state.get(inst_fqn)
 
-            for trans in sm.transitions:
-                if trans.from_state != current:
+        for trans in sm.transitions:
+            if trans.from_state != current:
+                continue
+
+            # Check trigger
+            matched_item = None
+            if trans.trigger:
+                if trans.trigger_port:
+                    # Item-based trigger: look in the port's mailbox
+                    port_key = f"{inst_fqn}::{trans.trigger_port.replace('.', '::')}"
+                    for item in self.port_mailboxes.get(port_key, []):
+                        if self._is_subtype(item['type'], trans.trigger):
+                            matched_item = item
+                            break
+                    if matched_item is None:
+                        continue
+                    # Expose trigger_var attributes in state for guard evaluation
+                    if trans.trigger_var:
+                        for attr_path, val in matched_item['attrs'].items():
+                            state_key = (f"{inst_fqn}::{trans.trigger_var}::"
+                                         f"{attr_path.replace('.', '::')}")
+                            self.state[state_key] = val
+                else:
+                    # Legacy state-flag trigger
+                    trigger_key = f"{inst_fqn}::{trans.trigger}"
+                    if not self.state.get(trigger_key, False):
+                        continue
+                    self.state[trigger_key] = False
+
+            # Check guard
+            if trans.guard is not None:
+                evaluator = ExpressionEvaluator(self.state, inst_fqn,
+                                                self.parser.ref_bindings,
+                                                self.parser.system_part)
+                if not evaluator.evaluate(trans.guard):
                     continue
 
-                # Check trigger
-                matched_item = None
-                if trans.trigger:
-                    if trans.trigger_port:
-                        # Item-based trigger: look in the port's mailbox
-                        port_key = f"{inst_fqn}::{trans.trigger_port}"
-                        for item in self.port_mailboxes.get(port_key, []):
-                            if self._is_subtype(item['type'], trans.trigger):
-                                matched_item = item
-                                break
-                        if matched_item is None:
-                            continue
-                        # Expose trigger_var attributes in state for guard evaluation
-                        if trans.trigger_var:
-                            for attr_path, val in matched_item['attrs'].items():
-                                state_key = (f"{inst_fqn}::{trans.trigger_var}::"
-                                             f"{attr_path.replace('.', '::')}")
-                                self.state[state_key] = val
-                    else:
-                        # Legacy state-flag trigger
-                        trigger_key = f"{inst_fqn}::{trans.trigger}"
-                        if not self.state.get(trigger_key, False):
-                            continue
-                        self.state[trigger_key] = False
+            # Execute do action
+            if trans.do_action:
+                self._execute_action_stmts(trans.do_action, inst_fqn)
 
-                # Check guard
-                if trans.guard is not None:
-                    evaluator = ExpressionEvaluator(self.state, inst_fqn,
-                                                    self.parser.ref_bindings,
-                                                    self.parser.system_part)
-                    if not evaluator.evaluate(trans.guard):
-                        continue
+            # Consume matched item from mailbox
+            if matched_item is not None:
+                port_key = f"{inst_fqn}::{trans.trigger_port.replace('.', '::')}"
+                mailbox = self.port_mailboxes.get(port_key, [])
+                if matched_item in mailbox:
+                    mailbox.remove(matched_item)
 
-                # Execute do action
-                if trans.do_action:
-                    self._execute_action_stmts(trans.do_action, inst_fqn)
+            # Perform transition
+            self.current_sm_state[inst_fqn] = trans.to_state
+            return True
+        return False
 
-                # Consume matched item from mailbox
-                if matched_item is not None:
-                    port_key = f"{inst_fqn}::{trans.trigger_port}"
-                    mailbox = self.port_mailboxes.get(port_key, [])
-                    if matched_item in mailbox:
-                        mailbox.remove(matched_item)
-
-                # Perform transition
-                self.current_sm_state[inst_fqn] = trans.to_state
-                break
+    def _process_state_machines(self) -> None:
+        for inst_fqn in self.parser.instance_state_machines:
+            self._process_state_machine(inst_fqn)
 
     def _is_subtype(self, type_name: str, expected_type: str) -> bool:
         """Return True if type_name is expected_type or descends from it via :>."""
@@ -493,7 +500,12 @@ class SimulationEngine:
         return False
 
     def _find_connected_port(self, port_key: str) -> Optional[str]:
-        """Return the port key connected to port_key via a connect statement."""
+        """Return the port key connected to port_key via a connect statement.
+
+        Handles sub-ports: if port_key is system::controller::volumeSensor1Port::req
+        and a connect maps controller.volumeSensor1Port <-> volumeSensor1.modbusPort,
+        returns system::volumeSensor1::modbusPort::req (suffix transferred).
+        """
         system = self.parser.system_part
         for from_port, to_port in self.parser.connects:
             from_key = f"{system}::{from_port.replace('.', '::')}"
@@ -502,16 +514,24 @@ class SimulationEngine:
                 return to_key
             if port_key == to_key:
                 return from_key
+            # Check if port_key is a sub-port of either side
+            if port_key.startswith(from_key + "::"):
+                suffix = port_key[len(from_key):]
+                return to_key + suffix
+            if port_key.startswith(to_key + "::"):
+                suffix = port_key[len(to_key):]
+                return from_key + suffix
         return None
 
     def _send_item(self, type_name: str, attrs: dict,
-                   sender_fqn: str, port_name: str) -> None:
+                   sender_fqn: str, port_name: str) -> Optional[str]:
         """Deliver an item to the port connected to sender_fqn::port_name.
 
         Single-slot-per-type: a new item replaces any existing item of the same
         type in the destination mailbox, so the consumer always sees the latest value.
+        Returns the destination port key (so caller can trigger recipient SM), or None.
         """
-        sender_port_key = f"{sender_fqn}::{port_name}"
+        sender_port_key = f"{sender_fqn}::{port_name.replace('.', '::')}"
         dest_port_key = self._find_connected_port(sender_port_key)
         if dest_port_key:
             mailbox = self.port_mailboxes.setdefault(dest_port_key, [])
@@ -519,13 +539,31 @@ class SimulationEngine:
             for i, existing in enumerate(mailbox):
                 if existing['type'] == type_name:
                     mailbox[i] = new_item
-                    return
+                    return dest_port_key
             mailbox.append(new_item)
+            return dest_port_key
+        return None
 
-    def _execute_action_stmts(self, stmts: list, context: str) -> None:
+    def _find_action(self, context: str, action_name: str):
+        """Look up a named action from the part def of the given context."""
+        inst = self.parser.part_instances.get(context)
+        if not inst:
+            return None
+        pdef = self.parser.part_defs.get(inst.part_type)
+        if not pdef:
+            return None
+        for action in pdef.actions:
+            if action.name == action_name:
+                return action
+        return None
+
+    def _execute_action_stmts(self, stmts: list, context: str, local_items: dict = None) -> None:
         """Evaluate and apply a list of ActionStmt nodes in the given part context."""
+        # Use passed-in locals (for recursive calls) or create fresh
+        if local_items is None:
+            local_items = {}
+
         # Collect local item declarations first
-        local_items: dict[str, dict] = {}
         for stmt in stmts:
             if isinstance(stmt, ItemDeclStmt):
                 local_items[stmt.name] = {'type': stmt.type_name, 'attrs': {}}
@@ -536,20 +574,60 @@ class SimulationEngine:
         for stmt in stmts:
             if isinstance(stmt, AssignStmt):
                 if local_items and stmt.target[0] in local_items:
-                    # Local item attribute — track in item dict, not persisted to state
+                    # Local item attribute — track in item dict and expose in state
                     attr_key = '.'.join(stmt.target[1:])
                     value = evaluator.evaluate(stmt.expr)
                     if value is not None:
                         local_items[stmt.target[0]]['attrs'][attr_key] = value
+                        state_key = f"{context}::" + "::".join(stmt.target)
+                        self.state[state_key] = value
                 else:
                     key = f"{context}::" + "::".join(stmt.target)
                     value = evaluator.evaluate(stmt.expr)
                     if value is not None:
-                        self.state[canonical_key(self.state, key)] = value
+                        ckey = canonical_key(self.state, key)
+                        cap = self._capacity_for(ckey)
+                        if cap is not None:
+                            value = min(cap, value)
+                        self.state[ckey] = value
             elif isinstance(stmt, SendStmt):
                 if stmt.item_name in local_items:
                     item = local_items[stmt.item_name]
-                    self._send_item(item['type'], item['attrs'], context, stmt.port)
+                    dest = self._send_item(item['type'], item['attrs'], context, stmt.port)
+                    # Trigger recipient SM so it can process the message immediately
+                    if dest:
+                        # dest is like "system::volumeSensor1::modbusPort::req"
+                        # extract the instance FQN (everything before the port path)
+                        for inst_fqn in self.parser.instance_state_machines:
+                            if dest.startswith(inst_fqn + "::"):
+                                self._process_state_machine(inst_fqn)
+                                break
+            elif isinstance(stmt, IfStmt):
+                cond_val = evaluator.evaluate(stmt.condition)
+                if cond_val:
+                    self._execute_action_stmts(stmt.body, context, local_items)
+            elif isinstance(stmt, PerformStmt):
+                action = self._find_action(context, stmt.action_name)
+                if action:
+                    self._execute_action_stmts(action.body, context, local_items)
+            elif isinstance(stmt, AcceptStmt):
+                port_key = f"{context}::{stmt.port.replace('.', '::')}"
+                mailbox = self.port_mailboxes.get(port_key, [])
+                for i, item in enumerate(mailbox):
+                    if self._is_subtype(item['type'], stmt.type_name):
+                        if stmt.var_name:
+                            local_items[stmt.var_name] = item
+                            # Expose item attrs in state so expressions can resolve them
+                            for attr_path, val in item.get('attrs', {}).items():
+                                state_key = f"{context}::{stmt.var_name}::{attr_path.replace('.', '::')}"
+                                self.state[state_key] = val
+                        mailbox.pop(i)
+                        break
+            elif isinstance(stmt, AttributeDeclStmt):
+                if stmt.init_expr:
+                    value = evaluator.evaluate(stmt.init_expr)
+                    if value is not None:
+                        self.state[f"{context}::{stmt.name}"] = value
 
     def _execute_step_sends(self, dt: float) -> None:
         """Send items produced by step action bodies (e.g. thermometer reading)."""

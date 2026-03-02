@@ -1,133 +1,368 @@
-package DigitalThermostatSystem {
+package TankFillingSystem {
 
+    // Standard library imports
     private import ScalarValues::*;
-    private import SI::*;
 
-    item def Heat;
+    // Modbus message hierarchy.
+    item def ModbusMsg;
+    item def ModbusReqMsg :> ModbusMsg;
+    item def ModbusResMsg :> ModbusMsg;
 
-    // Port definition carrying temperature and heat flow
-    port def ThermalPort {
-        attribute temperature : Real;   // e.g., °C
-        attribute heatFlow    : Real;   // positive adds heat to the connected element
+    item def ReadInputRegisterReqMsg :> ModbusReqMsg {
+        attribute registerAddress : Integer;
     }
 
-    // Physical room model: temperature changes based on net heat flow
-    part def Room {
-        port thermal : ThermalPort;
+    item def WriteCoilReqMsg :> ModbusReqMsg {
+        attribute coilAddress : Integer;
+        attribute coilValue : Boolean;
+    }
 
-        // State variable 
-        attribute T_room : Real;
+    item def ReadInputRegisterRespMsg :> ModbusResMsg {
+        attribute response : Integer;
+    }
 
-        // Simple physical parameters
-        attribute thermalMass : Real;     // bigger = slower temp change
-        attribute leakRate    : Real;     // how strongly room moves toward ambient
-        attribute T_ambient   : Real;     // outside/ambient temperature
+    item def ExceptionResMsg :> ModbusResMsg;
 
-        // Keep port temperature consistent with room temperature
-        constraint portTemp {
-            thermal.temperature == T_room
+    // A Modbus message port.
+    port def ModbusMasterPort {
+        out item req : ModbusReqMsg;
+        in item resp : ModbusResMsg;
+    }
+
+    item def VolumeReading {
+        attribute volumeMl : Integer;
+    }
+
+    // A port to connect the volume sensor to a tank.
+    port def VolumeSensorToTankPort {
+        in item reading : VolumeReading;
+    }
+
+    // Represents a Modbus client.
+    part def VolumeSensor {
+        // Connection to Modbus master.
+        port modbusPort : ~ModbusMasterPort;
+
+        // Connection to tank.
+        port tankConnection : VolumeSensorToTankPort;
+
+        state def VolumeSensorBehavior {
+            entry; then waiting;
+
+            state waiting;
+            transition waiting_to_waiting
+                first waiting
+                accept msg : ReadInputRegisterReqMsg via modbusPort.req
+                if msg.registerAddress == 0 
+                do action {
+                    item rsp : ReadInputRegisterRespMsg;
+                    assign rsp.response := tankConnection.reading.volumeMl;
+                    send rsp via modbusPort.resp;
+                }
+                then waiting;
+
+
+            transition wait_to_waiting_invalid_msg
+            first waiting
+            accept msg : ModbusReqMsg via modbusPort.req
+            do action {
+                item rsp : ExceptionResMsg;
+                send rsp via modbusPort.resp;
+            }
+            then waiting;
         }
 
-        // Dynamics 
-        // Room warms when heatFlow > 0, cools toward ambient based on leakRate.
-        constraint dynamics {
-            der(T_room) == (thermal.heatFlow / thermalMass) - leakRate * (T_room - T_ambient)
+        exhibit state behavior : VolumeSensorBehavior;
+    }
+
+    // Item that flows through the system
+    item def Fluid;
+
+    // Port definition with flow rate
+    port def FluidPort {
+        attribute flowRateMl : Integer;
+    }
+
+    // Tank with level tracking
+    part def Tank {
+        port outlet : FluidPort;
+        port inlet : FluidPort;
+
+        port volumeSensorPort : ~VolumeSensorToTankPort;
+
+        attribute capacityMl : Integer;
+        attribute currentLevelMl : Integer;
+        attribute isFull : Boolean = currentLevelMl >= capacityMl;
+        attribute isEmpty : Boolean = currentLevelMl <= 0;
+
+        // Timestep update: advance currentLevel by net flow * dt
+        action step {
+            in dt : Real;
+            assign currentLevelMl := currentLevelMl + (inlet.flowRateMl - outlet.flowRateMl) * dt;
+        }
+
+        bind volumeSensorPort.reading.volumeMl = currentLevelMl;
+    }
+
+    // Pump with on/off state and flow rate
+    part def Pump {
+        port inlet : FluidPort;
+        port outlet : FluidPort;
+
+        port modbusPort : ~ModbusMasterPort;
+
+        attribute isRunning : Boolean;
+        attribute maxFlowRateMl : Integer;
+
+        state def PumpBehavior {
+            entry; then waiting;
+
+            state waiting;
+            transition waiting_to_waiting
+                first waiting 
+                accept coilWriteRequest : WriteCoilReqMsg via modbusPort.req
+                if coilWriteRequest.coilAddress == 0
+                do action { 
+                    assign isRunning := coilWriteRequest.coilValue; 
+                    item res : ModbusResMsg;
+                    send res via modbusPort.resp;
+                }
+                then waiting;
+
+            transition waiting_to_waiting_err
+                first waiting 
+                accept req : ModbusReqMsg via modbusPort.req
+                do action {
+                    item res : ExceptionResMsg;
+                    send res via modbusPort.resp;
+                }
+                then waiting;
+        }
+
+        exhibit state behavior : PumpBehavior;
+
+        // When running, outlet flow equals max rate; otherwise zero
+        constraint flowConstraint {
+            (isRunning implies outlet.flowRateMl == maxFlowRateMl) and
+            (not isRunning implies outlet.flowRateMl == 0)
         }
     }
 
-    // Heater actuator: ON/OFF produces heatFlow
-    part def Heater {
-        port thermal : ThermalPort;
+    // Valve with position control
+    part def Valve {
+        port inlet : FluidPort;
+        port outlet : FluidPort;
 
-        // Cyber command (output of thermostat)
-        attribute H : Boolean;
+        attribute isOpen : Boolean;
 
-        // Physical capability
-        attribute maxHeatFlow : Real;
+        port modbusPort : ~ModbusMasterPort;
 
-        // When ON -> provides maxHeatFlow, else 0
-        constraint heatConstraint {
-            thermal.heatFlow == (H ? maxHeatFlow : 0)
+        state def ValveBehavior {
+            entry; then waiting;
+
+            state waiting;
+            transition waiting_to_waiting
+                first waiting 
+                accept coilWriteRequest : WriteCoilReqMsg via modbusPort.req
+                if coilWriteRequest.coilAddress == 0
+                do action { 
+                    assign isOpen := coilWriteRequest.coilValue; 
+                    item res : ModbusResMsg;
+                    send res via modbusPort.resp;
+                }
+                then waiting;
+
+            transition waiting_to_waiting_err
+                first waiting 
+                accept req : ModbusReqMsg via modbusPort.req
+                do action {
+                    item res : ExceptionResMsg;
+                    send res via modbusPort.resp;
+                }
+                then waiting;
+        }
+
+        exhibit state behavior : ValveBehavior;
+
+        // Outlet flow is inlet flow scaled by position
+        constraint flowConstraint {
+            (isOpen implies outlet.flowRateMl == inlet.flowRateMl) and
+            (not isOpen implies outlet.flowRateMl == 0)
         }
     }
 
-    // Thermostat controller behavior 
-    state def ThermostatBehavior {
-        state OFF;
-        state ON;
+    // Controller that monitors and commands both feeder paths
+    part def Controller {
+        // References to controlled components
+        ref pump1 : Pump;
+        ref pump2 : Pump;
+        ref valve1 : Valve;
+        ref valve2 : Valve;
+        ref tank : Tank;
+        ref volumeSensor1 : VolumeSensor;
+        ref volumeSensor2 : VolumeSensor;
 
-        // OFF -> ON: switch is ON and room temp below setpoint
-        transition off_to_on
-            first OFF
-            if (S and (T_room < T_set))
-            then ON;
+        // Targets.
+        attribute tank1TransferMl : Integer;
+        attribute tank2TransferMl : Integer;
 
-        // ON -> OFF: switch OFF OR reached setpoint
-        transition on_to_off
-            first ON
-            if ((not S) or (T_room >= T_set))
-            then OFF;
+        // Originals.
+        attribute tank1OriginalLevelMl : Integer;
+        attribute tank2OriginalLevelMl : Integer;
+
+        // Scan frequency.
+        attribute scanCycleFrequencyHz : Integer = 10;
+        attribute lastScanTimeSeconds : Real = 0;
+        attribute currentTimeSeconds : Real = 0;
+
+        // Ports.
+        port pump1Port : ModbusMasterPort;
+        port pump2Port : ModbusMasterPort;
+        port valve1Port : ModbusMasterPort;
+        port valve2Port : ModbusMasterPort;
+        port volumeSensor1Port : ModbusMasterPort;
+        port volumeSensor2Port : ModbusMasterPort;
+
+        action ScanCycle {
+            // Check if we need to run tank 1.
+            item volume1ReadingReq : ReadInputRegisterReqMsg;
+            assign volume1ReadingReq.registerAddress := 0;
+            send volume1ReadingReq via volumeSensor1Port.req;
+            item volume1Res : ReadInputRegisterRespMsg;
+            accept volume1Res : ReadInputRegisterRespMsg via volumeSensor1Port.resp;
+            attribute shouldRunPump1 : Boolean = tank1OriginalLevelMl - volume1Res.response < tank1TransferMl;
+
+            // Open / close valve 1.
+            item valve1CoilReq : WriteCoilReqMsg;
+            assign valve1CoilReq.coilAddress := 0;
+            assign valve1CoilReq.coilValue := shouldRunPump1;
+            send valve1CoilReq via valve1Port.req;
+            accept ModbusResMsg via valve1Port.resp;
+
+            // On / off pump 1.
+            item pump1CoilReq : WriteCoilReqMsg;
+            assign pump1CoilReq.coilAddress := 0;
+            assign pump1CoilReq.coilValue := shouldRunPump1;
+            send pump1CoilReq via pump1Port.req;
+            accept ModbusResMsg via pump1Port.resp;
+
+            // Check if we need to run tank 2.
+            item volume2ReadingReq : ReadInputRegisterReqMsg;
+            assign volume2ReadingReq.registerAddress := 0;
+            send volume2ReadingReq via volumeSensor2Port.req;
+            item volume2Res : ReadInputRegisterRespMsg;
+            accept volume2Res : ReadInputRegisterRespMsg via volumeSensor2Port.resp;
+            attribute shouldRunPump2 : Boolean = tank2OriginalLevelMl - volume2Res.response < tank2TransferMl;
+
+            // Open / close valve 2.
+            item valve2CoilReq : WriteCoilReqMsg;
+            assign valve2CoilReq.coilAddress := 0;
+            assign valve2CoilReq.coilValue := shouldRunPump2;
+            send valve2CoilReq via valve2Port.req;
+            accept ModbusResMsg via valve2Port.resp;
+
+            // On / off pump 2.
+            item pump2CoilReq : WriteCoilReqMsg;
+            assign pump2CoilReq.coilAddress := 0;
+            assign pump2CoilReq.coilValue := shouldRunPump2;
+            send pump2CoilReq via pump2Port.req;
+            accept ModbusResMsg via pump2Port.resp;
+        }
+
+        action step {
+            in dt : Real;
+
+            assign currentTimeSeconds := currentTimeSeconds + dt;
+            if currentTimeSeconds - lastScanTimeSeconds >= 1.0 / scanCycleFrequencyHz {
+                assign lastScanTimeSeconds := currentTimeSeconds;
+                perform action ScanCycle;
+            }
+        }
+
     }
 
-    // Controller: monitors T_room and commands heater H
-    part def ThermostatController {
-
-        // Inputs (user + sensor)
-        attribute S      : Boolean;  // switch
-        attribute T_set  : Real;     // setpoint
-        attribute T_room : Real;     // sensor reading
-
-        // Output (to heater)
-        attribute H      : Boolean;
-
-        // Behavior
-        exhibit state behavior : ThermostatBehavior;
-
-        // Control logic per state 
-        constraint offConstraint {
-            behavior.OFF implies (H == false)
+    // The complete system
+    part def FillingSystem {
+        // Components - feeder path 1
+        part pump1 : Pump {
+            attribute :>> maxFlowRateMl = 10;  // units per second
         }
 
-        constraint onConstraint {
-            behavior.ON implies (H == true)
+        part valve1 : Valve;
+
+        part feederTank1 : Tank {
+            attribute :>> capacityMl = 1000;
+            attribute :>> currentLevelMl = 1000;  // starts full
+        }
+
+        // Components - feeder path 2
+        part pump2 : Pump {
+            attribute :>> maxFlowRateMl = 10;  // units per second
+        }
+
+        part valve2 : Valve;
+
+        part feederTank2 : Tank {
+            attribute :>> capacityMl = 1000;
+            attribute :>> currentLevelMl = 1000;  // starts full
+        }
+
+        part fillingTank : Tank {
+            attribute :>> capacityMl = 1000;
+            attribute :>> currentLevelMl = 0;  // starts empty
+        }
+
+        part volumeSensor1 : VolumeSensor;
+        part volumeSensor2 : VolumeSensor;
+
+        part controller : Controller {
+            ref :>> pump1 = system::pump1;
+            ref :>> pump2 = system::pump2;
+            ref :>> valve1 = system::valve1;
+            ref :>> valve2 = system::valve2;
+            ref :>> tank = system::fillingTank;
+            ref :>> volumeSensor1 = system::volumeSensor1;
+            ref :>> volumeSensor2 = system::volumeSensor2;
+            attribute :>> tank1TransferMl = 50;
+            attribute :>> tank2TransferMl = 100;
+            attribute :>> tank1OriginalLevelMl = 1000;
+            attribute :>> tank2OriginalLevelMl = 1000;
+        }
+
+        // Flows - feeder path 1
+        flow : Fluid from feederTank1.outlet to pump1.inlet;
+        flow : Fluid from pump1.outlet to valve1.inlet;
+        flow : Fluid from valve1.outlet to fillingTank.inlet;
+
+        // Flows - feeder path 2
+        flow : Fluid from feederTank2.outlet to pump2.inlet;
+        flow : Fluid from pump2.outlet to valve2.inlet;
+        flow : Fluid from valve2.outlet to fillingTank.inlet;
+
+        flow from feederTank1.volumeSensorPort to volumeSensor1.tankConnection;
+        flow from feederTank2.volumeSensorPort to volumeSensor2.tankConnection;
+
+        // Modbus topology.
+        connect controller.pump1Port to pump1.modbusPort;
+        connect controller.pump2Port to pump2.modbusPort;
+        connect controller.valve1Port to valve1.modbusPort;
+        connect controller.valve2Port to valve2.modbusPort;
+        connect controller.volumeSensor1Port to volumeSensor1.modbusPort;
+        connect controller.volumeSensor2Port to volumeSensor2.modbusPort;
+
+        // System-level dynamics: tank levels change based on flow
+        constraint feeder1DrainRate {
+            feederTank1.outlet.flowRateMl == valve1.outlet.flowRateMl
+        }
+
+        constraint feeder2DrainRate {
+            feederTank2.outlet.flowRateMl == valve2.outlet.flowRateMl
+        }
+
+        constraint fillingFillRate {
+            fillingTank.inlet.flowRateMl == valve1.outlet.flowRateMl + valve2.outlet.flowRateMl
         }
     }
 
-    // Complete thermostat system: connect controller + heater + room
-    part def ThermostatSystem {
-
-        part room : Room {
-            attribute :>> T_room       = 18.0;
-            attribute :>> T_ambient    = 10.0;
-            attribute :>> thermalMass  = 50.0;
-            attribute :>> leakRate     = 0.01;
-        }
-
-        part heater : Heater {
-            attribute :>> maxHeatFlow = 30.0;
-        }
-
-        part controller : ThermostatController {
-            attribute :>> S     = true;
-            attribute :>> T_set = 22.0;
-
-            // bind controller’s sensed temp to room temp
-            attribute :>> T_room = system::room.T_room;
-        }
-
-        // Connect heater heat into the room (flow connection)
-        // This says heat flows from heater to room via thermal ports.
-        flow : Heat from heater.thermal to room.thermal;
-
-        // Bind heater command to controller output
-        constraint commandBinding {
-            heater.H == controller.H
-        }
-
-        constraint tempConsistency {
-            heater.thermal.temperature == room.thermal.temperature
-        }
-    }
-
-    part system : ThermostatSystem;
+    part system : FillingSystem;
 }
