@@ -223,6 +223,94 @@ package TankFillingSystem {
         port volumeSensor1Port : ModbusMasterPort;
         port volumeSensor2Port : ModbusMasterPort;
 
+        action turnOnPump1 {
+            item valve1CoilReq : WriteCoilReqMsg;
+            assign valve1CoilReq.coilAddress := 0;
+            assign valve1CoilReq.coilValue := true;
+            send valve1CoilReq via valve1Port.req;
+            accept ModbusResMsg via valve1Port.resp;
+
+            item pump1CoilReq : WriteCoilReqMsg;
+            assign pump1CoilReq.coilAddress := 0;
+            assign pump1CoilReq.coilValue := true;
+            send pump1CoilReq via pump1Port.req;
+            accept ModbusResMsg via pump1Port.resp;
+        }
+    
+        action turnOffPump1 {
+            item pump1CoilReq : WriteCoilReqMsg;
+            assign pump1CoilReq.coilAddress := 0;
+            assign pump1CoilReq.coilValue := false;
+            send pump1CoilReq via pump1Port.req;
+            accept ModbusResMsg via pump1Port.resp;
+
+            item valve1CoilReq : WriteCoilReqMsg;
+            assign valve1CoilReq.coilAddress := 0;
+            assign valve1CoilReq.coilValue := false;
+            send valve1CoilReq via valve1Port.req;
+            accept ModbusResMsg via valve1Port.resp;
+        }
+
+        action turnOnPump2 {
+            item valve2CoilReq : WriteCoilReqMsg;
+            assign valve2CoilReq.coilAddress := 0;
+            assign valve2CoilReq.coilValue := true;
+            send valve2CoilReq via valve2Port.req;
+            accept ModbusResMsg via valve2Port.resp;
+
+            item pump2CoilReq : WriteCoilReqMsg;
+            assign pump2CoilReq.coilAddress := 0;
+            assign pump2CoilReq.coilValue := true;
+            send pump2CoilReq via pump2Port.req;
+            accept ModbusResMsg via pump2Port.resp;
+        }
+
+        action turnOffPump2 {
+            item pump2CoilReq : WriteCoilReqMsg;
+            assign pump2CoilReq.coilAddress := 0;
+            assign pump2CoilReq.coilValue := false;
+            send pump2CoilReq via pump2Port.req;
+            accept ModbusResMsg via pump2Port.resp;
+
+            item valve2CoilReq : WriteCoilReqMsg;
+            assign valve2CoilReq.coilAddress := 0;
+            assign valve2CoilReq.coilValue := false;
+            send valve2CoilReq via valve2Port.req;
+            accept ModbusResMsg via valve2Port.resp;
+        }
+
+        action openValve1 {
+            item valve1CoilReq : WriteCoilReqMsg;
+            assign valve1CoilReq.coilAddress := 0;
+            assign valve1CoilReq.coilValue := true;
+            send valve1CoilReq via valve1Port.req;
+            accept ModbusResMsg via valve1Port.resp;
+        }
+
+        action closeValve1 {
+            item valve1CoilReq : WriteCoilReqMsg;
+            assign valve1CoilReq.coilAddress := 0;
+            assign valve1CoilReq.coilValue := false;
+            send valve1CoilReq via valve1Port.req;
+            accept ModbusResMsg via valve1Port.resp;
+        }
+
+        action openValve2 {
+            item valve2CoilReq : WriteCoilReqMsg;
+            assign valve2CoilReq.coilAddress := 0;
+            assign valve2CoilReq.coilValue := true;
+            send valve2CoilReq via valve2Port.req;
+            accept ModbusResMsg via valve2Port.resp;
+        }
+
+        action closeValve2 {
+            item valve2CoilReq : WriteCoilReqMsg;
+            assign valve2CoilReq.coilAddress := 0;
+            assign valve2CoilReq.coilValue := false;
+            send valve2CoilReq via valve2Port.req;
+            accept ModbusResMsg via valve2Port.resp;
+        }
+
         action ScanCycle {
             // Check if we need to run tank 1.
             item volume1ReadingReq : ReadInputRegisterReqMsg;
@@ -232,19 +320,13 @@ package TankFillingSystem {
             accept volume1Res : ReadInputRegisterRespMsg via volumeSensor1Port.resp;
             attribute shouldRunPump1 : Boolean = tank1OriginalLevelMl - volume1Res.response < tank1TransferMl;
 
-            // Open / close valve 1.
-            item valve1CoilReq : WriteCoilReqMsg;
-            assign valve1CoilReq.coilAddress := 0;
-            assign valve1CoilReq.coilValue := shouldRunPump1;
-            send valve1CoilReq via valve1Port.req;
-            accept ModbusResMsg via valve1Port.resp;
-
-            // On / off pump 1.
-            item pump1CoilReq : WriteCoilReqMsg;
-            assign pump1CoilReq.coilAddress := 0;
-            assign pump1CoilReq.coilValue := shouldRunPump1;
-            send pump1CoilReq via pump1Port.req;
-            accept ModbusResMsg via pump1Port.resp;
+            if shouldRunPump1 {
+                perform action openValve1;
+                perform action turnOnPump1;
+            } else {
+                perform action turnOffPump1;
+                perform action closeValve1;
+            }
 
             // Check if we need to run tank 2.
             item volume2ReadingReq : ReadInputRegisterReqMsg;
@@ -254,19 +336,13 @@ package TankFillingSystem {
             accept volume2Res : ReadInputRegisterRespMsg via volumeSensor2Port.resp;
             attribute shouldRunPump2 : Boolean = tank2OriginalLevelMl - volume2Res.response < tank2TransferMl;
 
-            // Open / close valve 2.
-            item valve2CoilReq : WriteCoilReqMsg;
-            assign valve2CoilReq.coilAddress := 0;
-            assign valve2CoilReq.coilValue := shouldRunPump2;
-            send valve2CoilReq via valve2Port.req;
-            accept ModbusResMsg via valve2Port.resp;
-
-            // On / off pump 2.
-            item pump2CoilReq : WriteCoilReqMsg;
-            assign pump2CoilReq.coilAddress := 0;
-            assign pump2CoilReq.coilValue := shouldRunPump2;
-            send pump2CoilReq via pump2Port.req;
-            accept ModbusResMsg via pump2Port.resp;
+            if shouldRunPump2 {
+                perform action openValve2;
+                perform action turnOnPump2;
+            } else {
+                perform action turnOffPump2;
+                perform action closeValve2;
+            }
         }
 
         action step {
@@ -361,6 +437,52 @@ package TankFillingSystem {
 
         constraint fillingFillRate {
             fillingTank.inlet.flowRateMl == valve1.outlet.flowRateMl + valve2.outlet.flowRateMl
+        }
+
+        requirement def 'No Dead Heading' {
+            doc /* When a valve is closed, the controller shall not turn on its corresponding pump. */
+            subject s : FillingSystem;
+
+            require constraint {
+                (not s.valve1.isOpen implies not s.pump1.isRunning) and
+                (not s.valve2.isOpen implies not s.pump2.isRunning)
+            }
+        }
+
+        requirement def 'Fluid Transfer Termination Safety' {
+            doc /* When the target fluid has been transferred, the controller shall turn off the pump and close the valve. */
+            subject s : FillingSystem;
+
+            require constraint {
+                (s.controller.lastScanTimeSeconds > 0) implies
+                ((s.controller.tank1OriginalLevelMl - s.feederTank1.currentLevelMl >= s.controller.tank1TransferMl)
+                  implies (not s.valve1.isOpen and not s.pump1.isRunning)) and
+                ((s.controller.tank2OriginalLevelMl - s.feederTank2.currentLevelMl >= s.controller.tank2TransferMl)
+                  implies (not s.valve2.isOpen and not s.pump2.isRunning))
+            }
+        }
+
+        requirement def 'Fluid Transfer Liveness' {
+            doc /* When the fluid transferred is below the target amount, the controller shall turn on the pump and open the valve during its next scan cycle. */
+            subject s : FillingSystem;
+
+            require constraint {
+                (s.controller.lastScanTimeSeconds > 0) implies
+                ((s.controller.tank1OriginalLevelMl - s.feederTank1.currentLevelMl < s.controller.tank1TransferMl)
+                    implies (s.valve1.isOpen and s.pump1.isRunning) and 
+                  (s.controller.tank2OriginalLevelMl - s.feederTank2.currentLevelMl < s.controller.tank2TransferMl)
+                    implies (s.valve2.isOpen and s.pump2.isRunning))
+            }
+        }
+
+        requirement def 'No Dry Running' {
+            doc /* When a tank is empty, the controller shall not turn on its corresponding pump. */
+            subject s : FillingSystem;
+
+            require constraint {
+                (s.feederTank1.currentLevelMl == 0 implies not s.pump1.isRunning) and
+                (s.feederTank2.currentLevelMl == 0 implies not s.pump2.isRunning)
+            }
         }
     }
 

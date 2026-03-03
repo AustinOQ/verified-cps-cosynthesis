@@ -606,6 +606,8 @@ class SimulationEngine:
                 cond_val = evaluator.evaluate(stmt.condition)
                 if cond_val:
                     self._execute_action_stmts(stmt.body, context, local_items)
+                elif stmt.else_body:
+                    self._execute_action_stmts(stmt.else_body, context, local_items)
             elif isinstance(stmt, PerformStmt):
                 action = self._find_action(context, stmt.action_name)
                 if action:

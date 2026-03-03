@@ -32,7 +32,7 @@ from sysml_parser import (
     Expr, LiteralExpr, RefExpr, BinaryExpr, TernaryExpr, UnaryExpr,
     AssignStmt, ItemDeclStmt, SendStmt, AcceptStmt, AttributeDeclStmt, IfStmt, PerformStmt,
     Action,
-    Constraint, DerivedAttribute, StepAction, Parameter,
+    Constraint, Requirement, DerivedAttribute, StepAction, Parameter,
     State, Transition, StateMachine, Flow, PartInstance, PartDef,
     SysMLParser,
 )
@@ -156,6 +156,7 @@ class SMVGenerator:
         self._controlled: dict[str, dict[str, Any]] = {}  # smv_name → {state: value}
         self._bool_ivars: list[str] = []           # SMV names for boolean IVARs
         self._real_ivars: list[str] = []           # SMV names for real IVARs
+        self._scan_phase_count: int = 0            # number of scan sub-phases (0 = no sub-stepping)
 
         self._build_info()
 
@@ -652,55 +653,112 @@ class SMVGenerator:
         # "volume1Res.response" → "volumeSensor1_rsp_response".
         accept_map: dict[str, tuple[str, str]] = {}
 
-        # Collect all non-step actions (e.g. ScanCycle)
+        # Find actions referenced by PerformStmt in non-step actions —
+        # skip these since they'll be inlined via the flattener.
+        # (step is excluded because it's the entry point that calls ScanCycle)
+        performed_names: set[str] = set()
         for action in ctrl_def.actions:
             if action.name == 'step':
                 continue
+            for stmt in action.body:
+                self._collect_performed_names(stmt, performed_names)
+
+        # Collect all non-step, non-sub actions (e.g. ScanCycle)
+        for action in ctrl_def.actions:
+            if action.name == 'step' or action.name in performed_names:
+                continue
             self._phase3d_process_action(
-                action, ctrl_fqn, ctrl_name, rev_connect, accept_map)
+                action, ctrl_fqn, ctrl_name, rev_connect, accept_map, ctrl_def)
+
+    @staticmethod
+    def _collect_performed_names(stmt, names: set):
+        """Recursively collect action names referenced by PerformStmt."""
+        if isinstance(stmt, PerformStmt):
+            names.add(stmt.action_name)
+        elif isinstance(stmt, IfStmt):
+            for s in stmt.body:
+                SMVGenerator._collect_performed_names(s, names)
+            for s in stmt.else_body:
+                SMVGenerator._collect_performed_names(s, names)
+
+    def _flatten_action_stmts(self, stmts: list, ctrl_def: PartDef,
+                               condition: Optional[Expr] = None):
+        """Recursively flatten action stmts, yielding (stmt, condition) pairs.
+
+        Follows PerformStmt into sub-action bodies and tracks enclosing
+        IfStmt conditions so each yielded stmt carries its full condition.
+        """
+        for stmt in stmts:
+            if isinstance(stmt, PerformStmt):
+                sub = next((a for a in ctrl_def.actions
+                            if a.name == stmt.action_name), None)
+                if sub:
+                    yield from self._flatten_action_stmts(
+                        sub.body, ctrl_def, condition)
+            elif isinstance(stmt, IfStmt):
+                if_cond = (stmt.condition if condition is None
+                           else BinaryExpr('and', condition, stmt.condition))
+                yield from self._flatten_action_stmts(
+                    stmt.body, ctrl_def, if_cond)
+                if stmt.else_body:
+                    neg = UnaryExpr('not', stmt.condition)
+                    else_cond = (neg if condition is None
+                                 else BinaryExpr('and', condition, neg))
+                    yield from self._flatten_action_stmts(
+                        stmt.else_body, ctrl_def, else_cond)
+            else:
+                yield (stmt, condition)
 
     def _phase3d_process_action(self, action: Action, ctrl_fqn: str,
                                  ctrl_name: str, rev_connect: dict,
-                                 accept_map: dict):
-        """Process a single controller action body for Phase 3d coupling."""
+                                 accept_map: dict, ctrl_def: PartDef):
+        """Process a single controller action body for Phase 3d coupling.
+
+        Recursively flattens PerformStmt (sub-action calls) and IfStmt/else
+        branches, then assigns sequential scan_phase numbers to each send.
+        """
+        # Flatten all statements (follows performs, expands if/else)
+        flat_stmts = list(self._flatten_action_stmts(
+            action.body, ctrl_def))
+
         # Build local item type map
         local_items: dict[str, str] = {}
-        for stmt in action.body:
+        for stmt, _cond in flat_stmts:
             if isinstance(stmt, ItemDeclStmt):
                 local_items[stmt.name] = stmt.type_name
 
         # Build accept-var map: var_name → (device_inst_smv, local_item_name)
-        for stmt in action.body:
+        for stmt, _cond in flat_stmts:
             if isinstance(stmt, AcceptStmt) and stmt.var_name:
-                # stmt.port is like "volumeSensor1Port.resp"
                 port_parts = stmt.port.split('.')
                 top_port = port_parts[0]
                 sender_dot = f"{ctrl_name}.{top_port}"
-                # Find connected device
                 peer_dot = rev_connect.get(sender_dot)
                 if peer_dot:
                     peer_parts = peer_dot.split('.', 1)
                     peer_inst_name = peer_parts[0]
                     peer_fqn = f"{self.system}::{peer_inst_name}"
                     peer_smv = self._smv(peer_fqn)
-                    # Find what local item name the device's do-action uses
-                    # for the response type
                     item_name = self._find_device_response_item(
                         peer_fqn, stmt.type_name)
                     if item_name:
                         accept_map[stmt.var_name] = (peer_smv, item_name)
 
-        # Build local item assign map: (item_name, attr) → Expr
+        # 2. Single-pass: accumulate item assigns and process sends in order.
+        #    This ensures each send sees only the assigns that precede it
+        #    (important when the same item name is reused across sub-actions).
         item_assigns: dict[tuple[str, str], Expr] = {}
-        for stmt in action.body:
+        phase = 0
+        # ivar_name → [(phase, condition)]
+        trigger_phases: dict[str, list[tuple[int, Optional[Expr]]]] = {}
+        # (send_stmt, recv_fqn, trigger_var, phase, condition, assigns_snapshot)
+        send_to_recv: list[tuple[SendStmt, str, str, int, Optional[Expr], dict]] = []
+
+        for stmt, cond in flat_stmts:
+            # Accumulate assigns as we go
             if isinstance(stmt, AssignStmt) and len(stmt.target) == 2:
                 item_assigns[(stmt.target[0], stmt.target[1])] = stmt.expr
-
-        # Track which sends we process for trigger-var coupling
-        send_to_recv: list[tuple[SendStmt, str, str]] = []  # (stmt, recv_fqn, recv_port)
-
-        # 2. Couple device trigger boolean IVARs to scan_fires
-        for stmt in action.body:
+                continue
             if not isinstance(stmt, SendStmt):
                 continue
             port_parts = stmt.port.split('.')
@@ -721,11 +779,12 @@ class SMVGenerator:
             if not sent_type:
                 continue
 
+            phase += 1
+
             recv_sm = self._sm_instances[recv_fqn]
             for trans in recv_sm.transitions:
                 if not trans.trigger or not trans.trigger_port:
                     continue
-                # Match sub-port
                 if recv_port_name and sub_port:
                     expected = f"{recv_port_name}.{sub_port}"
                     if trans.trigger_port != expected:
@@ -735,16 +794,30 @@ class SMVGenerator:
 
                 ivar_name = self._trigger_ivar_name(
                     recv_fqn, trans.trigger_port, trans.trigger)
-                if ivar_name in self._bool_ivars:
-                    self._bool_ivars.remove(ivar_name)
-                    self._defines[ivar_name] = "scan_fires"
+                trigger_phases.setdefault(ivar_name, []).append((phase, cond))
 
-                # Record for trigger-var attr coupling (step 4)
                 if trans.trigger_var:
-                    send_to_recv.append((stmt, recv_fqn, trans.trigger_var))
+                    send_to_recv.append(
+                        (stmt, recv_fqn, trans.trigger_var, phase, cond,
+                         dict(item_assigns)))
+
+        self._scan_phase_count = phase
+
+        # Build trigger IVAR DEFINEs (OR of all phase+condition pairs)
+        for ivar_name, phases in trigger_phases.items():
+            if ivar_name in self._bool_ivars:
+                self._bool_ivars.remove(ivar_name)
+            parts = []
+            for ph, c in phases:
+                if c is not None:
+                    c_smv = self._to_smv_with_accept_map(c, ctrl_fqn, accept_map)
+                    parts.append(f"(scan_phase = {ph} & {c_smv})")
+                else:
+                    parts.append(f"(scan_phase = {ph})")
+            self._defines[ivar_name] = " | ".join(parts)
 
         # 3. Emit shouldRunPump DEFINEs from AttributeDeclStmts
-        for stmt in action.body:
+        for stmt, _cond in flat_stmts:
             if isinstance(stmt, AttributeDeclStmt) and stmt.init_expr:
                 smv_name = self._smv(f"{ctrl_fqn}::{stmt.name}")
                 smv_expr = self._to_smv_with_accept_map(
@@ -752,19 +825,44 @@ class SMVGenerator:
                 self._defines[smv_name] = smv_expr
 
         # 4. Couple trigger-var attribute IVARs (coilValue, coilAddress, etc.)
-        for send_stmt, recv_fqn, trigger_var in send_to_recv:
+        #    Collect per-ivar (phase, condition, value) for case expressions.
+        trigvar_entries: dict[str, list[tuple[int, Optional[Expr], str]]] = {}
+
+        for send_stmt, recv_fqn, trigger_var, ph, cond, assigns_snap in send_to_recv:
             recv_smv = self._smv(recv_fqn)
             tv_prefix = f"{recv_smv}_{trigger_var}_"
             for ivar_name in list(self._real_ivars):
                 if not ivar_name.startswith(tv_prefix):
                     continue
                 attr_suffix = ivar_name[len(tv_prefix):]
-                assign_expr = item_assigns.get((send_stmt.item_name, attr_suffix))
+                assign_expr = assigns_snap.get(
+                    (send_stmt.item_name, attr_suffix))
                 if assign_expr is not None:
                     smv_val = self._to_smv_with_accept_map(
                         assign_expr, ctrl_fqn, accept_map)
-                    self._real_ivars.remove(ivar_name)
-                    self._defines[ivar_name] = smv_val
+                    trigvar_entries.setdefault(ivar_name, []).append(
+                        (ph, cond, smv_val))
+
+        # Emit trigger-var DEFINEs
+        for ivar_name, entries in trigvar_entries.items():
+            if ivar_name in self._real_ivars:
+                self._real_ivars.remove(ivar_name)
+            if len(entries) == 1:
+                # Single assignment — simple DEFINE
+                self._defines[ivar_name] = entries[0][2]
+            else:
+                # Multiple phases — case expression
+                parts = []
+                for ph, c, val in entries:
+                    if c is not None:
+                        c_smv = self._to_smv_with_accept_map(
+                            c, ctrl_fqn, accept_map)
+                        parts.append(f"scan_phase = {ph} & {c_smv} : {val}")
+                    else:
+                        parts.append(f"scan_phase = {ph} : {val}")
+                case_body = "; ".join(parts)
+                self._defines[ivar_name] = (
+                    f"case {case_body}; TRUE : {entries[0][2]}; esac")
 
     def _find_device_response_item(self, device_fqn: str, response_type: str) -> Optional[str]:
         """Find the local item name used in a device's do-action for a response type."""
@@ -933,6 +1031,10 @@ class SMVGenerator:
         for smv_n in sorted(self._controlled.keys()):
             lines.append(f"  {smv_n} : boolean;")
 
+        # Scan phase counter (sequential action sub-stepping)
+        if self._scan_phase_count > 0:
+            lines.append(f"  scan_phase : 0..{self._scan_phase_count};")
+
         return lines
 
     def _gen_ivar(self) -> list[str]:
@@ -1011,6 +1113,18 @@ class SMVGenerator:
                 init_val = self._controlled[smv_n].get(init_state, False)
                 lines.append(f"  init({smv_n}) := {'TRUE' if init_val else 'FALSE'};")
 
+        # init/next for scan_phase counter (sequential action sub-stepping)
+        if self._scan_phase_count > 0:
+            n = self._scan_phase_count
+            lines.append("  init(scan_phase) := 0;")
+            lines.append("  next(scan_phase) :=")
+            lines.append("    case")
+            lines.append("      scan_phase = 0 & scan_fires : 1;")
+            lines.append(f"      scan_phase >= 1 & scan_phase < {n} : scan_phase + 1;")
+            lines.append(f"      scan_phase = {n} : 0;")
+            lines.append("      TRUE : 0;")
+            lines.append("    esac;")
+
         # next() for state machine transitions (skip single-state SMs)
         for inst_fqn, sm in self._sm_instances.items():
             if len(sm.states) < 2:
@@ -1042,15 +1156,24 @@ class SMVGenerator:
             lines.append("    esac;")
 
         # next() for step-action targets (real: unclamped; integer: clamped case)
+        # When sub-stepping is active, hold values during scan phases (only advance at phase 0)
+        has_phases = self._scan_phase_count > 0
         for sa in self._step_actions:
             smv_n = self._smv(sa.target_key)
             new_val = self._to_smv(sa.expression, sa.context)
             cond_smv = self._to_smv(sa.condition, sa.context) if sa.condition else None
             if self._needs_real(sa.target_key):
-                if cond_smv:
+                if has_phases or cond_smv:
                     lines.append(f"  next({smv_n}) :=")
                     lines.append("    case")
-                    lines.append(f"      {cond_smv} : ({new_val});")
+                    if has_phases:
+                        lines.append(f"      scan_phase != 0 : {smv_n};")
+                    if cond_smv:
+                        # Conditional step-action (e.g. lastScanTimeSeconds)
+                        phase0_cond = f"scan_phase = 0 & {cond_smv}" if has_phases else cond_smv
+                        lines.append(f"      {phase0_cond} : ({new_val});")
+                    else:
+                        lines.append(f"      TRUE : ({new_val});")
                     lines.append(f"      TRUE : {smv_n};")
                     lines.append("    esac;")
                 else:
@@ -1059,8 +1182,11 @@ class SMVGenerator:
                 upper = self._capacity_for(sa.target_key)
                 lines.append(f"  next({smv_n}) :=")
                 lines.append("    case")
+                if has_phases:
+                    lines.append(f"      scan_phase != 0 : {smv_n};")
                 if cond_smv:
-                    lines.append(f"      !({cond_smv}) : {smv_n};")
+                    phase0_cond = f"scan_phase = 0 & {cond_smv}" if has_phases else cond_smv
+                    lines.append(f"      !({phase0_cond}) : {smv_n};")
                 lines.append(f"      ({new_val}) < 0 : 0;")
                 lines.append(f"      ({new_val}) > {upper} : {upper};")
                 lines.append(f"      TRUE : ({new_val});")
@@ -1138,8 +1264,15 @@ class SMVGenerator:
                 lines.append(f"LTLSPEC G({smv_n} >= 0 & {smv_n} <= {upper})")
                 lines.append("")
 
+        # Requirements → LTLSPEC
+        for req in self.parser.parsed_requirements:
+            spec_expr = self._to_smv(req.expression, req.context)
+            lines.append(f"-- Requirement: {req.name}")
+            lines.append(f"LTLSPEC G({spec_expr})")
+            lines.append("")
+
         # Phase 1f: placeholder LTL spec per SM instance
-        lines.append("-- TODO: verification properties (to be specified in SysML)")
+        lines.append("-- TODO: additional verification properties")
         for inst_fqn in self._sm_instances:
             if self._is_single_state(inst_fqn):
                 continue
