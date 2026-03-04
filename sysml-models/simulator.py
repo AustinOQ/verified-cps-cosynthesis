@@ -61,6 +61,7 @@ from sysml_parser import (
     ExpressionParser,
     Constraint, DerivedAttribute, StepAction, Parameter,
     AssignStmt, ItemDeclStmt, SendStmt, AcceptStmt, AttributeDeclStmt, IfStmt, PerformStmt,
+    SubactionCallStmt, InputBindingStmt, ActionDef,
     Action, State, Transition, StateMachine, Flow, PartInstance, PartDef,
     SysMLParser,
 )
@@ -348,6 +349,7 @@ class SimulationEngine:
         self.solver: Optional[ConstraintSolver] = None
         self.port_mailboxes: dict[str, list] = {}
         self.time = 0.0
+        self.model = None  # Neural policy function: dict -> dict
 
     def initialize(self, overrides: dict[str, float] = None) -> None:
         overrides = overrides or {}
@@ -557,6 +559,19 @@ class SimulationEngine:
                 return action
         return None
 
+    def _find_action_def(self, context: str, type_name: str) -> Optional[ActionDef]:
+        """Look up an ActionDef by type name from the part def of the given context."""
+        inst = self.parser.part_instances.get(context)
+        if not inst:
+            return None
+        pdef = self.parser.part_defs.get(inst.part_type)
+        if not pdef:
+            return None
+        for ad in pdef.action_defs:
+            if ad.name == type_name:
+                return ad
+        return None
+
     def _execute_action_stmts(self, stmts: list, context: str, local_items: dict = None) -> None:
         """Evaluate and apply a list of ActionStmt nodes in the given part context."""
         # Use passed-in locals (for recursive calls) or create fresh
@@ -630,6 +645,22 @@ class SimulationEngine:
                     value = evaluator.evaluate(stmt.init_expr)
                     if value is not None:
                         self.state[f"{context}::{stmt.name}"] = value
+            elif isinstance(stmt, SubactionCallStmt):
+                action_def = self._find_action_def(context, stmt.type_name)
+                if action_def and 'Neural' in action_def.metadata:
+                    # Collect input bindings into a dict
+                    inputs = {}
+                    for binding in stmt.bindings:
+                        if isinstance(binding, InputBindingStmt):
+                            inputs[binding.name] = evaluator.evaluate(binding.expr)
+                    # Call the neural model
+                    if self.model is not None:
+                        outputs = self.model(inputs)
+                    else:
+                        outputs = {}
+                    # Store outputs in state so policyCall.X references resolve
+                    for key, value in outputs.items():
+                        self.state[f"{context}::{stmt.name}::{key}"] = value
 
     def _execute_step_sends(self, dt: float) -> None:
         """Send items produced by step action bodies (e.g. thermometer reading)."""
@@ -714,6 +745,27 @@ class SimulationEngine:
             "state_vars": state_vars,
             "flow_rate": flow_rate,
         }
+
+    def requirement_statuses(self) -> dict[str, dict]:
+        """Evaluate all parsed requirements against the current state.
+
+        Returns a dict mapping requirement names to:
+            {"kind": str or None, "status": bool}
+        where kind is the first metadata annotation (e.g. "Obligation",
+        "Prohibition") or None, and status is True when the requirement holds.
+        """
+        result = {}
+        for req in self.parser.parsed_requirements:
+            evaluator = ExpressionEvaluator(
+                self.state, req.context,
+                self.parser.ref_bindings, self.parser.system_part)
+            try:
+                status = bool(evaluator.evaluate(req.expression))
+            except Exception:
+                status = False
+            kind = req.metadata[0] if req.metadata else None
+            result[req.name] = {"kind": kind, "status": status}
+        return result
 
     def issue_command(self, command: str) -> None:
         ctrl = self.parser.controller_part

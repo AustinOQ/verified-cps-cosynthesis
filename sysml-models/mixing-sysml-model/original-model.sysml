@@ -11,13 +11,6 @@ package TankFillingSystem {
     // Neural annotation.
     metadata def Neural;    
 
-    // Prohibition / Obligation annotations.
-    metadata def Prohibition;
-
-    metadata def Obligation;
-
-    metadata def Termination;
-
     item def ReadInputRegisterReqMsg :> ModbusReqMsg {
         attribute registerAddress : Integer;
     }
@@ -321,74 +314,36 @@ package TankFillingSystem {
             accept ModbusResMsg via valve2Port.resp;
         }
 
-        #Neural action def Policy {
-            in tank1VolumeMl : Integer;
-            in tank2VolumeMl : Integer;
-            in tank1TargetTransferMl : Integer;
-            in tank2TargetTransferMl : Integer;
-            in tank1OriginalMl : Integer;
-            in tank2OriginalMl : Integer;
-            in done : Boolean;
-
-            out shouldOpenValve1 : Boolean;
-            out shouldOpenValve2 : Boolean;
-            out shouldTurnOnPump1 : Boolean;
-            out shouldTurnOnPump2 : Boolean;
-        }
-
-        action ScanCycle {
+       #Neural action ScanCycle {
+            // Check if we need to run tank 1.
             item volume1ReadingReq : ReadInputRegisterReqMsg;
             assign volume1ReadingReq.registerAddress := 0;
             send volume1ReadingReq via volumeSensor1Port.req;
             item volume1Res : ReadInputRegisterRespMsg;
             accept volume1Res : ReadInputRegisterRespMsg via volumeSensor1Port.resp;
+            attribute shouldRunPump1 : Boolean = tank1OriginalLevelMl - volume1Res.response < tank1TransferMl;
 
+            if shouldRunPump1 {
+                perform action openValve1;
+                perform action turnOnPump1;
+            } else {
+                perform action turnOffPump1;
+                perform action closeValve1;
+            }
+
+            // Check if we need to run tank 2.
             item volume2ReadingReq : ReadInputRegisterReqMsg;
             assign volume2ReadingReq.registerAddress := 0;
             send volume2ReadingReq via volumeSensor2Port.req;
             item volume2Res : ReadInputRegisterRespMsg;
             accept volume2Res : ReadInputRegisterRespMsg via volumeSensor2Port.resp;
+            attribute shouldRunPump2 : Boolean = tank2OriginalLevelMl - volume2Res.response < tank2TransferMl;
 
-            action policyCall : Policy {
-                in tank1VolumeMl := volume1Res.response;
-                in tank2VolumeMl := volume2Res.response;
-                in tank1TargetTransferMl := tank1TransferMl;
-                in tank2TargetTransferMl := tank2TransferMl;
-                in tank1OriginalMl := tank1OriginalLevelMl;
-                in tank2OriginalMl := tank2OriginalLevelMl;
-                in done := (tank1OriginalLevelMl - volume1Res.response >= tank1TargetTransferMl) and
-                            (tank2OriginalLevelMl - volume2Res.response >= tank2TargetTransferMl);
-            }
-
-            if policyCall.shouldOpenValve1 {
-                perform action openValve1;
-            }
-
-            if policyCall.shouldTurnOnPump1 {
-                perform action turnOnPump1;
-            }
-
-            if not policyCall.shouldTurnOnPump1 {
-                perform action turnOffPump1;
-            }
-
-            if not policyCall.shouldOpenValve1 {
-                perform action closeValve1;
-            }
-
-            if policyCall.shouldOpenValve2 {
+            if shouldRunPump2 {
                 perform action openValve2;
-            }
-
-            if policyCall.shouldTurnOnPump2 {
                 perform action turnOnPump2;
-            }
-
-            if not policyCall.shouldTurnOnPump2 {
+            } else {
                 perform action turnOffPump2;
-            }
-
-            if not policyCall.shouldOpenValve2 {
                 perform action closeValve2;
             }
         }
@@ -487,7 +442,7 @@ package TankFillingSystem {
             fillingTank.inlet.flowRateMl == valve1.outlet.flowRateMl + valve2.outlet.flowRateMl
         }
 
-        #Prohibition
+
         requirement def 'No Dry Running' {
             doc /* When a tank is empty, the controller shall not turn on its corresponding pump. */
             subject s : FillingSystem;
@@ -498,7 +453,6 @@ package TankFillingSystem {
             }
         }
 
-        #Prohibition
         requirement def 'No Dead Heading' {
             doc /* When a valve is closed, the controller shall not turn on its corresponding pump. */
             subject s : FillingSystem;
@@ -509,7 +463,6 @@ package TankFillingSystem {
             }
         }
 
-        #Obligation 
         requirement def 'Fluid Transfer Termination Safety' {
             doc /* When the target fluid has been transferred, the controller shall turn off the pump and close the valve. */
             subject s : FillingSystem;
@@ -523,7 +476,6 @@ package TankFillingSystem {
             }
         }
 
-        #Obligation
         requirement def 'Fluid Transfer Liveness' {
             doc /* When the fluid transferred is below the target amount, the controller shall turn on the pump and open the valve during its next scan cycle. */
             subject s : FillingSystem;

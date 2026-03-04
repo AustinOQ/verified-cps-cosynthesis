@@ -1,13 +1,15 @@
 """
-train.py — RL training loop with LTL-derived sparse rewards for digital twins.
+train.py — RL training loop with requirement-derived sparse rewards.
 
 Architecture Context
 --------------------
 This module sits between two stages of the pipeline:
 
-    UPSTREAM:   SysML v2 extractor produces LTL formulas + a digital twin.
+    UPSTREAM:   SysML v2 parser + simulator produce a digital twin whose
+                SimulationEngine exposes requirement_statuses(), returning
+                the evaluated status of every requirement in the model.
     THIS FILE:  Trains a neural controller using the twin, rewarding only
-                via LTL violation detection (sparse rewards).
+                via requirement satisfaction checks (sparse rewards).
     DOWNSTREAM: The trained controller is verified in two phases:
                   1. β-CROWN checks every non-temporal property on the network
                      directly (per-input-point verification).
@@ -15,38 +17,40 @@ This module sits between two stages of the pipeline:
                      over a finite transition system whose valid transitions
                      are constrained by the non-temporal properties.
 
-The non-temporal properties (always / never) serve as the bridge between
-training and verification:
+Requirement kinds and their role in training:
 
-    During training (here):
-        They are per-step violation checks. Any violation → -1 reward,
-        episode terminates. The agent learns to avoid these states entirely.
+    Prohibition / Obligation (safety properties):
+        Per-step checks. If any requirement of these kinds has status=False,
+        the requirement is violated → -1 reward, episode terminates. The
+        agent learns to avoid these states entirely.
 
-    During verification (downstream):
-        The same properties define which transitions are POSSIBLE in the
-        nuXmv abstraction. β-CROWN proves that the trained network satisfies
-        each non-temporal property for all valid inputs. nuXmv then only
-        needs to explore transition sequences within that verified envelope.
-        This is what keeps temporal model checking tractable — without the
-        non-temporal constraints pruning the state space, nuXmv would face
-        an exponential blowup in reachable states.
+        During verification (downstream), the same requirements define which
+        transitions are POSSIBLE in the nuXmv abstraction. β-CROWN proves
+        the trained network satisfies each property for all valid inputs.
 
-    The critical invariant is that the SAME expressions used for reward here
-    are used for transition constraints in nuXmv. There is one source of
-    truth: the LTL extracted from the SysML v2 specification.
+    None (unclassified):
+        Treated as safety properties (same as Prohibition/Obligation).
+        If status=False → violation.
+
+Goal completion is signalled separately via the "done" key in the state
+dict. The termination condition is computed by the simulator and passed
+as an input to the neural policy (e.g., `in done : Boolean`), so the
+controller can observe when the task is complete. The twin surfaces this
+in the state dict returned to the training loop.
 
 Why Sparse Rewards
 ------------------
 The reward signal is intentionally sparse: -1 / 0 / +1, nothing else.
 
-    -1  A non-temporal safety property was violated this timestep.
-         Episode terminates immediately — no recovery, no partial credit.
+    -1  A safety requirement (Prohibition, Obligation, or unclassified) was
+        violated this timestep. Episode terminates immediately — no recovery,
+        no partial credit.
 
-     0  No violation, goal not yet reached. The agent gets no guidance about
-         whether it's "close" to the goal or "far" from a violation.
+     0  No violations, goal not yet reached. The agent gets no guidance about
+        whether it's "close" to the goal or "far" from a violation.
 
-    +1  The digital twin signals task completion (done=True) and no property
-         was violated on this final step.
+    +1  The twin signals task completion (done=True in the state dict) and
+        no safety requirement was violated on this final step.
 
     Why not shaped rewards?
         Shaped rewards (e.g., distance-to-goal, proximity-to-violation-boundary)
@@ -63,11 +67,12 @@ The reward signal is intentionally sparse: -1 / 0 / +1, nothing else.
 
     Why not -1 magnitude shaping?
         All violations are equally fatal: -1 regardless of "how badly" the
-        property was violated. This matches the semantics of the LTL spec,
+        property was violated. This matches the semantics of the requirement,
         where □(level ≥ 2) is either satisfied or not — there is no notion
         of "level = 1.9 is less bad than level = 0.1." A violation is a
         violation. This also simplifies the reward function to a pure boolean
-        check per property, which is exactly what β-CROWN will verify downstream.
+        check per requirement, which is exactly what β-CROWN will verify
+        downstream.
 
 Digital Twin Protocol
 ---------------------
@@ -88,35 +93,25 @@ Why a single function instead of a class with reset()/step()?
       generated from SysML v2 (chemical mixer), or a high-fidelity NVIDIA
       Omniverse simulation (drone). The training code is identical.
 
-State dict contract:
+Requirement Statuses Protocol
+-----------------------------
+The requirement_statuses callable returns the current status of every
+requirement in the model:
 
-    The twin returns a plain Python dict. Keys are strings that MUST match
-    the variable names used in the LTL specification. This is the critical
-    design decision that eliminates the mapping layer:
+    statuses = requirement_statuses()
+    -> {"No Dry Running": {"kind": "Prohibition", "status": True},
+        "Stop Simulation": {"kind": "Termination", "status": False}, ...}
 
-        SysML v2 spec says:  "pump_on", "valve_open", "level"
-        LTL extractor uses:   pump_on, valve_open, level
-        Twin returns:         {"pump_on": 1, "valve_open": 1, "level": 5.2}
-        Violation expression: "(pump_on) and not (valve_open)"
-        eval() namespace:     the twin's state dict directly
+Each entry maps a requirement name to:
+    kind:   "Prohibition", "Obligation", "Termination", or None
+    status: True if the requirement currently holds, False if violated
 
-    No var_map, no index translation, no observation vector flattening.
-    The variable names flow from the SysML v2 specification through the
-    LTL extractor, into the twin's state dict, and directly into eval().
-    One vocabulary, end to end.
-
-    The special key "done" (bool) signals that the task's goal condition
-    has been achieved. This corresponds to the liveness properties in the
-    LTL spec (e.g., ◇(|transferred - target| ≤ 2L)). The twin is
-    responsible for checking goal conditions because they require domain
-    logic (e.g., "close enough to target volume") that the generic reward
-    function cannot infer from the non-temporal properties alone.
-
-    The liveness properties themselves are verified by nuXmv over the
-    transition system, not by this training loop. The +1 reward for "done"
-    simply provides the learning signal that drives the agent toward
-    goal-reaching behavior. Verification that the goal is ALWAYS eventually
-    reached (under the verified transition constraints) is nuXmv's job.
+This callable is provided by SimulationEngine.requirement_statuses and
+evaluates the parsed SysML requirement expressions against the live
+simulator state. The requirement expressions, their metadata annotations
+(#Prohibition, #Obligation, #Termination), and the simulation variables
+they reference all originate from the same SysML v2 model — one source
+of truth, end to end.
 
 Timestep Convention
 -------------------
@@ -157,55 +152,48 @@ The policy object must implement three methods:
     advantage estimation, etc. are all encapsulated in the policy object.
 """
 
-from ltl_to_constraints import validate_violations
+# Requirement kinds that are treated as safety properties.
+# Violation (status=False) of any of these → -1 reward, episode terminates.
+_SAFETY_KINDS = {"Prohibition", "Obligation", None}
 
 
-# Restricted eval namespace: no builtins except safe math functions.
-# The state dict is passed as locals, so its keys become the only accessible
-# variables. This prevents the violation expressions from doing anything
-# beyond arithmetic and comparisons on state values.
-_EVAL_NS = {"__builtins__": {}, "abs": abs, "max": max, "min": min}
-
-
-def make_reward_fn(violations: list[str]):
+def make_reward_fn(requirement_statuses):
     """
-    Build a reward function that checks non-temporal LTL violations.
+    Build a reward function from a requirement_statuses callable.
 
-    Returns a closure:  state_dict -> float
+    Returns a closure:  state_dict -> (float, bool)
 
-    The returned function evaluates each violation expression against the
-    state dict. Because the twin's state dict keys match the LTL variable
-    names, the dict IS the eval namespace — no translation needed.
+    The returned function calls requirement_statuses() to check safety
+    properties, and inspects state["done"] for goal completion:
 
-    Return values:
-        -1.0  First violation expression that evaluates to True. Short-circuits:
-              remaining expressions are not checked. The episode should
-              terminate immediately (the state is unsafe).
-        +1.0  No violations AND state["done"] is True. The task goal was
-              reached safely. This is the only positive reward the agent
-              ever receives.
-         0.0  No violations, goal not yet reached. Continue.
+        -1.0, True   A safety requirement (Prohibition, Obligation, or
+                      unclassified) has status=False. Episode should
+                      terminate immediately.
+        +1.0, True   state["done"] is True and no safety requirement
+                      is violated. Goal reached.
+         0.0, False  No violations, goal not yet reached. Continue.
 
     Parameters
     ----------
-    violations : list[str]
-        Violation expressions from ltl_to_violations(). Each must eval to
-        True when the corresponding safety property is violated.
+    requirement_statuses : callable
+        Returns dict[str, {"kind": str|None, "status": bool}].
+        Typically SimulationEngine.requirement_statuses.
     """
-    def reward(state: dict) -> float:
-        for v in violations:
-            if eval(v, _EVAL_NS, state):
-                return -1.0
+    def reward(state: dict) -> tuple[float, bool]:
+        statuses = requirement_statuses()
+        for entry in statuses.values():
+            if entry["kind"] in _SAFETY_KINDS and not entry["status"]:
+                return -1.0, True
         if state.get("done"):
-            return 1.0
-        return 0.0
+            return 1.0, True
+        return 0.0, False
     return reward
 
 
-def train(twin, violations, policy,
+def train(twin, requirement_statuses, policy,
           n_episodes=1000, max_steps=200, dt=0.05):
     """
-    Train a controller via sparse LTL rewards on a plug-and-play digital twin.
+    Train a controller via sparse requirement-derived rewards on a digital twin.
 
     Parameters
     ----------
@@ -213,14 +201,12 @@ def train(twin, violations, policy,
         The digital twin / simulation environment.
         twin()       -> dict : reset, return initial state.
         twin(action) -> dict : step by dt seconds, return new state.
-        State dict keys must match the variable names in the LTL spec.
-        Set "done": True in the state dict when the goal is reached.
+        State dict must include "done" (bool) when the goal is reached.
 
-    violations : list[str]
-        Violation expressions from ltl_to_violations(). These are the
-        non-temporal (always/never) properties converted to per-step checks.
-        The same expressions will later constrain the nuXmv transition
-        system for temporal verification.
+    requirement_statuses : callable
+        Returns the current status of every requirement in the model.
+        -> dict[str, {"kind": str|None, "status": bool}]
+        Typically bound to SimulationEngine.requirement_statuses.
 
     policy : object
         RL policy with methods:
@@ -239,14 +225,7 @@ def train(twin, violations, policy,
         Simulation timestep in seconds. Each twin(action) call advances
         the clock by this amount. Default 0.05 (20 Hz).
     """
-    reward_fn = make_reward_fn(violations)
-
-    # Validate violation expressions against the twin's state dict keys
-    # before training. Catches variable name mismatches (e.g., LTL says
-    # "pump_on" but twin returns "pump_active") immediately rather than
-    # mid-training. This is the one-vocabulary invariant being enforced.
-    init = twin()
-    validate_violations(violations, [k for k in init if k != "done"])
+    reward_fn = make_reward_fn(requirement_statuses)
 
     for ep in range(n_episodes):
         state = twin()
@@ -257,8 +236,7 @@ def train(twin, violations, policy,
             next_state = twin(action)
             step += 1  # clock += dt
 
-            reward = reward_fn(next_state)
-            done = next_state.get("done", False) or reward < 0
+            reward, done = reward_fn(next_state)
 
             policy.store(state, action, reward, next_state, done)
             state = next_state
