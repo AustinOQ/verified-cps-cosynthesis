@@ -630,6 +630,11 @@ class SimulationEngine:
             elif isinstance(stmt, AcceptStmt):
                 port_key = f"{context}::{stmt.port.replace('.', '::')}"
                 mailbox = self.port_mailboxes.get(port_key, [])
+                # If no mailbox at the full path, try the parent port
+                # (e.g., thermometerPort.reading -> thermometerPort)
+                if not mailbox and '::' in port_key:
+                    parent_key = port_key.rsplit('::', 1)[0]
+                    mailbox = self.port_mailboxes.get(parent_key, [])
                 for i, item in enumerate(mailbox):
                     if self._is_subtype(item['type'], stmt.type_name):
                         if stmt.var_name:

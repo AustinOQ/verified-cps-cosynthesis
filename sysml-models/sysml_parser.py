@@ -821,8 +821,10 @@ class SysMLParser:
             self.part_def_ports[part_name] = ports
 
             # Check if exhibits state machine
+            # Strip single-line comments so that commented-out exhibits are ignored
+            part_body_uncommented = re.sub(r'//[^\n]*', '', part_body)
             exhibit_pattern = r'exhibit\s+state\s+\w+\s*:\s*(\w+)\s*;'
-            exhibit_match = re.search(exhibit_pattern, part_body)
+            exhibit_match = re.search(exhibit_pattern, part_body_uncommented)
             if exhibit_match:
                 part_def.exhibits_state = exhibit_match.group(1)
 

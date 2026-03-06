@@ -1,16 +1,6 @@
 package Thermostat {
     private import ScalarValues::*;
 
-    // Neural annotation.
-    metadata def Neural;    
-
-    // Prohibition / Obligation annotations.
-    metadata def Prohibition;
-
-    metadata def Obligation;
-
-    metadata def Termination;
-
     item def TemperatureReading {
         attribute temperatureCelcius : Real;
     }
@@ -105,53 +95,60 @@ package Thermostat {
     part def Controller {
         attribute setPointCelcius : Real;
         attribute toleranceCelcius : Real;
-        attribute heaterOn : Boolean;
-        attribute acOn : Boolean;
         
         port heaterControlPort : ~HeatingCoolingCmdPort;
         port acControlPort : ~HeatingCoolingCmdPort;
         port thermometerPort : TemperatureSensorPort;
 
-        #Neural action def Policy {
-            in setPoint : Real;
-            in temperatureCelcius : Real;
-            in done : Boolean;
+        state def ControllerBehavior {
+            entry; then waiting;
 
-            out heaterState : Boolean;
-            out acState : Boolean;
-        }
+            state waiting;
+            state heating;
+            state cooling;
 
-        action step {
-            in dt : Real;
-
-            item reading : TemperatureReading;
-            accept reading : TemperatureReading via thermometerPort.reading;
-
-            action policyCall : Policy {
-                in setPoint := setPointCelcius;
-                in temperatureCelcius := reading.temperatureCelcius;
-                in done := setPointCelcius <= reading.temperatureCelcius + toleranceCelcius and
-                setPointCelcius >= reading.temperatureCelcius - toleranceCelcius and not heaterOn and not acOn;
-            }
-
-            assign heaterOn := policyCall.heaterState;
-            if policyCall.heaterState {
-                item onCmd : HeatingCoolingOnCmd;
-                send onCmd via heaterControlPort;
-            } else {
-                item resetCmd : HeatingCoolingResetCmd;
-                send resetCmd via heaterControlPort;
-            }
+            transition waiting_to_heating
+                first waiting
+                accept temperatureReading : TemperatureReading via thermometerPort 
+                if temperatureReading.temperatureCelcius < setPointCelcius - toleranceCelcius
+                do action {
+                    item onCmd : HeatingCoolingOnCmd;
+                    send onCmd via heaterControlPort; 
+                }
+                then heating;
             
-            assign acOn := policyCall.acState;
-            if policyCall.acState {
-                item onCmd : HeatingCoolingOnCmd;
-                send onCmd via acControlPort;
-            } else {
-                item resetCmd : HeatingCoolingResetCmd;
-                send resetCmd via acControlPort;
-            }
+            transition heating_to_waiting
+                first heating
+                accept temperatureReading : TemperatureReading via thermometerPort
+                if temperatureReading.temperatureCelcius >= setPointCelcius - toleranceCelcius
+                do action {
+                    item resetCmd : HeatingCoolingResetCmd;
+                    send resetCmd via heaterControlPort;
+                }
+                then waiting;
+            
+            transition waiting_to_cooling
+                first waiting
+                accept temperatureReading : TemperatureReading via thermometerPort
+                if temperatureReading.temperatureCelcius > setPointCelcius + toleranceCelcius
+                do action {
+                    item onCmd : HeatingCoolingOnCmd;
+                    send onCmd via acControlPort;
+                }
+                then cooling;
+            
+            transition cooling_to_waiting
+                first cooling
+                accept temperatureReading : TemperatureReading via thermometerPort 
+                if temperatureReading.temperatureCelcius <= setPointCelcius + toleranceCelcius
+                do action {
+                    item resetCmd : HeatingCoolingResetCmd;
+                    send resetCmd via acControlPort;
+                }
+                then waiting;
         }
+
+        exhibit state controllerBehavior : ControllerBehavior;
     }
 
     part def HeatingCoolingSystem {
@@ -168,38 +165,6 @@ package Thermostat {
         connect controller.acControlPort to ac.cmdIn;
         connect controller.heaterControlPort to heater.cmdIn;
         connect thermometer.upstreamPort to controller.thermometerPort;
-
-        #Prohibition
-        requirement def 'No Simultaneous Heating and Cooling' {
-            doc /* The controller shall not turn on both the heater and AC at the same time. */
-            subject s : HeatingCoolingSystem;
-
-            require constraint {
-                not (s.controller.heaterOn and s.controller.acOn)
-            }
-        }
-
-        #Obligation
-        requirement def 'Heat When Cold' {
-            doc /* When the temperature is below the setpoint minus tolerance, the heater shall be on. */
-            subject s : HeatingCoolingSystem;
-
-            require constraint {
-                s.environment.temperatureCelcius < s.controller.setPointCelcius - s.controller.toleranceCelcius
-                    implies s.controller.heaterOn
-            }
-        }
-
-        #Obligation
-        requirement def 'Cool When Hot' {
-            doc /* When the temperature is above the setpoint plus tolerance, the AC shall be on. */
-            subject s : HeatingCoolingSystem;
-
-            require constraint {
-                s.environment.temperatureCelcius > s.controller.setPointCelcius + s.controller.toleranceCelcius
-                    implies s.controller.acOn
-            }
-        }
     }
 
     part system : HeatingCoolingSystem {
