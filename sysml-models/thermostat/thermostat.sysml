@@ -11,6 +11,11 @@ package Thermostat {
 
     metadata def Termination;
 
+    // Scenario input annotations.
+    metadata def ScenarioInput;
+
+    metadata def ScenarioConstraint;
+
     item def TemperatureReading {
         attribute temperatureCelcius : Real;
     }
@@ -206,7 +211,7 @@ package Thermostat {
         part :>> environment {
             attribute :>> temperatureCelcius = 23.9;
             attribute :>> volumeMetersCubed = 20;
-            attribute :>> outsideTemperatureCelcius = 5.0;
+            #ScenarioInput attribute :>> outsideTemperatureCelcius = 5.0;
             attribute :>> heatLossCoefficientWattsPerCelcius = 10.0;
         }
 
@@ -219,8 +224,15 @@ package Thermostat {
         }
 
         part :>> controller {
-            attribute :>> setPointCelcius = 18.3;
+            #ScenarioInput attribute :>> setPointCelcius = 18.3;
             attribute :>> toleranceCelcius = 1;
+        }
+
+        #ScenarioConstraint constraint scenarioConstraint {
+            controller.setPointCelcius >= 12.78 and 
+            controller.setPointCelcius <= 37.78 and 
+            environment.outsideTemperatureCelcius <= 50 and 
+            environment.outsideTemperatureCelcius >= -30
         }
     }
 }

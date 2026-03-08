@@ -1070,6 +1070,22 @@ class SysMLParser:
                     _add_param(sub_match.group(1), attr_match.group(2),
                                float(attr_match.group(3)), meta)
 
+            # Parse constraints at the top level of the system instantiation block.
+            constraint_pattern = r'(?:#(\w+)\s+)?constraint\s+(\w+)\s*\{\s*([^}]+)\s*\}'
+            for const_match in re.finditer(constraint_pattern, sys_body):
+                const_metadata = [const_match.group(1)] if const_match.group(1) else []
+                const_name = const_match.group(2)
+                const_expr = const_match.group(3).strip()
+                # Avoid duplicates (may already be parsed from part def).
+                if not any(c.name == const_name for c in self.parsed_constraints):
+                    self.parsed_constraints.append(Constraint(
+                        name=const_name,
+                        expression=None,
+                        raw_text=const_expr,
+                        context=self.system_part,
+                        metadata=const_metadata,
+                    ))
+
         # 2. System type definition: part def FillingSystem { part x : T { ... } }
         lookup_name = self.system_type if self.system_type else self.system_part
         sys_def_pattern = rf'part\s+def\s+{re.escape(lookup_name)}\s*\{{'
