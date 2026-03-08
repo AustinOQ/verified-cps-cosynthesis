@@ -87,7 +87,7 @@ class LogCallback(BaseCallback):
 def train(model_path: str, output_dir: str = "./rl_output",
           total_timesteps: int = 200_000, dt: float = 0.1,
           max_steps: int = 200, randomize: bool = False,
-          done_threshold: float = 0.0, shaping: bool = False) -> dict:
+          shaping: bool = False) -> dict:
     """Train a PPO controller from a SysML model.
 
     Args:
@@ -97,8 +97,6 @@ def train(model_path: str, output_dir: str = "./rl_output",
         dt:               Simulation timestep in seconds.
         max_steps:        Max steps per episode before truncation.
         randomize:        Randomize start states each episode.
-        done_threshold:   Reduce target values by this amount when checking
-                          done (makes convergence easier).
         shaping:          Use distance-based reward shaping.
 
     Returns:
@@ -128,8 +126,7 @@ def train(model_path: str, output_dir: str = "./rl_output",
 
     # 2. Build Gymnasium environment.
     env = SysMLEnv(model_path, interface, dt=dt, max_steps=max_steps,
-                   randomize=randomize, done_threshold=done_threshold,
-                   shaping=shaping)
+                   randomize=randomize, shaping=shaping)
 
     # 3. Train with SB3 PPO.
     # With shaping, less exploration needed (dense signal available).
@@ -170,14 +167,12 @@ def main():
                    help="Max steps per episode.")
     p.add_argument("--randomize", action="store_true",
                    help="Randomize start states each episode.")
-    p.add_argument("--done-threshold", type=float, default=0.0,
-                   help="Reduce target values by this amount for done check.")
     p.add_argument("--shaping", action="store_true",
                    help="Enable distance-based reward shaping.")
     args = p.parse_args()
 
     train(args.model_path, args.output_dir, args.timesteps, args.dt, args.max_steps,
-          args.randomize, args.done_threshold, args.shaping)
+          args.randomize, args.shaping)
 
 
 if __name__ == "__main__":

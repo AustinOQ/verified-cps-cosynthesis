@@ -155,10 +155,9 @@ class SysMLEnv(gym.Env):
     the SysML model) and uses SimulatorTwin for dynamics. No model-specific
     code is needed for the core train/eval loop.
 
-    The simulator's `done` binding value is unreliable (the expression
-    evaluator doesn't properly resolve sensor response refs), so we
-    exclude `done` from observations and recompute it from the extracted
-    done_expr using actual observation values.
+    The `done` signal from the SysML model's Neural action def is used
+    directly for episode termination. It is excluded from the policy's
+    observation vector (the agent doesn't see it as an input).
 
     Args:
         model_path:     Path to the .sysml model file.
@@ -167,17 +166,13 @@ class SysMLEnv(gym.Env):
         max_steps:      Maximum steps per episode before truncation.
         randomize:      If True, randomize scenario inputs each episode
                         using #ScenarioInput / #ScenarioConstraint metadata.
-        done_threshold: Reduce target values by this amount when checking
-                        done, making goal conditions easier to satisfy.
-                        Useful when exact convergence is slow.
         shaping:        If True, use distance-based reward shaping instead
                         of sparse rewards.
     """
 
     def __init__(self, model_path: str, interface: NeuralInterface,
                  dt: float = 0.1, max_steps: int = 200,
-                 randomize: bool = False, done_threshold: float = 0.0,
-                 shaping: bool = False):
+                 randomize: bool = False, shaping: bool = False):
         super().__init__()
         self.interface = interface
         self.max_steps = max_steps
@@ -186,14 +181,13 @@ class SysMLEnv(gym.Env):
         self._step_count = 0
         self._done_expr = interface.done_expr
         self._randomize = randomize
-        self._done_threshold = done_threshold
         self._shaping = shaping
 
         # Distance tracking for reward shaping.
         self._d_initial = 0.0
         self._last_distance = 0.0
 
-        # Exclude `done` from obs (simulator value is unreliable).
+        # Exclude `done` from policy observations (used only for termination).
         self._obs_indices = []
         for i, (name, typ) in enumerate(zip(interface.obs_names, interface.obs_types)):
             if name.lower() == 'done' and typ == 'Boolean':
@@ -212,11 +206,6 @@ class SysMLEnv(gym.Env):
         if interface.scenario_constraints:
             raw = ' and '.join(c.raw_text for c in interface.scenario_constraints)
             self._scenario_constraint_expr = _normalize_constraint_expr(raw)
-
-        # Build set of #ScenarioInput parameter names for done_threshold.
-        self._scenario_input_names = set()
-        if interface.scenario_inputs:
-            self._scenario_input_names = {p.name for p in interface.scenario_inputs}
 
     # ------------------------------------------------------------------
     # Goal distance (GENERAL)
@@ -323,8 +312,8 @@ class SysMLEnv(gym.Env):
         self._step_count += 1
         obs = self._raw_obs(state) / self._obs_scale
 
-        # 1. Check done (goal reached) first.
-        done = self._check_done(state)
+        # 1. Check done using the simulator's done signal.
+        done = bool(state.get('done', False))
         if done:
             reward = 10.0 if self._shaping else 1.0
             return obs, reward, True, False, {"violation": None}
@@ -364,34 +353,6 @@ class SysMLEnv(gym.Env):
             if entry["kind"] == "Prohibition" and not entry["status"]:
                 return req_name
         return None
-
-    def _check_done(self, state: dict) -> bool:
-        """Evaluate the done expression against current observation values.
-
-        Uses the Python expression extracted from the SysML model's done
-        binding. Optionally applies done_threshold to make convergence
-        easier (reduces target values before checking).
-        """
-        if not self._done_expr:
-            return False
-        try:
-            ns = {}
-            for name in self.interface.obs_names:
-                if name.lower() == 'done':
-                    continue
-                ns[name] = _to_float(state.get(name))
-            # Apply threshold: reduce scenario input values so done triggers
-            # earlier. Only applies to #ScenarioInput-bound observations.
-            if self._done_threshold > 0 and self._scenario_input_names:
-                bindings = self.interface.obs_bindings or {}
-                for obs_name in list(ns):
-                    ref = bindings.get(obs_name, '')
-                    if ref in self._scenario_input_names:
-                        ns[obs_name] = max(0.0, ns[obs_name] - self._done_threshold)
-            ns["__builtins__"] = {}
-            return bool(eval(self._done_expr, ns))
-        except Exception:
-            return False
 
     def close(self):
         if self._twin is not None:
