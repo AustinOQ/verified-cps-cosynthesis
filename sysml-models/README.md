@@ -204,9 +204,9 @@ python mc-extract.py thermostat.sysml -o out.smv               # thermostat mode
 
 ## Verification with nuXmv
 
-`out.smv` uses nuXmv's native `real` arithmetic (via the MathSAT5 SMT backend). The
-interactive mode is required; the batch `./nuXmv out.smv` invocation only supports
-integer-arithmetic solvers.
+The generated SMV models use nuXmv's native `real` arithmetic (via the MathSAT5 SMT
+backend). The interactive mode is required; the batch `./nuXmv out.smv` invocation only
+supports integer-arithmetic solvers.
 
 **Start an interactive session:**
 
@@ -214,31 +214,102 @@ integer-arithmetic solvers.
 ./nuXmv -int out.smv
 ```
 
-### IC3 / PDR — unbounded proof
+### Verification methods
+
+nuXmv offers several verification methods. The right choice depends on whether the model
+is finite-state (all integer/enum/boolean variables) or infinite-state (contains `real`
+variables), and whether you need a full proof or just bug-finding.
+
+#### 1. IC3 / PDR — unbounded proof (finite-state only)
 
 ```
 go_msat
 check_ltlspec_ic3
 ```
 
-Uses the IC3/PDR (Property Directed Reachability) algorithm over MathSAT5. Proves or
-disproves each `LTLSPEC` for **all reachable states and all time**. Ideal for safety
-properties (invariants of the form `G p`). Returns a counterexample trace if the
-property fails.
+Uses the IC3/PDR (Property Directed Reachability) algorithm. Proves or disproves each
+`LTLSPEC` for **all reachable states and all time**. Returns a counterexample trace if
+the property fails.
 
-### BMC — bounded model checking
+**Limitation:** IC3 only works on finite-state models. If the model contains `real`
+variables (which happens when `--dt` is fractional, or when SysML attributes are typed
+`Real`), IC3 cannot verify the model — it operates on finite abstractions and will
+either reject the model or fail to converge.
+
+#### 2. BMC — bounded model checking (finite or infinite-state)
 
 ```
 go_msat
-msat_check_ltlspec_bmc -k 60
+msat_check_ltlspec_bmc -k 60       # LTLSPEC properties
+msat_check_invar_bmc -k 60         # INVARSPEC properties
 ```
 
 Unrolls the transition relation `k` steps and checks whether any counterexample of
-length ≤ k exists. Can find bugs up to depth k but cannot prove safety. Use a larger k
-to increase confidence, or to find counterexamples that require many steps to manifest.
+length ≤ k exists. Works with both finite and infinite-state models via SMT solving.
+Can find bugs up to depth k but **cannot prove safety** — the absence of a
+counterexample at depth k does not mean the property holds at depth k+1.
 
 `msat_check_ltlspec_bmc_onepb -k N` checks exactly length-N paths only (useful for
 liveness).
+
+#### 3. k-Induction — unbounded proof (infinite-state)
+
+```
+go_msat
+msat_check_invar_bmc -a een-sorensson
+```
+
+Uses the een-sorensson algorithm, which combines BMC with k-induction. For each
+`INVARSPEC`, it tries to find a k such that:
+
+1. The property holds for all states reachable in 0..k steps (base case).
+2. If the property holds for k consecutive states, it holds for the next (inductive step).
+
+If both succeed, the property is proven for **all reachable states**. This is the
+primary method for verifying real-valued models.
+
+**Important:** Safety properties must be written as `INVARSPEC φ`, not `LTLSPEC G(φ)`.
+The two are semantically equivalent for invariant properties, but `msat_check_invar_bmc`
+only processes `INVARSPEC`.
+
+##### Strengthening invariants
+
+k-induction requires properties to be *k-inductive*: the inductive step must go through
+using only the properties themselves as hypotheses. Many safety properties are not
+self-inductive because they depend on implicit relationships between variables (e.g.,
+a sensor reading matches its tank level after the read phase). Without help, the
+checker considers unreachable states where these relationships are violated, and the
+inductive step fails.
+
+`mc-extract.py` automatically generates **strengthening invariants** that encode these
+implicit relationships. They are conjoined with the main properties during k-induction,
+making the combined set inductive at low k values (typically k < 10). Four categories
+are generated:
+
+1. **Sensor–variable sync** — after a sensor read phase, the sensor response equals
+   the physical variable it measures.
+2. **Non-negativity** — Euler-integrated variables (tank levels, temperatures) are ≥ 0.
+3. **Actuator–condition ordering** — after an actuator's "off" phase, if the controlling
+   condition is false, the actuator is off.
+4. **Actuator coupling** — when two actuators share a controlling condition and the scan
+   cycle activates one before the other (deactivating in reverse order), the later one
+   being on implies the earlier one is on.
+
+All four categories are derived mechanically from model structure (phase ordering,
+DEFINE chains, step-action classification). See
+[invariant-heuristics.md](invariant-heuristics.md) for details.
+
+### LTLSPEC vs INVARSPEC
+
+| Form | Use with | Notes |
+|------|----------|-------|
+| `LTLSPEC G(φ)` | `check_ltlspec_ic3`, `msat_check_ltlspec_bmc` | Full LTL syntax, but k-induction not available |
+| `INVARSPEC φ` | `msat_check_invar_bmc` | Required for k-induction (`-a een-sorensson`) |
+
+For safety properties (always-true invariants), `LTLSPEC G(φ)` and `INVARSPEC φ` are
+semantically equivalent. `mc-extract.py` emits `INVARSPEC` by default for models that
+use scan-cycle sub-stepping, since k-induction is the only viable unbounded proof method
+for real-valued models.
 
 ### Choosing `k` relative to `dt`
 
@@ -259,8 +330,18 @@ To reduce the number of steps required, increase `--dt`:
 Larger `dt` is less accurate (coarser Euler steps) but dramatically reduces the BMC
 depth needed to observe slow physical dynamics.
 
-For the fluid-transfer model, use `--max-int` to cap integer ranges (the default
-2147483647 causes `go_msat` to hang):
+### Scan-cycle sub-stepping and verification depth
+
+Models with scan-cycle controllers (e.g., the fluid-transfer model) use phase-based
+sub-stepping: each scan cycle is broken into N sub-phases (e.g., 14 phases for the
+mixing model). This means one physical time step requires N+1 nuXmv transitions.
+A BMC bound of k covers only `k / (N+1)` physical time steps.
+
+With strengthening invariants and k-induction (`-a een-sorensson`), the proof typically
+converges at very low k (often k < 10), regardless of sub-stepping depth.
+
+For the fluid-transfer model, use `--max-int` to cap integer ranges if using integer
+mode (the default 2147483647 causes `go_msat` to hang):
 
 ```
 python mc-extract.py model.sysml --max-int 10000 -o out.smv

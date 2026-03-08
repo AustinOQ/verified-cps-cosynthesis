@@ -370,8 +370,8 @@ package TankFillingSystem {
         part valve1 : Valve;
 
         part feederTank1 : Tank {
-            attribute :>> capacityMl = 1000;
-            attribute :>> currentLevelMl = 1000;  // starts full
+            attribute :>> capacityMl = 150;
+            attribute :>> currentLevelMl = 150;  // starts full
         }
 
         // Components - feeder path 2
@@ -382,12 +382,12 @@ package TankFillingSystem {
         part valve2 : Valve;
 
         part feederTank2 : Tank {
-            attribute :>> capacityMl = 1000;
-            attribute :>> currentLevelMl = 1000;  // starts full
+            attribute :>> capacityMl = 150;
+            attribute :>> currentLevelMl = 150;  // starts full
         }
 
         part fillingTank : Tank {
-            attribute :>> capacityMl = 1000;
+            attribute :>> capacityMl = 300;
             attribute :>> currentLevelMl = 0;  // starts empty
         }
 
@@ -404,8 +404,8 @@ package TankFillingSystem {
             ref :>> volumeSensor2 = system::volumeSensor2;
             attribute :>> tank1TransferMl = 50;
             attribute :>> tank2TransferMl = 100;
-            attribute :>> tank1OriginalLevelMl = 1000;
-            attribute :>> tank2OriginalLevelMl = 1000;
+            attribute :>> tank1OriginalLevelMl = 150;
+            attribute :>> tank2OriginalLevelMl = 150;
         }
 
         // Flows - feeder path 1

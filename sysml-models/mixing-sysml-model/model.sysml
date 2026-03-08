@@ -8,8 +8,10 @@ package TankFillingSystem {
     item def ModbusReqMsg :> ModbusMsg;
     item def ModbusResMsg :> ModbusMsg;
 
-    // Neural annotation.
-    metadata def Neural;    
+    // Neural annotations.
+    metadata def Neural;
+
+    metadata def NeuralRequirement;
 
     // Prohibition / Obligation annotations.
     metadata def Prohibition;
@@ -341,6 +343,16 @@ package TankFillingSystem {
             out shouldTurnOnPump2 : Boolean;
         }
 
+        #NeuralRequirement requirement def 'Neural Controller Soundness' {
+            subject p : Policy;
+            require constraint {
+                (p.tank1OriginalMl - p.tank1VolumeMl < p.tank1TargetTransferMl == p.shouldTurnOnPump1) and 
+                (p.shouldTurnOnPump1 implies p.shouldOpenValve1) and 
+                (p.tank2OriginalMl - p.tank2VolumeMl < p.tank2TargetTransferMl == p.shouldTurnOnPump2) and 
+                (p.shouldTurnOnPump2 implies p.shouldOpenValve2)
+            }
+        }
+
         action ScanCycle {
             item volume1ReadingReq : ReadInputRegisterReqMsg;
             assign volume1ReadingReq.registerAddress := 0;
@@ -420,8 +432,8 @@ package TankFillingSystem {
         part valve1 : Valve;
 
         part feederTank1 : Tank {
-            attribute :>> capacityMl = 1000;
-            attribute :>> currentLevelMl = 1000;  // starts full
+            attribute :>> capacityMl = 150;
+            attribute :>> currentLevelMl = 150;  // starts full
         }
 
         // Components - feeder path 2
@@ -432,12 +444,12 @@ package TankFillingSystem {
         part valve2 : Valve;
 
         part feederTank2 : Tank {
-            attribute :>> capacityMl = 1000;
-            attribute :>> currentLevelMl = 1000;  // starts full
+            attribute :>> capacityMl = 150;
+            attribute :>> currentLevelMl = 150;  // starts full
         }
 
         part fillingTank : Tank {
-            attribute :>> capacityMl = 1000;
+            attribute :>> capacityMl = 300;
             attribute :>> currentLevelMl = 0;  // starts empty
         }
 
@@ -454,8 +466,8 @@ package TankFillingSystem {
             ref :>> volumeSensor2 = system::volumeSensor2;
             #ScenarioInput attribute :>> tank1TransferMl = 50;
             #ScenarioInput attribute :>> tank2TransferMl = 100;
-            #ScenarioInput attribute :>> tank1OriginalLevelMl = 1000;
-            #ScenarioInput attribute :>> tank2OriginalLevelMl = 1000;
+            #ScenarioInput attribute :>> tank1OriginalLevelMl = 150;
+            #ScenarioInput attribute :>> tank2OriginalLevelMl = 150;
         }
 
         #ScenarioConstraint constraint scenarioConstraints {

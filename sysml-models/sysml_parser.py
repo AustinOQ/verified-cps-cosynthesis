@@ -453,7 +453,7 @@ class PartDef:
     actions: list[Action] = field(default_factory=list)
     action_defs: list[ActionDef] = field(default_factory=list)
     bindings: list[tuple[str, str]] = field(default_factory=list)  # (lhs_path, rhs_path)
-    requirements: list[tuple[str, str, str, list[str]]] = field(default_factory=list)  # (name, subject_var, expr_text, metadata)
+    requirements: list[tuple[str, str, str, str, list[str]]] = field(default_factory=list)  # (name, subject_var, subject_type, expr_text, metadata)
     exhibits_state: Optional[str] = None  # State machine name if this part exhibits one
 
 
@@ -771,6 +771,7 @@ class SysMLParser:
                 if not subj_match:
                     continue
                 subject_var = subj_match.group(1)
+                subject_type = subj_match.group(2)
                 # Extract require constraint body (nested braces)
                 rc_match = re.search(r'require\s+constraint\s*\{', req_body)
                 if not rc_match:
@@ -778,7 +779,7 @@ class SysMLParser:
                 rc_body, _ = self._extract_block_from_string(
                     req_body, rc_match.end())
                 part_def.requirements.append(
-                    (req_name, subject_var, rc_body.strip(), req_metadata))
+                    (req_name, subject_var, subject_type, rc_body.strip(), req_metadata))
 
             # Parse refs
             ref_pattern = r'ref\s+(\w+)\s*:\s*(\w+)\s*;'
@@ -1196,7 +1197,7 @@ class SysMLParser:
                 rhs_key = f"{fqn}::" + rhs.replace('.', '::')
                 self.parsed_bindings[lhs_key] = rhs_key
 
-        # Add system-level constraints and requirements
+        # Add system-level constraints, requirements, and step actions
         if self.system_part:
             for name, pdef in self.part_defs.items():
                 if 'System' in name or name == self.system_part or name == self.system_type:
@@ -1213,7 +1214,7 @@ class SysMLParser:
                             ))
                         except Exception:
                             pass
-                    for req_name, subject_var, req_expr, req_metadata in pdef.requirements:
+                    for req_name, subject_var, _subject_type, req_expr, req_metadata in pdef.requirements:
                         try:
                             parser = ExpressionParser(req_expr)
                             expr = parser.parse()
@@ -1231,6 +1232,59 @@ class SysMLParser:
                             ))
                         except Exception:
                             pass
+                    # System-level step actions (e.g. assign currentTime := currentTime + dt)
+                    sys_assign_targets: set[str] = set()
+                    for action in pdef.actions:
+                        if action.name == 'step':
+                            fqn = self.system_part
+                            self.step_action_bodies.append((fqn, action.body))
+                            for stmt, cond in self._walk_assigns(action.body):
+                                target_key = f"{fqn}::" + "::".join(stmt.target)
+                                self.step_actions.append(StepAction(
+                                    action_name=action.name,
+                                    target_path=stmt.target,
+                                    target_key=target_key,
+                                    expression=stmt.expr,
+                                    context=fqn,
+                                    condition=cond,
+                                ))
+                                if len(stmt.target) == 1:
+                                    sys_assign_targets.add(stmt.target[0])
+
+                    # System-level derived attributes: skip assign targets,
+                    # but promote them to parameters if they have initial values.
+                    fqn = self.system_part
+                    found_fqns = {p.qualified_name for p in self.parameters}
+                    for attr_name, expr_text in pdef.derived_attributes.items():
+                        if attr_name in sys_assign_targets:
+                            # Assign target with initial value → parameter
+                            try:
+                                val = float(expr_text)
+                            except (ValueError, TypeError):
+                                continue
+                            qn = f"{fqn}::{attr_name}"
+                            if qn not in found_fqns:
+                                found_fqns.add(qn)
+                                parts = qn.split('::')
+                                self.parameters.append(Parameter(
+                                    name=attr_name,
+                                    qualified_name=qn,
+                                    value=val,
+                                    part_path=parts[:-1],
+                                ))
+                        else:
+                            # True derived attribute → DEFINE
+                            try:
+                                parser = ExpressionParser(expr_text)
+                                expr = parser.parse()
+                                self.derived_attributes.append(DerivedAttribute(
+                                    name=attr_name,
+                                    qualified_name=f"{fqn}::{attr_name}",
+                                    expression=expr,
+                                    context=fqn,
+                                ))
+                            except Exception:
+                                pass
 
     def _extract_block(self, start_pos: int) -> str:
         """Extract content between braces starting at given position."""

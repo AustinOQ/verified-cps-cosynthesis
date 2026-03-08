@@ -31,6 +31,7 @@ from typing import Any, Optional
 from sysml_parser import (
     Expr, LiteralExpr, RefExpr, BinaryExpr, TernaryExpr, UnaryExpr,
     AssignStmt, ItemDeclStmt, SendStmt, AcceptStmt, AttributeDeclStmt, IfStmt, PerformStmt,
+    SubactionCallStmt, InputBindingStmt,
     Action,
     Constraint, Requirement, DerivedAttribute, StepAction, Parameter,
     State, Transition, StateMachine, Flow, PartInstance, PartDef,
@@ -124,6 +125,18 @@ def _contains_implies(expr: Expr) -> bool:
     return False
 
 
+def _find_neural_call(stmts: list, type_name: str) -> Optional[SubactionCallStmt]:
+    """Recursively find a SubactionCallStmt invoking the named #Neural action def."""
+    for s in stmts:
+        if isinstance(s, SubactionCallStmt) and s.type_name == type_name:
+            return s
+        if isinstance(s, IfStmt):
+            r = _find_neural_call(s.body, type_name) or _find_neural_call(s.else_body, type_name)
+            if r:
+                return r
+    return None
+
+
 class SMVGenerator:
     """Generates a nuXmv SMV model from a parsed SysML model."""
 
@@ -157,8 +170,15 @@ class SMVGenerator:
         self._bool_ivars: list[str] = []           # SMV names for boolean IVARs
         self._real_ivars: list[str] = []           # SMV names for real IVARs
         self._scan_phase_count: int = 0            # number of scan sub-phases (0 = no sub-stepping)
+        self._neural_invar: Optional[str] = None    # INVAR from #NeuralRequirement
+        # Phase effects for strengthening invariants:
+        # Each entry: {phase, condition_smv, target_smv, value_smv, device_fqn}
+        self._phase_effects: list[dict] = []
+        # Sensor read phases: sensor_response_smv → (read_phase, value_source_smv)
+        self._sensor_read_phases: dict[str, tuple[int, str]] = {}
 
         self._build_info()
+        self._build_neural_ivars()
 
     # ------------------------------------------------------------------
     # Naming helpers
@@ -251,7 +271,10 @@ class SMVGenerator:
         return None
 
     def _needs_real(self, key: str) -> bool:
-        """True if this step-action target should be real (native real, or dt is fractional)."""
+        """True if this step-action target should be real (native real, or dt is fractional).
+        Boolean attributes are never promoted to real."""
+        if self._is_boolean(key):
+            return False
         return self._is_real(key) or self._dt_is_real
 
     def _is_real(self, key: str) -> bool:
@@ -539,6 +562,165 @@ class SMVGenerator:
                 continue
             self._process_implies(c)
 
+    def _build_accept_map_from_action(self, ctrl_def, ctrl_fqn: str) -> dict:
+        """Build accept-var map from AcceptStmts in the controller's action bodies.
+
+        Returns: {var_name: (device_smv, item_name)}
+        """
+        accept_map: dict[str, tuple[str, str]] = {}
+        ctrl_name = ctrl_fqn.split("::")[-1]
+
+        # Build reverse connect map: "controller.port" → "device.port"
+        rev_connect: dict[str, str] = {}
+        for c in self.parser.connects:
+            c_from, c_to = c if isinstance(c, tuple) else (c.from_port, c.to_port)
+            from_parts = c_from.split('.', 1)
+            to_parts = c_to.split('.', 1)
+            if from_parts[0] == ctrl_name:
+                rev_connect[c_from] = c_to
+            elif to_parts[0] == ctrl_name:
+                rev_connect[c_to] = c_from
+
+        for action in ctrl_def.actions:
+            flat_stmts = list(self._flatten_action_stmts(
+                action.body, ctrl_def))
+            for stmt, _cond in flat_stmts:
+                if isinstance(stmt, AcceptStmt) and stmt.var_name:
+                    port_parts = stmt.port.split('.')
+                    top_port = port_parts[0]
+                    sender_dot = f"{ctrl_name}.{top_port}"
+                    peer_dot = rev_connect.get(sender_dot)
+                    if peer_dot:
+                        peer_inst_name = peer_dot.split('.', 1)[0]
+                        peer_fqn = f"{self.system}::{peer_inst_name}"
+                        peer_smv = self._smv(peer_fqn)
+                        item_name = self._find_device_response_item(
+                            peer_fqn, stmt.type_name)
+                        if item_name:
+                            accept_map[stmt.var_name] = (peer_smv, item_name)
+        return accept_map
+
+    def _build_neural_ivars(self):
+        """Detect #Neural action, declare output IVARs, build INVAR from #NeuralRequirement."""
+        ctrl_fqn = self.parser.controller_part
+        if not ctrl_fqn:
+            return
+        ctrl_inst = self.parser.part_instances.get(ctrl_fqn)
+        if not ctrl_inst:
+            return
+        ctrl_def = self.parser.part_defs.get(ctrl_inst.part_type)
+        if not ctrl_def:
+            return
+
+        # Find #Neural action def.
+        neural_def = None
+        for ad in ctrl_def.action_defs:
+            if 'Neural' in ad.metadata:
+                neural_def = ad
+                break
+        if not neural_def:
+            return
+
+        # Find SubactionCallStmt that invokes it in any controller action body.
+        call_stmt = None
+        for action in ctrl_def.actions:
+            call_stmt = _find_neural_call(action.body, neural_def.name)
+            if call_stmt:
+                break
+        if not call_stmt:
+            return
+
+        ctrl_smv = self._smv(ctrl_fqn)
+        call_name = call_stmt.name  # e.g. "policyCall"
+
+        # 1. Declare output params as boolean IVARs.
+        param_to_smv: dict[str, str] = {}
+        for p in neural_def.out_params:
+            ivar_name = f"{ctrl_smv}_{call_name}_{p.name}"
+            self._bool_ivars.append(ivar_name)
+            param_to_smv[p.name] = ivar_name
+
+        # 2. Map input params to SMV expressions via InputBindingStmts.
+        #    Use accept_map (built by _phase3d) to resolve accepted item refs.
+        #    If _phase3d didn't run (no scan-cycle controller), build a local
+        #    accept map from AcceptStmts in the action body.
+        accept_map = getattr(self, '_accept_map', {})
+        if not accept_map:
+            accept_map = self._build_accept_map_from_action(
+                ctrl_def, ctrl_fqn)
+        for b in call_stmt.bindings:
+            if isinstance(b, InputBindingStmt):
+                param_to_smv[b.name] = self._to_smv_with_accept_map(
+                    b.expr, ctrl_fqn, accept_map)
+
+        # 3. Find #NeuralRequirement and build INVAR.
+        for req_name, _sv, _st, req_expr, req_meta in ctrl_def.requirements:
+            if 'NeuralRequirement' not in req_meta:
+                continue
+            import re
+            # Strip subject prefix (e.g. "p.") from expression.
+            clean = re.sub(rf'\b{re.escape(_sv)}\.', '', req_expr)
+            # Substitute each param name with its SMV equivalent.
+            # Sort by length descending to avoid partial matches.
+            for pname, smv_expr in sorted(param_to_smv.items(),
+                                          key=lambda x: -len(x[0])):
+                clean = re.sub(rf'\b{re.escape(pname)}\b', smv_expr, clean)
+            # Resolve remaining bare identifiers as controller-scoped attributes.
+            # These are references like "toleranceCelcius" that aren't Policy
+            # params but belong to the controller's part definition.
+            import re as _re2
+            # Build set of all known SMV names (defines, vars, params)
+            _known_smv = set(self._defines.keys())
+            _known_smv.update(self._smv(k) for k in self._sa_keys | self._da_keys)
+            _known_smv.update(self._smv(pp.qualified_name)
+                              for pp in self.parser.parameters)
+            def _resolve_bare(m):
+                name = m.group(0)
+                # Skip SMV keywords and names already resolved
+                if name in ('TRUE', 'FALSE', 'not', 'case', 'esac',
+                            'next', 'init'):
+                    return name
+                if name in _known_smv:
+                    return name
+                # Try as controller attribute
+                key = ctrl_fqn + "::" + name
+                smv_n = self._smv(key)
+                if smv_n in _known_smv:
+                    return smv_n
+                return name
+            clean = _re2.sub(r'\b([a-zA-Z_]\w*)\b', _resolve_bare, clean)
+            # Convert SysML operators to SMV.
+            clean = clean.replace(' and ', ' & ')
+            clean = clean.replace(' or ', ' | ')
+            clean = clean.replace(' implies ', ' -> ')
+            clean = _re2.sub(r'\bnot\b', '!', clean)
+            clean = clean.replace('==', '=')
+            # Collapse whitespace.
+            clean = ' '.join(clean.split())
+            # Parenthesise comparisons: "a < b = c" → "(a < b) = c"
+            # so nuXmv doesn't choke on precedence.
+            import re as _re
+            clean = _re.sub(
+                r'(\([^()]+\)|[\w_.]+(?:\s*[-+*/]\s*[\w_.]+)*)'
+                r'\s*(<|>|<=|>=)\s*'
+                r'(\([^()]+\)|[\w_.]+(?:\s*[-+*/]\s*[\w_.]+)*)',
+                r'(\1 \2 \3)', clean)
+            # In non-scan-cycle models, sensor readings are step-action VARs
+            # updated via next().  The TRANS sees the *previous* step's reading,
+            # but the sensor read is conceptually instantaneous within the same
+            # step.  Substitute each sensor VAR with its flow source (the value
+            # next() would compute), resolved through the DEFINE chain.
+            if self._scan_phase_count == 0:
+                for sa in self._step_actions:
+                    smv_n = self._smv(sa.target_key)
+                    if smv_n not in clean:
+                        continue
+                    # Resolve the step-action's RHS to SMV, then follow DEFINEs
+                    source_smv = self._to_smv(sa.expression, sa.context)
+                    resolved = self._resolve_define_chain(source_smv)
+                    if resolved != smv_n:
+                        clean = clean.replace(smv_n, resolved)
+            self._neural_invar = clean
 
     def _collect_trigger_var_ivars(self, trigger_var: str, guard: Expr,
                                    inst_fqn: str, seen: set[str]):
@@ -655,7 +837,9 @@ class SMVGenerator:
         # Build accept-var → device response map for expression resolution.
         # Maps accept var name to (device_inst_smv, local_item_name) so
         # "volume1Res.response" → "volumeSensor1_rsp_response".
+        # Stored as instance var for use by _build_neural_ivars.
         accept_map: dict[str, tuple[str, str]] = {}
+        self._accept_map = accept_map
 
         # Find actions referenced by PerformStmt in non-step actions —
         # skip these since they'll be inlined via the flattener.
@@ -805,6 +989,27 @@ class SMVGenerator:
                         (stmt, recv_fqn, trans.trigger_var, phase, cond,
                          dict(item_assigns)))
 
+                # Record phase effects for strengthening invariants.
+                cond_smv = (self._to_smv_with_accept_map(cond, ctrl_fqn, accept_map)
+                            if cond is not None else None)
+                if trans.do_action:
+                    for do_stmt in trans.do_action:
+                        if isinstance(do_stmt, AssignStmt):
+                            target_key = recv_fqn + "::" + "::".join(do_stmt.target)
+                            if target_key in self._da_keys:
+                                target_smv = self._smv(target_key)
+                                val_smv = self._to_smv(do_stmt.expr, recv_fqn)
+                                self._phase_effects.append({
+                                    'phase': phase,
+                                    'condition': cond_smv,
+                                    'target_smv': target_smv,
+                                    'value_smv': val_smv,
+                                    'device_fqn': recv_fqn,
+                                })
+                                # Track sensor reads: sensor var → (phase, source)
+                                self._sensor_read_phases[target_smv] = (
+                                    phase, val_smv)
+
         self._scan_phase_count = phase
 
         # Build trigger IVAR DEFINEs (OR of all phase+condition pairs)
@@ -869,17 +1074,27 @@ class SMVGenerator:
                     f"case {case_body}; TRUE : {entries[0][2]}; esac")
 
     def _find_device_response_item(self, device_fqn: str, response_type: str) -> Optional[str]:
-        """Find the local item name used in a device's do-action for a response type."""
+        """Find the local item name used in a device's do-action or action body for a response type."""
+        # Check state machine transitions
         sm = self._sm_instances.get(device_fqn)
-        if not sm:
-            return None
-        for trans in sm.transitions:
-            if not trans.do_action:
-                continue
-            for stmt in trans.do_action:
-                if isinstance(stmt, ItemDeclStmt):
-                    if self._is_item_type_or_subtype(stmt.type_name, response_type):
-                        return stmt.name
+        if sm:
+            for trans in sm.transitions:
+                if not trans.do_action:
+                    continue
+                for stmt in trans.do_action:
+                    if isinstance(stmt, ItemDeclStmt):
+                        if self._is_item_type_or_subtype(stmt.type_name, response_type):
+                            return stmt.name
+        # Check action bodies (for devices without state machines)
+        inst = self.parser.part_instances.get(device_fqn)
+        if inst:
+            pdef = self.parser.part_defs.get(inst.part_type)
+            if pdef:
+                for action in pdef.actions:
+                    for stmt in action.body:
+                        if isinstance(stmt, ItemDeclStmt):
+                            if self._is_item_type_or_subtype(stmt.type_name, response_type):
+                                return stmt.name
         return None
 
     def _to_smv_with_accept_map(self, expr: Expr, context: str,
@@ -942,6 +1157,11 @@ class SMVGenerator:
 
     def _init_for(self, key: str) -> str:
         """Find the initial value for a parameter key, formatted for its type."""
+        if self._is_boolean(key):
+            for p in self.parser.parameters:
+                if p.qualified_name == key:
+                    return "TRUE" if p.value else "FALSE"
+            return "FALSE"
         use_real = self._needs_real(key)
         for p in self.parser.parameters:
             if p.qualified_name == key:
@@ -1014,7 +1234,9 @@ class SMVGenerator:
         # Step-action target variables
         for sa in self._step_actions:
             smv_n = self._smv(sa.target_key)
-            if self._needs_real(sa.target_key):
+            if self._is_boolean(sa.target_key):
+                lines.append(f"  {smv_n} : boolean;")
+            elif self._needs_real(sa.target_key):
                 lines.append(f"  {smv_n} : real;")
             else:
                 upper = self._capacity_for(sa.target_key)
@@ -1166,7 +1388,8 @@ class SMVGenerator:
             smv_n = self._smv(sa.target_key)
             new_val = self._to_smv(sa.expression, sa.context)
             cond_smv = self._to_smv(sa.condition, sa.context) if sa.condition else None
-            if self._needs_real(sa.target_key):
+            if self._is_boolean(sa.target_key) or self._needs_real(sa.target_key):
+                # Boolean and real targets: no clamping needed
                 if has_phases or cond_smv:
                     lines.append(f"  next({smv_n}) :=")
                     lines.append("    case")
@@ -1183,6 +1406,7 @@ class SMVGenerator:
                 else:
                     lines.append(f"  next({smv_n}) := ({new_val});")
             else:
+                # Integer targets: clamped to [0, upper]
                 upper = self._capacity_for(sa.target_key)
                 lines.append(f"  next({smv_n}) :=")
                 lines.append("    case")
@@ -1246,6 +1470,14 @@ class SMVGenerator:
         else:
             primary_sm = None
 
+        # Use INVARSPEC when the model has real variables (k-induction required),
+        # LTLSPEC G(...) otherwise (IC3 compatible).
+        has_reals = self._dt_is_real or any(
+            self._is_real(sa.target_key) for sa in self._step_actions)
+
+        def _spec(body: str) -> str:
+            return f"INVARSPEC {body}" if has_reals else f"LTLSPEC G({body})"
+
         # Safety: actuators follow state machine (controlled booleans, backward compat)
         if primary_sm and self._controlled:
             for state_name in [s.name for s in primary_sm.states]:
@@ -1256,33 +1488,196 @@ class SMVGenerator:
                 if parts_cond:
                     body = " & ".join(parts_cond)
                     lines.append(f"-- When {state_name}: actuators match")
-                    lines.append(f"LTLSPEC G({self.STATE_VAR} = {state_name} -> ({body}))")
+                    lines.append(_spec(f"{self.STATE_VAR} = {state_name} -> ({body})"))
                     lines.append("")
 
         # Safety: integer step-action targets stay within physical bounds
         for sa in self._step_actions:
-            if not self._needs_real(sa.target_key):
+            if not self._needs_real(sa.target_key) and not self._is_boolean(sa.target_key):
                 smv_n = self._smv(sa.target_key)
                 upper = self._capacity_for(sa.target_key)
                 lines.append(f"-- {smv_n} never leaves its physical bounds")
-                lines.append(f"LTLSPEC G({smv_n} >= 0 & {smv_n} <= {upper})")
+                lines.append(_spec(f"{smv_n} >= 0 & {smv_n} <= {upper}"))
                 lines.append("")
 
-        # Requirements → LTLSPEC
+        # Requirements → INVARSPEC or LTLSPEC
         for req in self.parser.parsed_requirements:
             spec_expr = self._to_smv(req.expression, req.context)
             lines.append(f"-- Requirement: {req.name}")
-            lines.append(f"LTLSPEC G({spec_expr})")
+            lines.append(_spec(spec_expr))
             lines.append("")
 
-        # Phase 1f: placeholder LTL spec per SM instance
+        # Phase 1f: placeholder spec per SM instance
         lines.append("-- TODO: additional verification properties")
         for inst_fqn in self._sm_instances:
             if self._is_single_state(inst_fqn):
                 continue
             state_var = self._state_var(inst_fqn)
-            lines.append(f"LTLSPEC G TRUE  -- placeholder for {state_var}")
+            lines.append(_spec("TRUE") + f"  -- placeholder for {state_var}")
         lines.append("")
+
+        return lines
+
+    # ------------------------------------------------------------------
+    # Strengthening invariants for k-induction convergence
+    # ------------------------------------------------------------------
+
+    def _resolve_define_chain(self, smv_name: str) -> str:
+        """Follow DEFINE aliases to find the underlying variable.
+
+        E.g. volumeSensor1_tankConnection_reading_volumeMl
+           → feederTank1_volumeSensorPort_reading_volumeMl
+           → feederTank1_currentLevelMl  (a VAR, not a DEFINE → stop)
+        """
+        visited = set()
+        cur = smv_name
+        while cur in self._defines and cur not in visited:
+            visited.add(cur)
+            val = self._defines[cur]
+            # Only follow simple name aliases (no operators, no case exprs)
+            if val.isidentifier() or (val.replace('_', '').isalnum() and not val[0].isdigit()):
+                cur = val
+            else:
+                break
+        return cur
+
+    def _gen_strengthening_invars(self) -> list[str]:
+        """Generate strengthening INVARSPEC lines for k-induction convergence.
+
+        These invariants encode implicit relationships that make the main
+        properties inductive at low k values:
+          1. Sensor-tank sync (after read phase, sensor = tank level)
+          2. Non-negativity of step-action targets
+          3. Actuator-condition ordering (after control phase, condition→state)
+          4. Valve-pump coupling (pump running → valve open)
+        """
+        if self._scan_phase_count == 0:
+            return []
+
+        lines = ["", "-- Strengthening invariants (auto-generated for k-induction)"]
+        max_phase = self._scan_phase_count
+        sa_smv_names = {self._smv(k) for k in self._sa_keys}
+
+        # 1. Sensor-tank sync: after sensor read phase, sensor = tank level.
+        #    Only consider targets whose value source resolves to a step-action var
+        #    (i.e., a physical quantity like tank level, not a coil command).
+        for sensor_smv, (read_phase, value_source) in self._sensor_read_phases.items():
+            # Trace the value source through DEFINEs to find the tank variable
+            tank_var = self._resolve_define_chain(value_source)
+            if tank_var not in sa_smv_names or tank_var == sensor_smv:
+                continue
+            lines.append(f"-- Sensor {sensor_smv} reads {tank_var} at phase {read_phase}")
+            lines.append(
+                f"INVARSPEC (scan_phase >= {read_phase + 1} & "
+                f"scan_phase <= {max_phase}) -> "
+                f"({sensor_smv} = {tank_var})")
+
+        # 2. Non-negativity of step-action (Euler-integrated) targets
+        for sa in self._step_actions:
+            smv_n = self._smv(sa.target_key)
+            lines.append(f"INVARSPEC {smv_n} >= 0")
+
+        # 3. Actuator-condition ordering: after an actuator's "off" phase,
+        #    if the condition is false, the actuator must be off.
+        #    Detect "off" phases by finding negated conditions (e.g., (!shouldRunPump1)).
+        #    Group phase effects by target and find the last "off" phase.
+        from collections import defaultdict
+        # target_smv → list of (phase, condition, value)
+        target_effects: dict[str, list[tuple[int, Optional[str], str]]] = defaultdict(list)
+        for eff in self._phase_effects:
+            target_effects[eff['target_smv']].append(
+                (eff['phase'], eff['condition'], eff['value_smv']))
+
+        for target_smv, effects in target_effects.items():
+            # Skip sensor targets (already handled above)
+            if target_smv in self._sensor_read_phases:
+                tank_var = self._resolve_define_chain(
+                    self._sensor_read_phases[target_smv][1])
+                if tank_var in sa_smv_names:
+                    continue
+
+            # Find the "off" phase: the latest phase with a negated condition.
+            # E.g., phase 5 has condition=(!controller_shouldRunPump1) → off
+            # After phase 5, if !shouldRunPump1, then !pump1_isRunning.
+            last_off_phase = -1
+            off_cond = None
+            for phase, cond, val in effects:
+                if cond is None:
+                    continue
+                # Detect negated condition: starts with (! or !
+                cond_stripped = cond.strip()
+                if (cond_stripped.startswith("(!") or
+                        cond_stripped.startswith("!")):
+                    if phase > last_off_phase:
+                        last_off_phase = phase
+                        off_cond = cond_stripped
+
+            if last_off_phase > 0 and off_cond:
+                lines.append(
+                    f"INVARSPEC (scan_phase >= {last_off_phase} & "
+                    f"scan_phase <= {max_phase} & "
+                    f"{off_cond}) -> !{target_smv}")
+
+        # 4. Actuator coupling: if two boolean do-action targets share the
+        #    same controlling condition and the scan cycle always activates
+        #    one before the other (and deactivates in reverse order), then
+        #    the later one being on implies the earlier one is on.
+        #    Derived purely from phase ordering and shared conditions —
+        #    no naming heuristics needed.
+
+        def _strip_negation(cond: str) -> tuple[str, bool]:
+            """Return (base_condition, is_negated)."""
+            c = cond.strip()
+            if c.startswith("(!") and c.endswith(")"):
+                return c[2:-1].strip(), True
+            if c.startswith("!"):
+                return c[1:].strip(), True
+            return c, False
+
+        # Collect per-target on/off phases grouped by base condition
+        # target_smv → {base_cond → {'on': [phases], 'off': [phases]}}
+        target_phase_info: dict[str, dict[str, dict[str, list[int]]]] = defaultdict(
+            lambda: defaultdict(lambda: {'on': [], 'off': []}))
+
+        for eff in self._phase_effects:
+            cond = eff['condition']
+            if cond is None:
+                continue
+            base_cond, is_neg = _strip_negation(cond)
+            key = 'off' if is_neg else 'on'
+            target_phase_info[eff['target_smv']][base_cond][key].append(eff['phase'])
+
+        # For each pair of targets sharing a base condition, check ordering
+        all_targets = list(target_phase_info.keys())
+        for i, target_a in enumerate(all_targets):
+            for target_b in all_targets[i + 1:]:
+                # Find shared base conditions
+                shared_conds = (set(target_phase_info[target_a].keys()) &
+                                set(target_phase_info[target_b].keys()))
+                for base_cond in shared_conds:
+                    a_info = target_phase_info[target_a][base_cond]
+                    b_info = target_phase_info[target_b][base_cond]
+                    if not (a_info['on'] and b_info['on'] and
+                            a_info['off'] and b_info['off']):
+                        continue
+                    # Check: A opens before B opens, and B closes before A closes
+                    # → B being on implies A is on
+                    if (max(a_info['on']) < min(b_info['on']) and
+                            max(b_info['off']) < min(a_info['off'])):
+                        lines.append(
+                            f"-- Actuator coupling: {target_a} activates before "
+                            f"{target_b}, deactivates after")
+                        lines.append(
+                            f"INVARSPEC {target_b} -> {target_a}")
+                    # Check reverse: B opens before A opens, A closes before B closes
+                    # → A being on implies B is on
+                    elif (max(b_info['on']) < min(a_info['on']) and
+                              max(a_info['off']) < min(b_info['off'])):
+                        lines.append(
+                            f"-- Actuator coupling: {target_b} activates before "
+                            f"{target_a}, deactivates after")
+                        lines.append(
+                            f"INVARSPEC {target_a} -> {target_b}")
 
         return lines
 
@@ -1306,10 +1701,18 @@ class SMVGenerator:
 
         parts.append("")
         parts.extend(self._gen_define())
+        if self._neural_invar:
+            parts.append("")
+            # Use TRANS (not INVAR) because the constraint references IVARs.
+            # INVAR cannot mention input variables; TRANS constrains
+            # valid (state, input) pairs at each transition step.
+            parts.append("TRANS")
+            parts.append(f"  {self._neural_invar};")
         parts.append("")
         parts.extend(self._gen_assign())
         parts.append("")
         parts.extend(self._gen_specs())
+        parts.extend(self._gen_strengthening_invars())
 
         return "\n".join(parts) + "\n"
 

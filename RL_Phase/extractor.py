@@ -88,6 +88,7 @@ class NeuralInterface:
     obs_bindings: Optional[dict[str, str]] = None
     scenario_inputs: list = None       # Parameter objects with #ScenarioInput
     scenario_constraints: list = None  # Constraint objects with #ScenarioConstraint
+    neural_requirements: list = None   # (name, raw_text) from #NeuralRequirement
 
 
 def extract_neural_interface(model_path: str) -> NeuralInterface:
@@ -138,12 +139,26 @@ def extract_neural_interface(model_path: str) -> NeuralInterface:
     scenario_constraints = [c for c in parser.parsed_constraints
                             if 'ScenarioConstraint' in c.metadata]
 
+    # Extract #NeuralRequirement constraints on the policy I/O.
+    # These are requirement defs inside part defs whose subject is the
+    # neural action def. Strip the subject prefix (e.g. "p.") from the
+    # raw expression so variable names match obs/action names directly.
+    neural_requirements = []
+    for part_def in parser.part_defs.values():
+        for req_name, subject_var, _subject_type, req_expr, req_metadata in part_def.requirements:
+            if 'NeuralRequirement' in req_metadata:
+                import re
+                clean_expr = re.sub(
+                    rf'\b{re.escape(subject_var)}\.', '', req_expr)
+                neural_requirements.append((req_name, clean_expr))
+
     return NeuralInterface(
         obs_names=obs_names, obs_types=obs_types,
         action_names=action_names, action_types=action_types,
         done_expr=done_expr, obs_bindings=obs_bindings,
         scenario_inputs=scenario_inputs,
         scenario_constraints=scenario_constraints,
+        neural_requirements=neural_requirements or None,
     )
 
 

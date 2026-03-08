@@ -1,8 +1,10 @@
 package Thermostat {
     private import ScalarValues::*;
 
-    // Neural annotation.
-    metadata def Neural;    
+    // Neural annotations.
+    metadata def Neural;
+
+    metadata def NeuralRequirement;
 
     // Prohibition / Obligation annotations.
     metadata def Prohibition;
@@ -126,6 +128,15 @@ package Thermostat {
             out acState : Boolean;
         }
 
+        #NeuralRequirement requirement def 'Neural Controller Soundness' {
+            subject p : Policy;
+            require constraint {
+                (p.setPoint > p.temperatureCelcius + toleranceCelcius == p.heaterState) and 
+                (p.setPoint < p.temperatureCelcius - toleranceCelcius == p.acState) and 
+                (not (p.heaterState and p.acState))
+            }
+        }
+
         action step {
             in dt : Real;
 
@@ -139,22 +150,28 @@ package Thermostat {
                 setPointCelcius >= reading.temperatureCelcius - toleranceCelcius and not heaterOn and not acOn;
             }
 
+            // Need to turn off before we turn on. 
+
             assign heaterOn := policyCall.heaterState;
-            if policyCall.heaterState {
-                item onCmd : HeatingCoolingOnCmd;
-                send onCmd via heaterControlPort;
-            } else {
+            assign acOn := policyCall.acState;
+            if not heaterOn {
                 item resetCmd : HeatingCoolingResetCmd;
                 send resetCmd via heaterControlPort;
             }
+
+            if not acOn {
+                item resetCmd : HeatingCoolingResetCmd;
+                send resetCmd via acControlPort;
+            }
+
+            if policyCall.heaterState {
+                item onCmd : HeatingCoolingOnCmd;
+                send onCmd via heaterControlPort;
+            }
             
-            assign acOn := policyCall.acState;
             if policyCall.acState {
                 item onCmd : HeatingCoolingOnCmd;
                 send onCmd via acControlPort;
-            } else {
-                item resetCmd : HeatingCoolingResetCmd;
-                send resetCmd via acControlPort;
             }
         }
     }
@@ -174,6 +191,13 @@ package Thermostat {
         connect controller.heaterControlPort to heater.cmdIn;
         connect thermometer.upstreamPort to controller.thermometerPort;
 
+        attribute currentTime : Real = 0;
+
+        action step {
+            in dt : Real;
+            assign currentTime := currentTime + dt;
+        }
+
         #Prohibition
         requirement def 'No Simultaneous Heating and Cooling' {
             doc /* The controller shall not turn on both the heater and AC at the same time. */
@@ -190,8 +214,9 @@ package Thermostat {
             subject s : HeatingCoolingSystem;
 
             require constraint {
-                s.environment.temperatureCelcius < s.controller.setPointCelcius - s.controller.toleranceCelcius
-                    implies s.controller.heaterOn
+                currentTime > 0 implies 
+                    (s.environment.temperatureCelcius < s.controller.setPointCelcius - s.controller.toleranceCelcius
+                        implies s.controller.heaterOn)
             }
         }
 
@@ -201,8 +226,9 @@ package Thermostat {
             subject s : HeatingCoolingSystem;
 
             require constraint {
-                s.environment.temperatureCelcius > s.controller.setPointCelcius + s.controller.toleranceCelcius
-                    implies s.controller.acOn
+                currentTime > 0 implies
+                    (s.environment.temperatureCelcius > s.controller.setPointCelcius + s.controller.toleranceCelcius
+                        implies s.controller.acOn)
             }
         }
     }
