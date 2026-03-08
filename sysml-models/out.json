@@ -1,0 +1,2582 @@
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+{
+  "system_part": "system",
+  "system_type": "FillingSystem",
+  "controller_part": "system::controller",
+  "parameters": [
+    {
+      "name": "maxFlowRateMl",
+      "qualified_name": "system::pump1::maxFlowRateMl",
+      "value": 10.0,
+      "part_path": [
+        "system",
+        "pump1"
+      ],
+      "cli_name": "pump1-max-flow-rate-ml",
+      "metadata": []
+    },
+    {
+      "name": "capacityMl",
+      "qualified_name": "system::feederTank1::capacityMl",
+      "value": 1000.0,
+      "part_path": [
+        "system",
+        "feederTank1"
+      ],
+      "cli_name": "feeder-tank1-capacity-ml",
+      "metadata": []
+    },
+    {
+      "name": "currentLevelMl",
+      "qualified_name": "system::feederTank1::currentLevelMl",
+      "value": 1000.0,
+      "part_path": [
+        "system",
+        "feederTank1"
+      ],
+      "cli_name": "feeder-tank1-current-level-ml",
+      "metadata": []
+    },
+    {
+      "name": "maxFlowRateMl",
+      "qualified_name": "system::pump2::maxFlowRateMl",
+      "value": 10.0,
+      "part_path": [
+        "system",
+        "pump2"
+      ],
+      "cli_name": "pump2-max-flow-rate-ml",
+      "metadata": []
+    },
+    {
+      "name": "capacityMl",
+      "qualified_name": "system::feederTank2::capacityMl",
+      "value": 1000.0,
+      "part_path": [
+        "system",
+        "feederTank2"
+      ],
+      "cli_name": "feeder-tank2-capacity-ml",
+      "metadata": []
+    },
+    {
+      "name": "currentLevelMl",
+      "qualified_name": "system::feederTank2::currentLevelMl",
+      "value": 1000.0,
+      "part_path": [
+        "system",
+        "feederTank2"
+      ],
+      "cli_name": "feeder-tank2-current-level-ml",
+      "metadata": []
+    },
+    {
+      "name": "capacityMl",
+      "qualified_name": "system::fillingTank::capacityMl",
+      "value": 1000.0,
+      "part_path": [
+        "system",
+        "fillingTank"
+      ],
+      "cli_name": "filling-tank-capacity-ml",
+      "metadata": []
+    },
+    {
+      "name": "currentLevelMl",
+      "qualified_name": "system::fillingTank::currentLevelMl",
+      "value": 0.0,
+      "part_path": [
+        "system",
+        "fillingTank"
+      ],
+      "cli_name": "filling-tank-current-level-ml",
+      "metadata": []
+    },
+    {
+      "name": "tank1TransferMl",
+      "qualified_name": "system::controller::tank1TransferMl",
+      "value": 50.0,
+      "part_path": [
+        "system",
+        "controller"
+      ],
+      "cli_name": "controller-tank1transfer-ml",
+      "metadata": [
+        "ScenarioInput"
+      ]
+    },
+    {
+      "name": "tank2TransferMl",
+      "qualified_name": "system::controller::tank2TransferMl",
+      "value": 100.0,
+      "part_path": [
+        "system",
+        "controller"
+      ],
+      "cli_name": "controller-tank2transfer-ml",
+      "metadata": [
+        "ScenarioInput"
+      ]
+    },
+    {
+      "name": "tank1OriginalLevelMl",
+      "qualified_name": "system::controller::tank1OriginalLevelMl",
+      "value": 1000.0,
+      "part_path": [
+        "system",
+        "controller"
+      ],
+      "cli_name": "controller-tank1original-level-ml",
+      "metadata": [
+        "ScenarioInput"
+      ]
+    },
+    {
+      "name": "tank2OriginalLevelMl",
+      "qualified_name": "system::controller::tank2OriginalLevelMl",
+      "value": 1000.0,
+      "part_path": [
+        "system",
+        "controller"
+      ],
+      "cli_name": "controller-tank2original-level-ml",
+      "metadata": [
+        "ScenarioInput"
+      ]
+    }
+  ],
+  "part_defs": {
+    "VolumeSensor": {
+      "name": "VolumeSensor",
+      "attributes": {},
+      "derived_attributes": {},
+      "constraints": [],
+      "refs": {},
+      "actions": [],
+      "action_defs": [],
+      "bindings": [],
+      "requirements": [],
+      "exhibits_state": "VolumeSensorBehavior"
+    },
+    "Tank": {
+      "name": "Tank",
+      "attributes": {
+        "capacityMl": "Integer",
+        "currentLevelMl": "Integer",
+        "isFull": "Boolean",
+        "isEmpty": "Boolean"
+      },
+      "derived_attributes": {
+        "isFull": "currentLevelMl >= capacityMl",
+        "isEmpty": "currentLevelMl <= 0"
+      },
+      "constraints": [],
+      "refs": {},
+      "actions": [
+        {
+          "name": "step",
+          "body": [
+            {
+              "__type__": "InParamStmt",
+              "name": "dt",
+              "type_name": "Real"
+            },
+            {
+              "__type__": "AssignStmt",
+              "target": [
+                "currentLevelMl"
+              ],
+              "expr": {
+                "type": "Binary",
+                "op": "+",
+                "left": {
+                  "type": "Ref",
+                  "path": [
+                    "currentLevelMl"
+                  ]
+                },
+                "right": {
+                  "type": "Binary",
+                  "op": "*",
+                  "left": {
+                    "type": "Binary",
+                    "op": "-",
+                    "left": {
+                      "type": "Ref",
+                      "path": [
+                        "inlet",
+                        "flowRateMl"
+                      ]
+                    },
+                    "right": {
+                      "type": "Ref",
+                      "path": [
+                        "outlet",
+                        "flowRateMl"
+                      ]
+                    }
+                  },
+                  "right": {
+                    "type": "Ref",
+                    "path": [
+                      "dt"
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "action_defs": [],
+      "bindings": [
+        [
+          "volumeSensorPort.reading.volumeMl",
+          "currentLevelMl"
+        ]
+      ],
+      "requirements": [],
+      "exhibits_state": null
+    },
+    "Pump": {
+      "name": "Pump",
+      "attributes": {
+        "isRunning": "Boolean",
+        "maxFlowRateMl": "Integer"
+      },
+      "derived_attributes": {},
+      "constraints": [
+        [
+          "flowConstraint",
+          "(isRunning implies outlet.flowRateMl == maxFlowRateMl) and\n            (not isRunning implies outlet.flowRateMl == 0)"
+        ]
+      ],
+      "refs": {},
+      "actions": [],
+      "action_defs": [],
+      "bindings": [],
+      "requirements": [],
+      "exhibits_state": "PumpBehavior"
+    },
+    "Valve": {
+      "name": "Valve",
+      "attributes": {
+        "isOpen": "Boolean"
+      },
+      "derived_attributes": {},
+      "constraints": [
+        [
+          "flowConstraint",
+          "(isOpen implies outlet.flowRateMl == inlet.flowRateMl) and\n            (not isOpen implies outlet.flowRateMl == 0)"
+        ]
+      ],
+      "refs": {},
+      "actions": [],
+      "action_defs": [],
+      "bindings": [],
+      "requirements": [],
+      "exhibits_state": "ValveBehavior"
+    },
+    "Controller": {
+      "name": "Controller",
+      "attributes": {
+        "tank1TransferMl": "Integer",
+        "tank2TransferMl": "Integer",
+        "tank1OriginalLevelMl": "Integer",
+        "tank2OriginalLevelMl": "Integer",
+        "scanCycleFrequencyHz": "Integer",
+        "lastScanTimeSeconds": "Real",
+        "currentTimeSeconds": "Real"
+      },
+      "derived_attributes": {
+        "scanCycleFrequencyHz": "10",
+        "lastScanTimeSeconds": "0",
+        "currentTimeSeconds": "0"
+      },
+      "constraints": [],
+      "refs": {
+        "pump1": "Pump",
+        "pump2": "Pump",
+        "valve1": "Valve",
+        "valve2": "Valve",
+        "tank": "Tank",
+        "volumeSensor1": "VolumeSensor",
+        "volumeSensor2": "VolumeSensor"
+      },
+      "actions": [
+        {
+          "name": "turnOnPump1",
+          "body": [
+            {
+              "__type__": "ItemDeclStmt",
+              "name": "valve1CoilReq",
+              "type_name": "WriteCoilReqMsg"
+            },
+            {
+              "__type__": "AssignStmt",
+              "target": [
+                "valve1CoilReq",
+                "coilAddress"
+              ],
+              "expr": {
+                "type": "Literal",
+                "value": 0
+              }
+            },
+            {
+              "__type__": "AssignStmt",
+              "target": [
+                "valve1CoilReq",
+                "coilValue"
+              ],
+              "expr": {
+                "type": "Literal",
+                "value": true
+              }
+            },
+            {
+              "__type__": "SendStmt",
+              "item_name": "valve1CoilReq",
+              "port": "valve1Port.req"
+            },
+            {
+              "__type__": "AcceptStmt",
+              "var_name": null,
+              "type_name": "ModbusResMsg",
+              "port": "valve1Port.resp"
+            },
+            {
+              "__type__": "ItemDeclStmt",
+              "name": "pump1CoilReq",
+              "type_name": "WriteCoilReqMsg"
+            },
+            {
+              "__type__": "AssignStmt",
+              "target": [
+                "pump1CoilReq",
+                "coilAddress"
+              ],
+              "expr": {
+                "type": "Literal",
+                "value": 0
+              }
+            },
+            {
+              "__type__": "AssignStmt",
+              "target": [
+                "pump1CoilReq",
+                "coilValue"
+              ],
+              "expr": {
+                "type": "Literal",
+                "value": true
+              }
+            },
+            {
+              "__type__": "SendStmt",
+              "item_name": "pump1CoilReq",
+              "port": "pump1Port.req"
+            },
+            {
+              "__type__": "AcceptStmt",
+              "var_name": null,
+              "type_name": "ModbusResMsg",
+              "port": "pump1Port.resp"
+            }
+          ]
+        },
+        {
+          "name": "turnOffPump1",
+          "body": [
+            {
+              "__type__": "ItemDeclStmt",
+              "name": "pump1CoilReq",
+              "type_name": "WriteCoilReqMsg"
+            },
+            {
+              "__type__": "AssignStmt",
+              "target": [
+                "pump1CoilReq",
+                "coilAddress"
+              ],
+              "expr": {
+                "type": "Literal",
+                "value": 0
+              }
+            },
+            {
+              "__type__": "AssignStmt",
+              "target": [
+                "pump1CoilReq",
+                "coilValue"
+              ],
+              "expr": {
+                "type": "Literal",
+                "value": false
+              }
+            },
+            {
+              "__type__": "SendStmt",
+              "item_name": "pump1CoilReq",
+              "port": "pump1Port.req"
+            },
+            {
+              "__type__": "AcceptStmt",
+              "var_name": null,
+              "type_name": "ModbusResMsg",
+              "port": "pump1Port.resp"
+            },
+            {
+              "__type__": "ItemDeclStmt",
+              "name": "valve1CoilReq",
+              "type_name": "WriteCoilReqMsg"
+            },
+            {
+              "__type__": "AssignStmt",
+              "target": [
+                "valve1CoilReq",
+                "coilAddress"
+              ],
+              "expr": {
+                "type": "Literal",
+                "value": 0
+              }
+            },
+            {
+              "__type__": "AssignStmt",
+              "target": [
+                "valve1CoilReq",
+                "coilValue"
+              ],
+              "expr": {
+                "type": "Literal",
+                "value": false
+              }
+            },
+            {
+              "__type__": "SendStmt",
+              "item_name": "valve1CoilReq",
+              "port": "valve1Port.req"
+            },
+            {
+              "__type__": "AcceptStmt",
+              "var_name": null,
+              "type_name": "ModbusResMsg",
+              "port": "valve1Port.resp"
+            }
+          ]
+        },
+        {
+          "name": "turnOnPump2",
+          "body": [
+            {
+              "__type__": "ItemDeclStmt",
+              "name": "valve2CoilReq",
+              "type_name": "WriteCoilReqMsg"
+            },
+            {
+              "__type__": "AssignStmt",
+              "target": [
+                "valve2CoilReq",
+                "coilAddress"
+              ],
+              "expr": {
+                "type": "Literal",
+                "value": 0
+              }
+            },
+            {
+              "__type__": "AssignStmt",
+              "target": [
+                "valve2CoilReq",
+                "coilValue"
+              ],
+              "expr": {
+                "type": "Literal",
+                "value": true
+              }
+            },
+            {
+              "__type__": "SendStmt",
+              "item_name": "valve2CoilReq",
+              "port": "valve2Port.req"
+            },
+            {
+              "__type__": "AcceptStmt",
+              "var_name": null,
+              "type_name": "ModbusResMsg",
+              "port": "valve2Port.resp"
+            },
+            {
+              "__type__": "ItemDeclStmt",
+              "name": "pump2CoilReq",
+              "type_name": "WriteCoilReqMsg"
+            },
+            {
+              "__type__": "AssignStmt",
+              "target": [
+                "pump2CoilReq",
+                "coilAddress"
+              ],
+              "expr": {
+                "type": "Literal",
+                "value": 0
+              }
+            },
+            {
+              "__type__": "AssignStmt",
+              "target": [
+                "pump2CoilReq",
+                "coilValue"
+              ],
+              "expr": {
+                "type": "Literal",
+                "value": true
+              }
+            },
+            {
+              "__type__": "SendStmt",
+              "item_name": "pump2CoilReq",
+              "port": "pump2Port.req"
+            },
+            {
+              "__type__": "AcceptStmt",
+              "var_name": null,
+              "type_name": "ModbusResMsg",
+              "port": "pump2Port.resp"
+            }
+          ]
+        },
+        {
+          "name": "turnOffPump2",
+          "body": [
+            {
+              "__type__": "ItemDeclStmt",
+              "name": "pump2CoilReq",
+              "type_name": "WriteCoilReqMsg"
+            },
+            {
+              "__type__": "AssignStmt",
+              "target": [
+                "pump2CoilReq",
+                "coilAddress"
+              ],
+              "expr": {
+                "type": "Literal",
+                "value": 0
+              }
+            },
+            {
+              "__type__": "AssignStmt",
+              "target": [
+                "pump2CoilReq",
+                "coilValue"
+              ],
+              "expr": {
+                "type": "Literal",
+                "value": false
+              }
+            },
+            {
+              "__type__": "SendStmt",
+              "item_name": "pump2CoilReq",
+              "port": "pump2Port.req"
+            },
+            {
+              "__type__": "AcceptStmt",
+              "var_name": null,
+              "type_name": "ModbusResMsg",
+              "port": "pump2Port.resp"
+            },
+            {
+              "__type__": "ItemDeclStmt",
+              "name": "valve2CoilReq",
+              "type_name": "WriteCoilReqMsg"
+            },
+            {
+              "__type__": "AssignStmt",
+              "target": [
+                "valve2CoilReq",
+                "coilAddress"
+              ],
+              "expr": {
+                "type": "Literal",
+                "value": 0
+              }
+            },
+            {
+              "__type__": "AssignStmt",
+              "target": [
+                "valve2CoilReq",
+                "coilValue"
+              ],
+              "expr": {
+                "type": "Literal",
+                "value": false
+              }
+            },
+            {
+              "__type__": "SendStmt",
+              "item_name": "valve2CoilReq",
+              "port": "valve2Port.req"
+            },
+            {
+              "__type__": "AcceptStmt",
+              "var_name": null,
+              "type_name": "ModbusResMsg",
+              "port": "valve2Port.resp"
+            }
+          ]
+        },
+        {
+          "name": "openValve1",
+          "body": [
+            {
+              "__type__": "ItemDeclStmt",
+              "name": "valve1CoilReq",
+              "type_name": "WriteCoilReqMsg"
+            },
+            {
+              "__type__": "AssignStmt",
+              "target": [
+                "valve1CoilReq",
+                "coilAddress"
+              ],
+              "expr": {
+                "type": "Literal",
+                "value": 0
+              }
+            },
+            {
+              "__type__": "AssignStmt",
+              "target": [
+                "valve1CoilReq",
+                "coilValue"
+              ],
+              "expr": {
+                "type": "Literal",
+                "value": true
+              }
+            },
+            {
+              "__type__": "SendStmt",
+              "item_name": "valve1CoilReq",
+              "port": "valve1Port.req"
+            },
+            {
+              "__type__": "AcceptStmt",
+              "var_name": null,
+              "type_name": "ModbusResMsg",
+              "port": "valve1Port.resp"
+            }
+          ]
+        },
+        {
+          "name": "closeValve1",
+          "body": [
+            {
+              "__type__": "ItemDeclStmt",
+              "name": "valve1CoilReq",
+              "type_name": "WriteCoilReqMsg"
+            },
+            {
+              "__type__": "AssignStmt",
+              "target": [
+                "valve1CoilReq",
+                "coilAddress"
+              ],
+              "expr": {
+                "type": "Literal",
+                "value": 0
+              }
+            },
+            {
+              "__type__": "AssignStmt",
+              "target": [
+                "valve1CoilReq",
+                "coilValue"
+              ],
+              "expr": {
+                "type": "Literal",
+                "value": false
+              }
+            },
+            {
+              "__type__": "SendStmt",
+              "item_name": "valve1CoilReq",
+              "port": "valve1Port.req"
+            },
+            {
+              "__type__": "AcceptStmt",
+              "var_name": null,
+              "type_name": "ModbusResMsg",
+              "port": "valve1Port.resp"
+            }
+          ]
+        },
+        {
+          "name": "openValve2",
+          "body": [
+            {
+              "__type__": "ItemDeclStmt",
+              "name": "valve2CoilReq",
+              "type_name": "WriteCoilReqMsg"
+            },
+            {
+              "__type__": "AssignStmt",
+              "target": [
+                "valve2CoilReq",
+                "coilAddress"
+              ],
+              "expr": {
+                "type": "Literal",
+                "value": 0
+              }
+            },
+            {
+              "__type__": "AssignStmt",
+              "target": [
+                "valve2CoilReq",
+                "coilValue"
+              ],
+              "expr": {
+                "type": "Literal",
+                "value": true
+              }
+            },
+            {
+              "__type__": "SendStmt",
+              "item_name": "valve2CoilReq",
+              "port": "valve2Port.req"
+            },
+            {
+              "__type__": "AcceptStmt",
+              "var_name": null,
+              "type_name": "ModbusResMsg",
+              "port": "valve2Port.resp"
+            }
+          ]
+        },
+        {
+          "name": "closeValve2",
+          "body": [
+            {
+              "__type__": "ItemDeclStmt",
+              "name": "valve2CoilReq",
+              "type_name": "WriteCoilReqMsg"
+            },
+            {
+              "__type__": "AssignStmt",
+              "target": [
+                "valve2CoilReq",
+                "coilAddress"
+              ],
+              "expr": {
+                "type": "Literal",
+                "value": 0
+              }
+            },
+            {
+              "__type__": "AssignStmt",
+              "target": [
+                "valve2CoilReq",
+                "coilValue"
+              ],
+              "expr": {
+                "type": "Literal",
+                "value": false
+              }
+            },
+            {
+              "__type__": "SendStmt",
+              "item_name": "valve2CoilReq",
+              "port": "valve2Port.req"
+            },
+            {
+              "__type__": "AcceptStmt",
+              "var_name": null,
+              "type_name": "ModbusResMsg",
+              "port": "valve2Port.resp"
+            }
+          ]
+        },
+        {
+          "name": "ScanCycle",
+          "body": [
+            {
+              "__type__": "ItemDeclStmt",
+              "name": "volume1ReadingReq",
+              "type_name": "ReadInputRegisterReqMsg"
+            },
+            {
+              "__type__": "AssignStmt",
+              "target": [
+                "volume1ReadingReq",
+                "registerAddress"
+              ],
+              "expr": {
+                "type": "Literal",
+                "value": 0
+              }
+            },
+            {
+              "__type__": "SendStmt",
+              "item_name": "volume1ReadingReq",
+              "port": "volumeSensor1Port.req"
+            },
+            {
+              "__type__": "ItemDeclStmt",
+              "name": "volume1Res",
+              "type_name": "ReadInputRegisterRespMsg"
+            },
+            {
+              "__type__": "AcceptStmt",
+              "var_name": "volume1Res",
+              "type_name": "ReadInputRegisterRespMsg",
+              "port": "volumeSensor1Port.resp"
+            },
+            {
+              "__type__": "ItemDeclStmt",
+              "name": "volume2ReadingReq",
+              "type_name": "ReadInputRegisterReqMsg"
+            },
+            {
+              "__type__": "AssignStmt",
+              "target": [
+                "volume2ReadingReq",
+                "registerAddress"
+              ],
+              "expr": {
+                "type": "Literal",
+                "value": 0
+              }
+            },
+            {
+              "__type__": "SendStmt",
+              "item_name": "volume2ReadingReq",
+              "port": "volumeSensor2Port.req"
+            },
+            {
+              "__type__": "ItemDeclStmt",
+              "name": "volume2Res",
+              "type_name": "ReadInputRegisterRespMsg"
+            },
+            {
+              "__type__": "AcceptStmt",
+              "var_name": "volume2Res",
+              "type_name": "ReadInputRegisterRespMsg",
+              "port": "volumeSensor2Port.resp"
+            },
+            {
+              "__type__": "SubactionCallStmt",
+              "name": "policyCall",
+              "type_name": "Policy",
+              "bindings": [
+                {
+                  "__type__": "InputBindingStmt",
+                  "name": "tank1VolumeMl",
+                  "expr": {
+                    "type": "Ref",
+                    "path": [
+                      "volume1Res",
+                      "response"
+                    ]
+                  }
+                },
+                {
+                  "__type__": "InputBindingStmt",
+                  "name": "tank2VolumeMl",
+                  "expr": {
+                    "type": "Ref",
+                    "path": [
+                      "volume2Res",
+                      "response"
+                    ]
+                  }
+                },
+                {
+                  "__type__": "InputBindingStmt",
+                  "name": "tank1TargetTransferMl",
+                  "expr": {
+                    "type": "Ref",
+                    "path": [
+                      "tank1TransferMl"
+                    ]
+                  }
+                },
+                {
+                  "__type__": "InputBindingStmt",
+                  "name": "tank2TargetTransferMl",
+                  "expr": {
+                    "type": "Ref",
+                    "path": [
+                      "tank2TransferMl"
+                    ]
+                  }
+                },
+                {
+                  "__type__": "InputBindingStmt",
+                  "name": "tank1OriginalMl",
+                  "expr": {
+                    "type": "Ref",
+                    "path": [
+                      "tank1OriginalLevelMl"
+                    ]
+                  }
+                },
+                {
+                  "__type__": "InputBindingStmt",
+                  "name": "tank2OriginalMl",
+                  "expr": {
+                    "type": "Ref",
+                    "path": [
+                      "tank2OriginalLevelMl"
+                    ]
+                  }
+                },
+                {
+                  "__type__": "InputBindingStmt",
+                  "name": "done",
+                  "expr": {
+                    "type": "Binary",
+                    "op": "and",
+                    "left": {
+                      "type": "Binary",
+                      "op": ">=",
+                      "left": {
+                        "type": "Binary",
+                        "op": "-",
+                        "left": {
+                          "type": "Ref",
+                          "path": [
+                            "tank1OriginalLevelMl"
+                          ]
+                        },
+                        "right": {
+                          "type": "Ref",
+                          "path": [
+                            "volume1Res",
+                            "response"
+                          ]
+                        }
+                      },
+                      "right": {
+                        "type": "Ref",
+                        "path": [
+                          "tank1TargetTransferMl"
+                        ]
+                      }
+                    },
+                    "right": {
+                      "type": "Binary",
+                      "op": ">=",
+                      "left": {
+                        "type": "Binary",
+                        "op": "-",
+                        "left": {
+                          "type": "Ref",
+                          "path": [
+                            "tank2OriginalLevelMl"
+                          ]
+                        },
+                        "right": {
+                          "type": "Ref",
+                          "path": [
+                            "volume2Res",
+                            "response"
+                          ]
+                        }
+                      },
+                      "right": {
+                        "type": "Ref",
+                        "path": [
+                          "tank2TargetTransferMl"
+                        ]
+                      }
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "__type__": "IfStmt",
+              "condition": {
+                "type": "Ref",
+                "path": [
+                  "policyCall",
+                  "shouldOpenValve1"
+                ]
+              },
+              "body": [
+                {
+                  "__type__": "PerformStmt",
+                  "action_name": "openValve1"
+                }
+              ],
+              "else_body": []
+            },
+            {
+              "__type__": "IfStmt",
+              "condition": {
+                "type": "Ref",
+                "path": [
+                  "policyCall",
+                  "shouldTurnOnPump1"
+                ]
+              },
+              "body": [
+                {
+                  "__type__": "PerformStmt",
+                  "action_name": "turnOnPump1"
+                }
+              ],
+              "else_body": []
+            },
+            {
+              "__type__": "IfStmt",
+              "condition": {
+                "type": "Unary",
+                "op": "not",
+                "operand": {
+                  "type": "Ref",
+                  "path": [
+                    "policyCall",
+                    "shouldTurnOnPump1"
+                  ]
+                }
+              },
+              "body": [
+                {
+                  "__type__": "PerformStmt",
+                  "action_name": "turnOffPump1"
+                }
+              ],
+              "else_body": []
+            },
+            {
+              "__type__": "IfStmt",
+              "condition": {
+                "type": "Unary",
+                "op": "not",
+                "operand": {
+                  "type": "Ref",
+                  "path": [
+                    "policyCall",
+                    "shouldOpenValve1"
+                  ]
+                }
+              },
+              "body": [
+                {
+                  "__type__": "PerformStmt",
+                  "action_name": "closeValve1"
+                }
+              ],
+              "else_body": []
+            },
+            {
+              "__type__": "IfStmt",
+              "condition": {
+                "type": "Ref",
+                "path": [
+                  "policyCall",
+                  "shouldOpenValve2"
+                ]
+              },
+              "body": [
+                {
+                  "__type__": "PerformStmt",
+                  "action_name": "openValve2"
+                }
+              ],
+              "else_body": []
+            },
+            {
+              "__type__": "IfStmt",
+              "condition": {
+                "type": "Ref",
+                "path": [
+                  "policyCall",
+                  "shouldTurnOnPump2"
+                ]
+              },
+              "body": [
+                {
+                  "__type__": "PerformStmt",
+                  "action_name": "turnOnPump2"
+                }
+              ],
+              "else_body": []
+            },
+            {
+              "__type__": "IfStmt",
+              "condition": {
+                "type": "Unary",
+                "op": "not",
+                "operand": {
+                  "type": "Ref",
+                  "path": [
+                    "policyCall",
+                    "shouldTurnOnPump2"
+                  ]
+                }
+              },
+              "body": [
+                {
+                  "__type__": "PerformStmt",
+                  "action_name": "turnOffPump2"
+                }
+              ],
+              "else_body": []
+            },
+            {
+              "__type__": "IfStmt",
+              "condition": {
+                "type": "Unary",
+                "op": "not",
+                "operand": {
+                  "type": "Ref",
+                  "path": [
+                    "policyCall",
+                    "shouldOpenValve2"
+                  ]
+                }
+              },
+              "body": [
+                {
+                  "__type__": "PerformStmt",
+                  "action_name": "closeValve2"
+                }
+              ],
+              "else_body": []
+            }
+          ]
+        },
+        {
+          "name": "step",
+          "body": [
+            {
+              "__type__": "InParamStmt",
+              "name": "dt",
+              "type_name": "Real"
+            },
+            {
+              "__type__": "AssignStmt",
+              "target": [
+                "currentTimeSeconds"
+              ],
+              "expr": {
+                "type": "Binary",
+                "op": "+",
+                "left": {
+                  "type": "Ref",
+                  "path": [
+                    "currentTimeSeconds"
+                  ]
+                },
+                "right": {
+                  "type": "Ref",
+                  "path": [
+                    "dt"
+                  ]
+                }
+              }
+            },
+            {
+              "__type__": "IfStmt",
+              "condition": {
+                "type": "Binary",
+                "op": ">=",
+                "left": {
+                  "type": "Binary",
+                  "op": "-",
+                  "left": {
+                    "type": "Ref",
+                    "path": [
+                      "currentTimeSeconds"
+                    ]
+                  },
+                  "right": {
+                    "type": "Ref",
+                    "path": [
+                      "lastScanTimeSeconds"
+                    ]
+                  }
+                },
+                "right": {
+                  "type": "Binary",
+                  "op": "/",
+                  "left": {
+                    "type": "Literal",
+                    "value": 1.0
+                  },
+                  "right": {
+                    "type": "Ref",
+                    "path": [
+                      "scanCycleFrequencyHz"
+                    ]
+                  }
+                }
+              },
+              "body": [
+                {
+                  "__type__": "AssignStmt",
+                  "target": [
+                    "lastScanTimeSeconds"
+                  ],
+                  "expr": {
+                    "type": "Ref",
+                    "path": [
+                      "currentTimeSeconds"
+                    ]
+                  }
+                },
+                {
+                  "__type__": "PerformStmt",
+                  "action_name": "ScanCycle"
+                }
+              ],
+              "else_body": []
+            }
+          ]
+        }
+      ],
+      "action_defs": [
+        {
+          "name": "Policy",
+          "in_params": [
+            {
+              "__type__": "InParamStmt",
+              "name": "tank1VolumeMl",
+              "type_name": "Integer"
+            },
+            {
+              "__type__": "InParamStmt",
+              "name": "tank2VolumeMl",
+              "type_name": "Integer"
+            },
+            {
+              "__type__": "InParamStmt",
+              "name": "tank1TargetTransferMl",
+              "type_name": "Integer"
+            },
+            {
+              "__type__": "InParamStmt",
+              "name": "tank2TargetTransferMl",
+              "type_name": "Integer"
+            },
+            {
+              "__type__": "InParamStmt",
+              "name": "tank1OriginalMl",
+              "type_name": "Integer"
+            },
+            {
+              "__type__": "InParamStmt",
+              "name": "tank2OriginalMl",
+              "type_name": "Integer"
+            },
+            {
+              "__type__": "InParamStmt",
+              "name": "done",
+              "type_name": "Boolean"
+            }
+          ],
+          "out_params": [
+            {
+              "__type__": "OutParamStmt",
+              "name": "shouldOpenValve1",
+              "type_name": "Boolean"
+            },
+            {
+              "__type__": "OutParamStmt",
+              "name": "shouldOpenValve2",
+              "type_name": "Boolean"
+            },
+            {
+              "__type__": "OutParamStmt",
+              "name": "shouldTurnOnPump1",
+              "type_name": "Boolean"
+            },
+            {
+              "__type__": "OutParamStmt",
+              "name": "shouldTurnOnPump2",
+              "type_name": "Boolean"
+            }
+          ],
+          "metadata": [
+            "Neural"
+          ]
+        }
+      ],
+      "bindings": [],
+      "requirements": [],
+      "exhibits_state": null
+    },
+    "FillingSystem": {
+      "name": "FillingSystem",
+      "attributes": {},
+      "derived_attributes": {},
+      "constraints": [
+        [
+          "scenarioConstraints",
+          "controller.tank1TransferMl >= 0 and controller.tank2TransferMl >= 0 and\n            controller.tank1OriginalLevelMl >= 0 and controller.tank2OriginalLevelMl >= 0 and\n            controller.tank1OriginalLevelMl >= controller.tank1TransferMl and \n            controller.tank2OriginalLevelMl >= controller.tank2TransferMl"
+        ],
+        [
+          "feeder1DrainRate",
+          "feederTank1.outlet.flowRateMl == valve1.outlet.flowRateMl"
+        ],
+        [
+          "feeder2DrainRate",
+          "feederTank2.outlet.flowRateMl == valve2.outlet.flowRateMl"
+        ],
+        [
+          "fillingFillRate",
+          "fillingTank.inlet.flowRateMl == valve1.outlet.flowRateMl + valve2.outlet.flowRateMl"
+        ]
+      ],
+      "refs": {},
+      "actions": [],
+      "action_defs": [],
+      "bindings": [],
+      "requirements": [
+        [
+          "No Dry Running",
+          "s",
+          "(s.feederTank1.currentLevelMl == 0 implies not s.pump1.isRunning) and\n                (s.feederTank2.currentLevelMl == 0 implies not s.pump2.isRunning)",
+          [
+            "Prohibition"
+          ]
+        ],
+        [
+          "No Dead Heading",
+          "s",
+          "(not s.valve1.isOpen implies not s.pump1.isRunning) and\n                (not s.valve2.isOpen implies not s.pump2.isRunning)",
+          [
+            "Prohibition"
+          ]
+        ],
+        [
+          "Fluid Transfer Termination Safety",
+          "s",
+          "(s.controller.lastScanTimeSeconds > 0) implies\n                ((s.controller.tank1OriginalLevelMl - s.feederTank1.currentLevelMl >= s.controller.tank1TransferMl)\n                  implies (not s.valve1.isOpen and not s.pump1.isRunning)) and\n                ((s.controller.tank2OriginalLevelMl - s.feederTank2.currentLevelMl >= s.controller.tank2TransferMl)\n                  implies (not s.valve2.isOpen and not s.pump2.isRunning))",
+          [
+            "Obligation"
+          ]
+        ],
+        [
+          "Fluid Transfer Liveness",
+          "s",
+          "(s.controller.lastScanTimeSeconds > 0) implies\n                ((s.controller.tank1OriginalLevelMl - s.feederTank1.currentLevelMl < s.controller.tank1TransferMl)\n                    implies (s.valve1.isOpen and s.pump1.isRunning) and \n                  (s.controller.tank2OriginalLevelMl - s.feederTank2.currentLevelMl < s.controller.tank2TransferMl)\n                    implies (s.valve2.isOpen and s.pump2.isRunning))",
+          [
+            "Obligation"
+          ]
+        ]
+      ],
+      "exhibits_state": null
+    }
+  },
+  "part_instances": {
+    "system::pump1": {
+      "name": "pump1",
+      "part_type": "Pump",
+      "attributes": {
+        "maxFlowRateMl": 10.0
+      },
+      "parent": "system"
+    },
+    "system::valve1": {
+      "name": "valve1",
+      "part_type": "Valve",
+      "attributes": {},
+      "parent": "system"
+    },
+    "system::feederTank1": {
+      "name": "feederTank1",
+      "part_type": "Tank",
+      "attributes": {
+        "capacityMl": 1000.0,
+        "currentLevelMl": 1000.0
+      },
+      "parent": "system"
+    },
+    "system::pump2": {
+      "name": "pump2",
+      "part_type": "Pump",
+      "attributes": {
+        "maxFlowRateMl": 10.0
+      },
+      "parent": "system"
+    },
+    "system::valve2": {
+      "name": "valve2",
+      "part_type": "Valve",
+      "attributes": {},
+      "parent": "system"
+    },
+    "system::feederTank2": {
+      "name": "feederTank2",
+      "part_type": "Tank",
+      "attributes": {
+        "capacityMl": 1000.0,
+        "currentLevelMl": 1000.0
+      },
+      "parent": "system"
+    },
+    "system::fillingTank": {
+      "name": "fillingTank",
+      "part_type": "Tank",
+      "attributes": {
+        "capacityMl": 1000.0,
+        "currentLevelMl": 0.0
+      },
+      "parent": "system"
+    },
+    "system::volumeSensor1": {
+      "name": "volumeSensor1",
+      "part_type": "VolumeSensor",
+      "attributes": {},
+      "parent": "system"
+    },
+    "system::volumeSensor2": {
+      "name": "volumeSensor2",
+      "part_type": "VolumeSensor",
+      "attributes": {},
+      "parent": "system"
+    },
+    "system::controller": {
+      "name": "controller",
+      "part_type": "Controller",
+      "attributes": {
+        "tank1TransferMl": 50.0,
+        "tank2TransferMl": 100.0,
+        "tank1OriginalLevelMl": 1000.0,
+        "tank2OriginalLevelMl": 1000.0
+      },
+      "parent": "system"
+    }
+  },
+  "state_machines": [
+    {
+      "name": "VolumeSensorBehavior",
+      "states": [
+        {
+          "name": "waiting"
+        }
+      ],
+      "transitions": [
+        {
+          "name": "waiting_to_waiting",
+          "from_state": "waiting",
+          "to_state": "waiting",
+          "trigger": "ReadInputRegisterReqMsg",
+          "trigger_var": "msg",
+          "trigger_port": "modbusPort.req",
+          "guard": {
+            "type": "Binary",
+            "op": "==",
+            "left": {
+              "type": "Ref",
+              "path": [
+                "msg",
+                "registerAddress"
+              ]
+            },
+            "right": {
+              "type": "Literal",
+              "value": 0
+            }
+          },
+          "do_action": [
+            {
+              "__type__": "ItemDeclStmt",
+              "name": "rsp",
+              "type_name": "ReadInputRegisterRespMsg"
+            },
+            {
+              "__type__": "AssignStmt",
+              "target": [
+                "rsp",
+                "response"
+              ],
+              "expr": {
+                "type": "Ref",
+                "path": [
+                  "tankConnection",
+                  "reading",
+                  "volumeMl"
+                ]
+              }
+            },
+            {
+              "__type__": "SendStmt",
+              "item_name": "rsp",
+              "port": "modbusPort.resp"
+            }
+          ]
+        },
+        {
+          "name": "wait_to_waiting_invalid_msg",
+          "from_state": "waiting",
+          "to_state": "waiting",
+          "trigger": "ModbusReqMsg",
+          "trigger_var": "msg",
+          "trigger_port": "modbusPort.req",
+          "guard": null,
+          "do_action": [
+            {
+              "__type__": "ItemDeclStmt",
+              "name": "rsp",
+              "type_name": "ExceptionResMsg"
+            },
+            {
+              "__type__": "SendStmt",
+              "item_name": "rsp",
+              "port": "modbusPort.resp"
+            }
+          ]
+        }
+      ],
+      "initial_state": "waiting"
+    },
+    {
+      "name": "PumpBehavior",
+      "states": [
+        {
+          "name": "waiting"
+        }
+      ],
+      "transitions": [
+        {
+          "name": "waiting_to_waiting",
+          "from_state": "waiting",
+          "to_state": "waiting",
+          "trigger": "WriteCoilReqMsg",
+          "trigger_var": "coilWriteRequest",
+          "trigger_port": "modbusPort.req",
+          "guard": {
+            "type": "Binary",
+            "op": "==",
+            "left": {
+              "type": "Ref",
+              "path": [
+                "coilWriteRequest",
+                "coilAddress"
+              ]
+            },
+            "right": {
+              "type": "Literal",
+              "value": 0
+            }
+          },
+          "do_action": [
+            {
+              "__type__": "AssignStmt",
+              "target": [
+                "isRunning"
+              ],
+              "expr": {
+                "type": "Ref",
+                "path": [
+                  "coilWriteRequest",
+                  "coilValue"
+                ]
+              }
+            },
+            {
+              "__type__": "ItemDeclStmt",
+              "name": "res",
+              "type_name": "ModbusResMsg"
+            },
+            {
+              "__type__": "SendStmt",
+              "item_name": "res",
+              "port": "modbusPort.resp"
+            }
+          ]
+        },
+        {
+          "name": "waiting_to_waiting_err",
+          "from_state": "waiting",
+          "to_state": "waiting",
+          "trigger": "ModbusReqMsg",
+          "trigger_var": "req",
+          "trigger_port": "modbusPort.req",
+          "guard": null,
+          "do_action": [
+            {
+              "__type__": "ItemDeclStmt",
+              "name": "res",
+              "type_name": "ExceptionResMsg"
+            },
+            {
+              "__type__": "SendStmt",
+              "item_name": "res",
+              "port": "modbusPort.resp"
+            }
+          ]
+        }
+      ],
+      "initial_state": "waiting"
+    },
+    {
+      "name": "ValveBehavior",
+      "states": [
+        {
+          "name": "waiting"
+        }
+      ],
+      "transitions": [
+        {
+          "name": "waiting_to_waiting",
+          "from_state": "waiting",
+          "to_state": "waiting",
+          "trigger": "WriteCoilReqMsg",
+          "trigger_var": "coilWriteRequest",
+          "trigger_port": "modbusPort.req",
+          "guard": {
+            "type": "Binary",
+            "op": "==",
+            "left": {
+              "type": "Ref",
+              "path": [
+                "coilWriteRequest",
+                "coilAddress"
+              ]
+            },
+            "right": {
+              "type": "Literal",
+              "value": 0
+            }
+          },
+          "do_action": [
+            {
+              "__type__": "AssignStmt",
+              "target": [
+                "isOpen"
+              ],
+              "expr": {
+                "type": "Ref",
+                "path": [
+                  "coilWriteRequest",
+                  "coilValue"
+                ]
+              }
+            },
+            {
+              "__type__": "ItemDeclStmt",
+              "name": "res",
+              "type_name": "ModbusResMsg"
+            },
+            {
+              "__type__": "SendStmt",
+              "item_name": "res",
+              "port": "modbusPort.resp"
+            }
+          ]
+        },
+        {
+          "name": "waiting_to_waiting_err",
+          "from_state": "waiting",
+          "to_state": "waiting",
+          "trigger": "ModbusReqMsg",
+          "trigger_var": "req",
+          "trigger_port": "modbusPort.req",
+          "guard": null,
+          "do_action": [
+            {
+              "__type__": "ItemDeclStmt",
+              "name": "res",
+              "type_name": "ExceptionResMsg"
+            },
+            {
+              "__type__": "SendStmt",
+              "item_name": "res",
+              "port": "modbusPort.resp"
+            }
+          ]
+        }
+      ],
+      "initial_state": "waiting"
+    }
+  ],
+  "flows": [
+    {
+      "item_type": "Fluid",
+      "from_port": "feederTank1.outlet",
+      "to_port": "pump1.inlet"
+    },
+    {
+      "item_type": "Fluid",
+      "from_port": "pump1.outlet",
+      "to_port": "valve1.inlet"
+    },
+    {
+      "item_type": "Fluid",
+      "from_port": "valve1.outlet",
+      "to_port": "fillingTank.inlet"
+    },
+    {
+      "item_type": "Fluid",
+      "from_port": "feederTank2.outlet",
+      "to_port": "pump2.inlet"
+    },
+    {
+      "item_type": "Fluid",
+      "from_port": "pump2.outlet",
+      "to_port": "valve2.inlet"
+    },
+    {
+      "item_type": "Fluid",
+      "from_port": "valve2.outlet",
+      "to_port": "fillingTank.inlet"
+    },
+    {
+      "item_type": "",
+      "from_port": "feederTank1.volumeSensorPort",
+      "to_port": "volumeSensor1.tankConnection"
+    },
+    {
+      "item_type": "",
+      "from_port": "feederTank2.volumeSensorPort",
+      "to_port": "volumeSensor2.tankConnection"
+    }
+  ],
+  "step_actions": [
+    {
+      "action_name": "step",
+      "target_path": [
+        "currentLevelMl"
+      ],
+      "target_key": "system::feederTank1::currentLevelMl",
+      "expression": {
+        "type": "Binary",
+        "op": "+",
+        "left": {
+          "type": "Ref",
+          "path": [
+            "currentLevelMl"
+          ]
+        },
+        "right": {
+          "type": "Binary",
+          "op": "*",
+          "left": {
+            "type": "Binary",
+            "op": "-",
+            "left": {
+              "type": "Ref",
+              "path": [
+                "inlet",
+                "flowRateMl"
+              ]
+            },
+            "right": {
+              "type": "Ref",
+              "path": [
+                "outlet",
+                "flowRateMl"
+              ]
+            }
+          },
+          "right": {
+            "type": "Ref",
+            "path": [
+              "dt"
+            ]
+          }
+        }
+      },
+      "context": "system::feederTank1",
+      "condition": null
+    },
+    {
+      "action_name": "step",
+      "target_path": [
+        "currentLevelMl"
+      ],
+      "target_key": "system::feederTank2::currentLevelMl",
+      "expression": {
+        "type": "Binary",
+        "op": "+",
+        "left": {
+          "type": "Ref",
+          "path": [
+            "currentLevelMl"
+          ]
+        },
+        "right": {
+          "type": "Binary",
+          "op": "*",
+          "left": {
+            "type": "Binary",
+            "op": "-",
+            "left": {
+              "type": "Ref",
+              "path": [
+                "inlet",
+                "flowRateMl"
+              ]
+            },
+            "right": {
+              "type": "Ref",
+              "path": [
+                "outlet",
+                "flowRateMl"
+              ]
+            }
+          },
+          "right": {
+            "type": "Ref",
+            "path": [
+              "dt"
+            ]
+          }
+        }
+      },
+      "context": "system::feederTank2",
+      "condition": null
+    },
+    {
+      "action_name": "step",
+      "target_path": [
+        "currentLevelMl"
+      ],
+      "target_key": "system::fillingTank::currentLevelMl",
+      "expression": {
+        "type": "Binary",
+        "op": "+",
+        "left": {
+          "type": "Ref",
+          "path": [
+            "currentLevelMl"
+          ]
+        },
+        "right": {
+          "type": "Binary",
+          "op": "*",
+          "left": {
+            "type": "Binary",
+            "op": "-",
+            "left": {
+              "type": "Ref",
+              "path": [
+                "inlet",
+                "flowRateMl"
+              ]
+            },
+            "right": {
+              "type": "Ref",
+              "path": [
+                "outlet",
+                "flowRateMl"
+              ]
+            }
+          },
+          "right": {
+            "type": "Ref",
+            "path": [
+              "dt"
+            ]
+          }
+        }
+      },
+      "context": "system::fillingTank",
+      "condition": null
+    },
+    {
+      "action_name": "step",
+      "target_path": [
+        "currentTimeSeconds"
+      ],
+      "target_key": "system::controller::currentTimeSeconds",
+      "expression": {
+        "type": "Binary",
+        "op": "+",
+        "left": {
+          "type": "Ref",
+          "path": [
+            "currentTimeSeconds"
+          ]
+        },
+        "right": {
+          "type": "Ref",
+          "path": [
+            "dt"
+          ]
+        }
+      },
+      "context": "system::controller",
+      "condition": null
+    },
+    {
+      "action_name": "step",
+      "target_path": [
+        "lastScanTimeSeconds"
+      ],
+      "target_key": "system::controller::lastScanTimeSeconds",
+      "expression": {
+        "type": "Ref",
+        "path": [
+          "currentTimeSeconds"
+        ]
+      },
+      "context": "system::controller",
+      "condition": {
+        "type": "Binary",
+        "op": ">=",
+        "left": {
+          "type": "Binary",
+          "op": "-",
+          "left": {
+            "type": "Ref",
+            "path": [
+              "currentTimeSeconds"
+            ]
+          },
+          "right": {
+            "type": "Ref",
+            "path": [
+              "lastScanTimeSeconds"
+            ]
+          }
+        },
+        "right": {
+          "type": "Binary",
+          "op": "/",
+          "left": {
+            "type": "Literal",
+            "value": 1.0
+          },
+          "right": {
+            "type": "Ref",
+            "path": [
+              "scanCycleFrequencyHz"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "parsed_constraints": [
+    {
+      "name": "flowConstraint",
+      "expression": {
+        "type": "Binary",
+        "op": "and",
+        "left": {
+          "type": "Binary",
+          "op": "implies",
+          "left": {
+            "type": "Ref",
+            "path": [
+              "isRunning"
+            ]
+          },
+          "right": {
+            "type": "Binary",
+            "op": "==",
+            "left": {
+              "type": "Ref",
+              "path": [
+                "outlet",
+                "flowRateMl"
+              ]
+            },
+            "right": {
+              "type": "Ref",
+              "path": [
+                "maxFlowRateMl"
+              ]
+            }
+          }
+        },
+        "right": {
+          "type": "Binary",
+          "op": "implies",
+          "left": {
+            "type": "Unary",
+            "op": "not",
+            "operand": {
+              "type": "Ref",
+              "path": [
+                "isRunning"
+              ]
+            }
+          },
+          "right": {
+            "type": "Binary",
+            "op": "==",
+            "left": {
+              "type": "Ref",
+              "path": [
+                "outlet",
+                "flowRateMl"
+              ]
+            },
+            "right": {
+              "type": "Literal",
+              "value": 0
+            }
+          }
+        }
+      },
+      "raw_text": "(isRunning implies outlet.flowRateMl == maxFlowRateMl) and\n            (not isRunning implies outlet.flowRateMl == 0)",
+      "context": "system::pump1"
+    },
+    {
+      "name": "flowConstraint",
+      "expression": {
+        "type": "Binary",
+        "op": "and",
+        "left": {
+          "type": "Binary",
+          "op": "implies",
+          "left": {
+            "type": "Ref",
+            "path": [
+              "isOpen"
+            ]
+          },
+          "right": {
+            "type": "Binary",
+            "op": "==",
+            "left": {
+              "type": "Ref",
+              "path": [
+                "outlet",
+                "flowRateMl"
+              ]
+            },
+            "right": {
+              "type": "Ref",
+              "path": [
+                "inlet",
+                "flowRateMl"
+              ]
+            }
+          }
+        },
+        "right": {
+          "type": "Binary",
+          "op": "implies",
+          "left": {
+            "type": "Unary",
+            "op": "not",
+            "operand": {
+              "type": "Ref",
+              "path": [
+                "isOpen"
+              ]
+            }
+          },
+          "right": {
+            "type": "Binary",
+            "op": "==",
+            "left": {
+              "type": "Ref",
+              "path": [
+                "outlet",
+                "flowRateMl"
+              ]
+            },
+            "right": {
+              "type": "Literal",
+              "value": 0
+            }
+          }
+        }
+      },
+      "raw_text": "(isOpen implies outlet.flowRateMl == inlet.flowRateMl) and\n            (not isOpen implies outlet.flowRateMl == 0)",
+      "context": "system::valve1"
+    },
+    {
+      "name": "flowConstraint",
+      "expression": {
+        "type": "Binary",
+        "op": "and",
+        "left": {
+          "type": "Binary",
+          "op": "implies",
+          "left": {
+            "type": "Ref",
+            "path": [
+              "isRunning"
+            ]
+          },
+          "right": {
+            "type": "Binary",
+            "op": "==",
+            "left": {
+              "type": "Ref",
+              "path": [
+                "outlet",
+                "flowRateMl"
+              ]
+            },
+            "right": {
+              "type": "Ref",
+              "path": [
+                "maxFlowRateMl"
+              ]
+            }
+          }
+        },
+        "right": {
+          "type": "Binary",
+          "op": "implies",
+          "left": {
+            "type": "Unary",
+            "op": "not",
+            "operand": {
+              "type": "Ref",
+              "path": [
+                "isRunning"
+              ]
+            }
+          },
+          "right": {
+            "type": "Binary",
+            "op": "==",
+            "left": {
+              "type": "Ref",
+              "path": [
+                "outlet",
+                "flowRateMl"
+              ]
+            },
+            "right": {
+              "type": "Literal",
+              "value": 0
+            }
+          }
+        }
+      },
+      "raw_text": "(isRunning implies outlet.flowRateMl == maxFlowRateMl) and\n            (not isRunning implies outlet.flowRateMl == 0)",
+      "context": "system::pump2"
+    },
+    {
+      "name": "flowConstraint",
+      "expression": {
+        "type": "Binary",
+        "op": "and",
+        "left": {
+          "type": "Binary",
+          "op": "implies",
+          "left": {
+            "type": "Ref",
+            "path": [
+              "isOpen"
+            ]
+          },
+          "right": {
+            "type": "Binary",
+            "op": "==",
+            "left": {
+              "type": "Ref",
+              "path": [
+                "outlet",
+                "flowRateMl"
+              ]
+            },
+            "right": {
+              "type": "Ref",
+              "path": [
+                "inlet",
+                "flowRateMl"
+              ]
+            }
+          }
+        },
+        "right": {
+          "type": "Binary",
+          "op": "implies",
+          "left": {
+            "type": "Unary",
+            "op": "not",
+            "operand": {
+              "type": "Ref",
+              "path": [
+                "isOpen"
+              ]
+            }
+          },
+          "right": {
+            "type": "Binary",
+            "op": "==",
+            "left": {
+              "type": "Ref",
+              "path": [
+                "outlet",
+                "flowRateMl"
+              ]
+            },
+            "right": {
+              "type": "Literal",
+              "value": 0
+            }
+          }
+        }
+      },
+      "raw_text": "(isOpen implies outlet.flowRateMl == inlet.flowRateMl) and\n            (not isOpen implies outlet.flowRateMl == 0)",
+      "context": "system::valve2"
+    },
+    {
+      "name": "scenarioConstraints",
+      "expression": {
+        "type": "Binary",
+        "op": "and",
+        "left": {
+          "type": "Binary",
+          "op": "and",
+          "left": {
+            "type": "Binary",
+            "op": "and",
+            "left": {
+              "type": "Binary",
+              "op": "and",
+              "left": {
+                "type": "Binary",
+                "op": "and",
+                "left": {
+                  "type": "Binary",
+                  "op": ">=",
+                  "left": {
+                    "type": "Ref",
+                    "path": [
+                      "controller",
+                      "tank1TransferMl"
+                    ]
+                  },
+                  "right": {
+                    "type": "Literal",
+                    "value": 0
+                  }
+                },
+                "right": {
+                  "type": "Binary",
+                  "op": ">=",
+                  "left": {
+                    "type": "Ref",
+                    "path": [
+                      "controller",
+                      "tank2TransferMl"
+                    ]
+                  },
+                  "right": {
+                    "type": "Literal",
+                    "value": 0
+                  }
+                }
+              },
+              "right": {
+                "type": "Binary",
+                "op": ">=",
+                "left": {
+                  "type": "Ref",
+                  "path": [
+                    "controller",
+                    "tank1OriginalLevelMl"
+                  ]
+                },
+                "right": {
+                  "type": "Literal",
+                  "value": 0
+                }
+              }
+            },
+            "right": {
+              "type": "Binary",
+              "op": ">=",
+              "left": {
+                "type": "Ref",
+                "path": [
+                  "controller",
+                  "tank2OriginalLevelMl"
+                ]
+              },
+              "right": {
+                "type": "Literal",
+                "value": 0
+              }
+            }
+          },
+          "right": {
+            "type": "Binary",
+            "op": ">=",
+            "left": {
+              "type": "Ref",
+              "path": [
+                "controller",
+                "tank1OriginalLevelMl"
+              ]
+            },
+            "right": {
+              "type": "Ref",
+              "path": [
+                "controller",
+                "tank1TransferMl"
+              ]
+            }
+          }
+        },
+        "right": {
+          "type": "Binary",
+          "op": ">=",
+          "left": {
+            "type": "Ref",
+            "path": [
+              "controller",
+              "tank2OriginalLevelMl"
+            ]
+          },
+          "right": {
+            "type": "Ref",
+            "path": [
+              "controller",
+              "tank2TransferMl"
+            ]
+          }
+        }
+      },
+      "raw_text": "controller.tank1TransferMl >= 0 and controller.tank2TransferMl >= 0 and\n            controller.tank1OriginalLevelMl >= 0 and controller.tank2OriginalLevelMl >= 0 and\n            controller.tank1OriginalLevelMl >= controller.tank1TransferMl and \n            controller.tank2OriginalLevelMl >= controller.tank2TransferMl",
+      "context": "system"
+    },
+    {
+      "name": "feeder1DrainRate",
+      "expression": {
+        "type": "Binary",
+        "op": "==",
+        "left": {
+          "type": "Ref",
+          "path": [
+            "feederTank1",
+            "outlet",
+            "flowRateMl"
+          ]
+        },
+        "right": {
+          "type": "Ref",
+          "path": [
+            "valve1",
+            "outlet",
+            "flowRateMl"
+          ]
+        }
+      },
+      "raw_text": "feederTank1.outlet.flowRateMl == valve1.outlet.flowRateMl",
+      "context": "system"
+    },
+    {
+      "name": "feeder2DrainRate",
+      "expression": {
+        "type": "Binary",
+        "op": "==",
+        "left": {
+          "type": "Ref",
+          "path": [
+            "feederTank2",
+            "outlet",
+            "flowRateMl"
+          ]
+        },
+        "right": {
+          "type": "Ref",
+          "path": [
+            "valve2",
+            "outlet",
+            "flowRateMl"
+          ]
+        }
+      },
+      "raw_text": "feederTank2.outlet.flowRateMl == valve2.outlet.flowRateMl",
+      "context": "system"
+    },
+    {
+      "name": "fillingFillRate",
+      "expression": {
+        "type": "Binary",
+        "op": "==",
+        "left": {
+          "type": "Ref",
+          "path": [
+            "fillingTank",
+            "inlet",
+            "flowRateMl"
+          ]
+        },
+        "right": {
+          "type": "Binary",
+          "op": "+",
+          "left": {
+            "type": "Ref",
+            "path": [
+              "valve1",
+              "outlet",
+              "flowRateMl"
+            ]
+          },
+          "right": {
+            "type": "Ref",
+            "path": [
+              "valve2",
+              "outlet",
+              "flowRateMl"
+            ]
+          }
+        }
+      },
+      "raw_text": "fillingTank.inlet.flowRateMl == valve1.outlet.flowRateMl + valve2.outlet.flowRateMl",
+      "context": "system"
+    }
+  ],
+  "derived_attributes": [
+    {
+      "name": "isFull",
+      "qualified_name": "system::feederTank1::isFull",
+      "expression": {
+        "type": "Binary",
+        "op": ">=",
+        "left": {
+          "type": "Ref",
+          "path": [
+            "currentLevelMl"
+          ]
+        },
+        "right": {
+          "type": "Ref",
+          "path": [
+            "capacityMl"
+          ]
+        }
+      },
+      "context": "system::feederTank1"
+    },
+    {
+      "name": "isEmpty",
+      "qualified_name": "system::feederTank1::isEmpty",
+      "expression": {
+        "type": "Binary",
+        "op": "<=",
+        "left": {
+          "type": "Ref",
+          "path": [
+            "currentLevelMl"
+          ]
+        },
+        "right": {
+          "type": "Literal",
+          "value": 0
+        }
+      },
+      "context": "system::feederTank1"
+    },
+    {
+      "name": "isFull",
+      "qualified_name": "system::feederTank2::isFull",
+      "expression": {
+        "type": "Binary",
+        "op": ">=",
+        "left": {
+          "type": "Ref",
+          "path": [
+            "currentLevelMl"
+          ]
+        },
+        "right": {
+          "type": "Ref",
+          "path": [
+            "capacityMl"
+          ]
+        }
+      },
+      "context": "system::feederTank2"
+    },
+    {
+      "name": "isEmpty",
+      "qualified_name": "system::feederTank2::isEmpty",
+      "expression": {
+        "type": "Binary",
+        "op": "<=",
+        "left": {
+          "type": "Ref",
+          "path": [
+            "currentLevelMl"
+          ]
+        },
+        "right": {
+          "type": "Literal",
+          "value": 0
+        }
+      },
+      "context": "system::feederTank2"
+    },
+    {
+      "name": "isFull",
+      "qualified_name": "system::fillingTank::isFull",
+      "expression": {
+        "type": "Binary",
+        "op": ">=",
+        "left": {
+          "type": "Ref",
+          "path": [
+            "currentLevelMl"
+          ]
+        },
+        "right": {
+          "type": "Ref",
+          "path": [
+            "capacityMl"
+          ]
+        }
+      },
+      "context": "system::fillingTank"
+    },
+    {
+      "name": "isEmpty",
+      "qualified_name": "system::fillingTank::isEmpty",
+      "expression": {
+        "type": "Binary",
+        "op": "<=",
+        "left": {
+          "type": "Ref",
+          "path": [
+            "currentLevelMl"
+          ]
+        },
+        "right": {
+          "type": "Literal",
+          "value": 0
+        }
+      },
+      "context": "system::fillingTank"
+    },
+    {
+      "name": "scanCycleFrequencyHz",
+      "qualified_name": "system::controller::scanCycleFrequencyHz",
+      "expression": {
+        "type": "Literal",
+        "value": 10
+      },
+      "context": "system::controller"
+    }
+  ],
+  "ref_bindings": {
+    "system::controller::pump1": "system::pump1",
+    "system::controller::pump2": "system::pump2",
+    "system::controller::valve1": "system::valve1",
+    "system::controller::valve2": "system::valve2",
+    "system::controller::tank": "system::fillingTank",
+    "system::controller::volumeSensor1": "system::volumeSensor1",
+    "system::controller::volumeSensor2": "system::volumeSensor2",
+    "system::s": "system"
+  },
+  "instance_state_machines": {
+    "system::pump1": "PumpBehavior",
+    "system::valve1": "ValveBehavior",
+    "system::pump2": "PumpBehavior",
+    "system::valve2": "ValveBehavior",
+    "system::volumeSensor1": "VolumeSensorBehavior",
+    "system::volumeSensor2": "VolumeSensorBehavior"
+  }
+}

@@ -120,8 +120,11 @@ def train(model_path: str, output_dir: str = "./rl_output",
         print("Reward shaping: ON (distance-based)")
 
     # Save extracted interface for downstream use.
+    # Exclude non-serializable dataclass objects (scenario_inputs, scenario_constraints).
+    serializable = {k: v for k, v in vars(interface).items()
+                    if k not in ('scenario_inputs', 'scenario_constraints')}
     with open(out / "interface.json", "w") as f:
-        json.dump(vars(interface), f, indent=2)
+        json.dump(serializable, f, indent=2)
 
     # 2. Build Gymnasium environment.
     env = SysMLEnv(model_path, interface, dt=dt, max_steps=max_steps,

@@ -86,6 +86,8 @@ class NeuralInterface:
     action_types: list[str]
     done_expr: Optional[str] = None
     obs_bindings: Optional[dict[str, str]] = None
+    scenario_inputs: list = None       # Parameter objects with #ScenarioInput
+    scenario_constraints: list = None  # Constraint objects with #ScenarioConstraint
 
 
 def extract_neural_interface(model_path: str) -> NeuralInterface:
@@ -130,10 +132,18 @@ def extract_neural_interface(model_path: str) -> NeuralInterface:
     # Extract the done binding expression and obs bindings from the call site.
     done_expr, obs_bindings = _extract_bindings(parser, nd.name, obs_names)
 
+    # Extract #ScenarioInput parameters and #ScenarioConstraint constraints.
+    scenario_inputs = [p for p in parser.parameters
+                       if 'ScenarioInput' in p.metadata]
+    scenario_constraints = [c for c in parser.parsed_constraints
+                            if 'ScenarioConstraint' in c.metadata]
+
     return NeuralInterface(
         obs_names=obs_names, obs_types=obs_types,
         action_names=action_names, action_types=action_types,
         done_expr=done_expr, obs_bindings=obs_bindings,
+        scenario_inputs=scenario_inputs,
+        scenario_constraints=scenario_constraints,
     )
 
 

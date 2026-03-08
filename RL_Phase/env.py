@@ -4,28 +4,15 @@ env.py — Gymnasium environment wrapping a SysML SimulatorTwin.
 This module provides `SysMLEnv`, a Gymnasium-compatible environment that
 wraps any SysML v2 model's digital twin (SimulatorTwin) as an RL environment.
 The environment is constructed entirely from extracted SysML metadata — no
-model-specific code is needed for basic training.
+model-specific code is needed.
 
-Generality Tiers
------------------
-The code has three tiers of generality:
-
-1. **Fully general** (works for any SysML model with a #Neural action def):
-   - Observation/action space construction from NeuralInterface
-   - Step/reset using SimulatorTwin
-   - Reward from requirement_statuses() (#Prohibition -> penalty)
-   - Done checking from extracted done_expr
-
-2. **General for numeric done conditions** (reward shaping):
-   - Parses done_expr AST to compute continuous goal distance
-   - Works for any done expression using >=, <=, ==, and/or operators
-   - Example: "(x >= 10) and (y >= 20)" -> distance = max(0,10-x)^2 + max(0,20-y)^2
-
-3. **Model-specific heuristics** (start-state randomization):
-   - _discover_mapping() and _randomize_start() use naming conventions
-     (e.g., "target", "original", "capacity") to identify observation roles
-   - These work for fluid-transfer models but may need adaptation for
-     other domains. Override these methods for new model families.
+Scenario Randomization
+----------------------
+Start-state randomization is driven entirely by SysML metadata:
+  - `#ScenarioInput` on attributes identifies which parameters to randomize.
+  - `#ScenarioConstraint` on constraints defines valid ranges for sampling.
+Each `#ScenarioInput` parameter's `qualified_name` maps directly to an
+engine state key — no naming heuristics are needed.
 
 Reward Protocol
 ---------------
@@ -42,6 +29,7 @@ Episodes terminate on: goal reached, prohibition violation, or max_steps.
 """
 
 import ast
+import re
 import sys
 from pathlib import Path
 from typing import Optional
@@ -58,7 +46,6 @@ if _SYSML_MODELS_DIR not in sys.path:
     sys.path.insert(0, _SYSML_MODELS_DIR)
 
 from simulator_adapter import SimulatorTwin
-from simulator import BindRef
 from .extractor import NeuralInterface
 
 
@@ -146,6 +133,21 @@ def _eval_arith_node(node, ns):
     return 0.0
 
 
+# ------------------------------------------------------------------
+# Scenario constraint evaluation
+# ------------------------------------------------------------------
+
+def _normalize_constraint_expr(raw_text: str) -> str:
+    """Convert a ScenarioConstraint raw_text to a Python expression.
+
+    Strips dotted prefixes (e.g. "controller.tank1TransferMl" -> "tank1TransferMl")
+    and collapses whitespace so the expression can be eval'd with Parameter.name
+    as variable names.
+    """
+    expr = re.sub(r'(\w+)\.(\w+)', r'\2', raw_text)
+    return ' '.join(expr.split())
+
+
 class SysMLEnv(gym.Env):
     """Gymnasium environment wrapping a SysML digital twin.
 
@@ -163,8 +165,8 @@ class SysMLEnv(gym.Env):
         interface:      NeuralInterface from extractor.py.
         dt:             Simulation timestep in seconds.
         max_steps:      Maximum steps per episode before truncation.
-        randomize:      If True, randomize start states each episode.
-                        (Uses model-specific heuristics — see _randomize_start.)
+        randomize:      If True, randomize scenario inputs each episode
+                        using #ScenarioInput / #ScenarioConstraint metadata.
         done_threshold: Reduce target values by this amount when checking
                         done, making goal conditions easier to satisfy.
                         Useful when exact convergence is slow.
@@ -205,92 +207,16 @@ class SysMLEnv(gym.Env):
         self.action_space = spaces.MultiBinary(n_act)
         self._obs_scale = None
 
-        # State mapping for randomization (built on first reset).
-        self._state_map = None   # obs_name -> [engine state keys]
-        self._capacities = None  # obs_name -> capacity value
+        # Pre-compile scenario constraint expression for rejection sampling.
+        self._scenario_constraint_expr = None
+        if interface.scenario_constraints:
+            raw = ' and '.join(c.raw_text for c in interface.scenario_constraints)
+            self._scenario_constraint_expr = _normalize_constraint_expr(raw)
 
-    # ------------------------------------------------------------------
-    # State mapping discovery (MODEL-SPECIFIC HEURISTICS)
-    #
-    # This method discovers which internal simulator state keys correspond
-    # to each observation, enabling start-state randomization. It uses
-    # naming conventions from the fluid-transfer model family:
-    #   - ".response" in binding ref -> sensor reading -> find physical
-    #     state by matching digits and looking for "currentLevelMl"
-    #   - "capacityMl" suffix -> tank capacity for normalization
-    #   - "volumeSensor" -> sensor device readings
-    #
-    # For other model families, override this method or extend the
-    # heuristics. The core train/eval loop works WITHOUT this method
-    # (only needed when randomize=True).
-    # ------------------------------------------------------------------
-
-    def _discover_mapping(self):
-        """Build obs_name -> engine state keys mapping using binding refs.
-
-        Uses heuristics based on SysML naming conventions to find the
-        simulator state keys that correspond to each observation. This
-        is needed for start-state randomization to patch the right keys.
-        """
-        state = self._engine.state
-        bindings = self.interface.obs_bindings or {}
-
-        self._state_map = {}
-        self._capacities = {}
-
-        # Find controller context prefix (e.g., "system::controller").
-        ctrl_prefix = None
-        for key in state:
-            if '::controller::' in key:
-                parts = key.split('::')
-                idx = parts.index('controller')
-                ctrl_prefix = '::'.join(parts[:idx + 1])
-                break
-
-        for obs_name in self.interface.obs_names:
-            if obs_name.lower() == 'done':
-                continue
-            ref = bindings.get(obs_name)
-            if not ref:
-                continue
-
-            keys = []
-
-            if '.response' in ref:
-                # Sensor reading — find the physical state key by digit matching.
-                digit = ''.join(c for c in ref if c.isdigit())
-                for sk in state:
-                    if (sk.endswith('::currentLevelMl')
-                            and digit in sk
-                            and 'feeder' in sk.lower()):
-                        keys.append(sk)
-                        prefix = sk.rsplit('::', 1)[0]
-                        cap_key = f"{prefix}::capacityMl"
-                        cap_val = state.get(cap_key)
-                        if isinstance(cap_val, (int, float)):
-                            self._capacities[obs_name] = float(cap_val)
-
-                # Also patch the controller's cached sensor response.
-                if ctrl_prefix:
-                    cache_key = f"{ctrl_prefix}::{ref.replace('.', '::')}"
-                    if cache_key in state:
-                        keys.append(cache_key)
-
-                # Also patch volumeSensor device readings.
-                for sk in state:
-                    if ('volumeSensor' in sk and digit in sk
-                            and ('reading' in sk or 'rsp' in sk)
-                            and not isinstance(state[sk], BindRef)
-                            and isinstance(state.get(sk), (int, float))):
-                        keys.append(sk)
-            else:
-                # Direct controller attribute.
-                if ctrl_prefix:
-                    key = f"{ctrl_prefix}::{ref}"
-                    if key in state:
-                        keys.append(key)
-
-            self._state_map[obs_name] = keys
+        # Build set of #ScenarioInput parameter names for done_threshold.
+        self._scenario_input_names = set()
+        if interface.scenario_inputs:
+            self._scenario_input_names = {p.name for p in interface.scenario_inputs}
 
     # ------------------------------------------------------------------
     # Goal distance (GENERAL)
@@ -311,104 +237,57 @@ class SysMLEnv(gym.Env):
         return _goal_distance_from_expr(self._done_expr, self._obs_dict(state))
 
     # ------------------------------------------------------------------
-    # Start state randomization (MODEL-SPECIFIC HEURISTICS)
-    #
-    # Generates random valid start states for domain randomization.
-    # Uses naming conventions to classify observations:
-    #   - obs with discovered capacity -> "volume" (randomize in [1, capacity])
-    #   - obs with "target"/"transfer" in name -> constrained to [1, volume]
-    #   - obs with "original" in name -> set to initial volume
-    #
-    # For other model families, override this method.
+    # Scenario randomization (metadata-driven, no heuristics)
     # ------------------------------------------------------------------
 
     def _randomize_start(self) -> dict:
-        """Generate a random valid start state and patch the engine.
+        """Randomize #ScenarioInput parameters and patch the engine.
 
-        Returns the new state dict (matching twin._model_inputs format).
+        Samples random values for each #ScenarioInput parameter, validates
+        them against the #ScenarioConstraint expression via rejection
+        sampling, and writes them directly to the engine state using each
+        parameter's qualified_name.
+
+        Returns the updated state dict (matching twin._model_inputs format).
         """
         rng = self.np_random
-        obs_names = [self.interface.obs_names[i] for i in self._obs_indices]
+        scenario_inputs = self.interface.scenario_inputs or []
+        if not scenario_inputs:
+            return dict(self._twin._model_inputs)
 
-        # Classify obs by role using naming conventions.
-        volume_obs = []   # (obs_name, capacity)
-        target_obs = []   # obs_name
-        original_obs = [] # obs_name
-        for name in obs_names:
-            lower = name.lower()
-            if name in self._capacities:
-                volume_obs.append((name, self._capacities[name]))
-            elif 'target' in lower or 'transfer' in lower:
-                target_obs.append(name)
-            elif 'original' in lower:
-                original_obs.append(name)
-
-        # Rejection sampling for a valid state.
         for _ in range(1000):
-            new_vals = {}
+            vals = {}
+            for param in scenario_inputs:
+                # Sample uniformly in [0, default_value].
+                vals[param.name] = rng.uniform(0.0, param.value)
 
-            # Random volumes in [1, capacity].
-            for vname, cap in volume_obs:
-                new_vals[vname] = rng.uniform(1.0, cap)
+            # Validate against #ScenarioConstraint if present.
+            if self._scenario_constraint_expr:
+                ns = dict(vals)
+                ns["__builtins__"] = {}
+                try:
+                    if not eval(self._scenario_constraint_expr, ns):
+                        continue
+                except Exception:
+                    continue
 
-            # Random targets — pair with correct volume by shared digits.
-            valid = True
-            for tname in target_obs:
-                t_digits = {c for c in tname if c.isdigit()}
-                paired_vol = None
-                for vname, _ in volume_obs:
-                    v_digits = {c for c in vname if c.isdigit()}
-                    if t_digits & v_digits:
-                        paired_vol = vname
-                        break
-                if paired_vol is None:
-                    cap = max(c for _, c in volume_obs) if volume_obs else 1000.0
-                    new_vals[tname] = rng.uniform(1.0, cap * 0.5)
-                else:
-                    max_target = new_vals[paired_vol]
-                    if max_target < 1.0:
-                        valid = False
-                        break
-                    new_vals[tname] = rng.uniform(1.0, max_target)
+            # Valid sample — patch engine state.
+            for param in scenario_inputs:
+                self._engine.state[param.qualified_name] = vals[param.name]
 
-            if not valid:
-                continue
+            # Return updated model_inputs state.
+            new_state = dict(self._twin._model_inputs)
+            for param in scenario_inputs:
+                # Find the obs_name that binds to this parameter.
+                if self.interface.obs_bindings:
+                    for obs_name, ref in self.interface.obs_bindings.items():
+                        if ref == param.name:
+                            new_state[obs_name] = vals[param.name]
+                            break
+            return new_state
 
-            # Originals = volume at start (pair by shared digits).
-            for oname in original_obs:
-                o_digits = {c for c in oname if c.isdigit()}
-                for vname, _ in volume_obs:
-                    v_digits = {c for c in vname if c.isdigit()}
-                    if o_digits & v_digits:
-                        new_vals[oname] = new_vals[vname]
-                        break
-
-            break  # Valid state found
-
-        # Patch engine state.
-        for obs_name, val in new_vals.items():
-            for sk in self._state_map.get(obs_name, []):
-                self._engine.state[sk] = val
-
-        # Update derived booleans (isEmpty, isFull).
-        for sk in list(self._engine.state):
-            if sk.endswith('::isEmpty'):
-                prefix = sk.rsplit('::', 1)[0]
-                lvl = self._engine.state.get(f"{prefix}::currentLevelMl")
-                if isinstance(lvl, (int, float)):
-                    self._engine.state[sk] = lvl <= 0
-            elif sk.endswith('::isFull'):
-                prefix = sk.rsplit('::', 1)[0]
-                lvl = self._engine.state.get(f"{prefix}::currentLevelMl")
-                cap = self._engine.state.get(f"{prefix}::capacityMl")
-                if isinstance(lvl, (int, float)) and isinstance(cap, (int, float)):
-                    self._engine.state[sk] = lvl >= cap
-
-        # Build state dict matching model_inputs format.
-        new_state = dict(self._twin._model_inputs)
-        for obs_name, val in new_vals.items():
-            new_state[obs_name] = val
-        return new_state
+        # Fallback: return unmodified state if no valid sample found.
+        return dict(self._twin._model_inputs)
 
     # ------------------------------------------------------------------
     # Core Gymnasium methods (GENERAL)
@@ -420,9 +299,6 @@ class SysMLEnv(gym.Env):
         self._engine = self._twin._engine
         self._step_count = 0
 
-        if self._state_map is None:
-            self._discover_mapping()
-
         if self._randomize:
             state = self._randomize_start()
 
@@ -433,18 +309,7 @@ class SysMLEnv(gym.Env):
 
         raw = self._raw_obs(state)
         if self._obs_scale is None:
-            if self._randomize and self._capacities:
-                # Use capacities for stable normalization across episodes.
-                scale = np.ones(len(self._obs_indices), dtype=np.float32)
-                for j, i in enumerate(self._obs_indices):
-                    name = self.interface.obs_names[i]
-                    if name in self._capacities:
-                        scale[j] = self._capacities[name]
-                    else:
-                        scale[j] = max(self._capacities.values())
-                self._obs_scale = np.maximum(scale, 1.0)
-            else:
-                self._obs_scale = np.maximum(np.abs(raw), 1.0)
+            self._obs_scale = np.maximum(np.abs(raw), 1.0)
 
         return raw / self._obs_scale, {}
 
@@ -515,12 +380,14 @@ class SysMLEnv(gym.Env):
                 if name.lower() == 'done':
                     continue
                 ns[name] = _to_float(state.get(name))
-            # Apply threshold: reduce target values so done triggers earlier.
-            if self._done_threshold > 0:
-                for name in self.interface.obs_names:
-                    lower = name.lower()
-                    if 'target' in lower or 'transfer' in lower:
-                        ns[name] = max(0.0, ns[name] - self._done_threshold)
+            # Apply threshold: reduce scenario input values so done triggers
+            # earlier. Only applies to #ScenarioInput-bound observations.
+            if self._done_threshold > 0 and self._scenario_input_names:
+                bindings = self.interface.obs_bindings or {}
+                for obs_name in list(ns):
+                    ref = bindings.get(obs_name, '')
+                    if ref in self._scenario_input_names:
+                        ns[obs_name] = max(0.0, ns[obs_name] - self._done_threshold)
             ns["__builtins__"] = {}
             return bool(eval(self._done_expr, ns))
         except Exception:

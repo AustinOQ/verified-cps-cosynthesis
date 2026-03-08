@@ -18,6 +18,11 @@ package TankFillingSystem {
 
     metadata def Termination;
 
+    // Scenario input annotations.
+    metadata def ScenarioInput;
+
+    metadata def ScenarioConstraint;
+
     item def ReadInputRegisterReqMsg :> ModbusReqMsg {
         attribute registerAddress : Integer;
     }
@@ -447,10 +452,17 @@ package TankFillingSystem {
             ref :>> tank = system::fillingTank;
             ref :>> volumeSensor1 = system::volumeSensor1;
             ref :>> volumeSensor2 = system::volumeSensor2;
-            attribute :>> tank1TransferMl = 50;
-            attribute :>> tank2TransferMl = 100;
-            attribute :>> tank1OriginalLevelMl = 1000;
-            attribute :>> tank2OriginalLevelMl = 1000;
+            #ScenarioInput attribute :>> tank1TransferMl = 50;
+            #ScenarioInput attribute :>> tank2TransferMl = 100;
+            #ScenarioInput attribute :>> tank1OriginalLevelMl = 1000;
+            #ScenarioInput attribute :>> tank2OriginalLevelMl = 1000;
+        }
+
+        #ScenarioConstraint constraint scenarioConstraints {
+            controller.tank1TransferMl >= 0 and controller.tank2TransferMl >= 0 and
+            controller.tank1OriginalLevelMl >= 0 and controller.tank2OriginalLevelMl >= 0 and
+            controller.tank1OriginalLevelMl >= controller.tank1TransferMl and 
+            controller.tank2OriginalLevelMl >= controller.tank2TransferMl
         }
 
         // Flows - feeder path 1
