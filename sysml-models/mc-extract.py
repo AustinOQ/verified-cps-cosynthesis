@@ -346,8 +346,12 @@ class SMVGenerator:
                             target_key = inst_fqn + "::" + "::".join(stmt.target)
                             self._da_keys.add(target_key)
 
+        # Filter out ScenarioConstraint — they are only for RL scenario generation.
+        _constraints = [c for c in self.parser.parsed_constraints
+                        if 'ScenarioConstraint' not in getattr(c, 'metadata', [])]
+
         # Process assignment constraints → DEFINE
-        for c in self.parser.parsed_constraints:
+        for c in _constraints:
             if _contains_implies(c.expression):
                 continue
             e = c.expression
@@ -371,7 +375,7 @@ class SMVGenerator:
         # Process non-behavior implies constraints → conditional DEFINE (case expression)
         # Must run before Phase 3a so flow propagation sees pump/valve flowRate DEFINEs.
         cond_branches: dict[str, list[tuple[str, str]]] = {}
-        for c in self.parser.parsed_constraints:
+        for c in _constraints:
             if not _contains_implies(c.expression):
                 continue
             self._collect_cond_branches(c.expression, c.context, cond_branches)
@@ -530,7 +534,7 @@ class SMVGenerator:
         self._phase3d_action_body_coupling()
 
         # Process implies constraints → controlled boolean assignments per state
-        for c in self.parser.parsed_constraints:
+        for c in _constraints:
             if not _contains_implies(c.expression):
                 continue
             self._process_implies(c)

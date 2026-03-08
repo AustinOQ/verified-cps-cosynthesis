@@ -404,6 +404,8 @@ class SimulationEngine:
                                        self.parser.ref_bindings, self.parser.flows,
                                        self.parser.instance_state_machines)
         for constraint in self.parser.parsed_constraints:
+            if 'ScenarioConstraint' in getattr(constraint, 'metadata', []):
+                continue
             self.solver.add_constraint(constraint)
         for attr in self.parser.derived_attributes:
             self.solver.add_derived_attribute(attr)

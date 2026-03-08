@@ -349,6 +349,7 @@ class Constraint:
     expression: Expr
     raw_text: str
     context: str
+    metadata: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -390,6 +391,7 @@ class Parameter:
     value: float
     part_path: list[str]
     cli_name: str = ""
+    metadata: list[str] = field(default_factory=list)
 
     def __post_init__(self):
         parts = self.qualified_name.split('::')
@@ -446,7 +448,7 @@ class PartDef:
     name: str
     attributes: dict[str, str] = field(default_factory=dict)
     derived_attributes: dict[str, str] = field(default_factory=dict)
-    constraints: list[tuple[str, str]] = field(default_factory=list)
+    constraints: list[tuple[str, str, list[str]]] = field(default_factory=list)  # (name, expr, metadata)
     refs: dict[str, str] = field(default_factory=dict)
     actions: list[Action] = field(default_factory=list)
     action_defs: list[ActionDef] = field(default_factory=list)
@@ -750,12 +752,13 @@ class SysMLParser:
                 if derivation:
                     part_def.derived_attributes[attr_name] = derivation.strip()
 
-            # Parse constraints
-            constraint_pattern = r'constraint\s+(\w+)\s*\{\s*([^}]+)\s*\}'
+            # Parse constraints (with optional #Metadata annotation)
+            constraint_pattern = r'(?:#(\w+)\s+)?constraint\s+(\w+)\s*\{\s*([^}]+)\s*\}'
             for const_match in re.finditer(constraint_pattern, part_body_toplevel):
-                const_name = const_match.group(1)
-                const_expr = const_match.group(2).strip()
-                part_def.constraints.append((const_name, const_expr))
+                const_metadata = [const_match.group(1)] if const_match.group(1) else []
+                const_name = const_match.group(2)
+                const_expr = const_match.group(3).strip()
+                part_def.constraints.append((const_name, const_expr, const_metadata))
 
             # Parse requirement defs (with optional #Metadata annotation)
             for req_match in re.finditer(r"(?:#(\w+)\s+)?requirement\s+def\s+(?:'([^']+)'|(\w+))\s*\{", part_body):
@@ -1032,7 +1035,8 @@ class SysMLParser:
 
         found_fqns: set[str] = {p.qualified_name for p in self.parameters}
 
-        def _add_param(part_name: str, attr_name: str, attr_value: float) -> None:
+        def _add_param(part_name: str, attr_name: str, attr_value: float,
+                       metadata: Optional[list[str]] = None) -> None:
             fqn = f"{self.system_part}::{part_name}::{attr_name}"
             if fqn in found_fqns:
                 return
@@ -1043,12 +1047,13 @@ class SysMLParser:
                 qualified_name=fqn,
                 value=attr_value,
                 part_path=parts[:-1],
+                metadata=metadata or [],
             ))
             inst_fqn = f"{self.system_part}::{part_name}"
             if inst_fqn in self.part_instances:
                 self.part_instances[inst_fqn].attributes[attr_name] = attr_value
 
-        attr_pattern = r'attribute\s+:>>\s*(\w+)\s*=\s*(-?[\d.]+)\s*;'
+        attr_pattern = r'(?:#(\w+)\s+)?attribute\s+:>>\s*(\w+)\s*=\s*(-?[\d.]+)\s*;'
 
         # 1. System instantiation block: part system : Type { ... }
         sys_inst_pattern = rf'\bpart\s+{re.escape(self.system_part)}\s*:\s*\w+\s*\{{'
@@ -1059,8 +1064,9 @@ class SysMLParser:
             for sub_match in re.finditer(sub_part_pattern, sys_body):
                 sub_body = self._extract_block(sys_match.end() + sub_match.end())
                 for attr_match in re.finditer(attr_pattern, sub_body):
-                    _add_param(sub_match.group(1), attr_match.group(1),
-                               float(attr_match.group(2)))
+                    meta = [attr_match.group(1)] if attr_match.group(1) else []
+                    _add_param(sub_match.group(1), attr_match.group(2),
+                               float(attr_match.group(3)), meta)
 
         # 2. System type definition: part def FillingSystem { part x : T { ... } }
         lookup_name = self.system_type if self.system_type else self.system_part
@@ -1075,8 +1081,9 @@ class SysMLParser:
                 inst_name = inst_match.group(1)
                 inst_body = self._extract_block(def_start + inst_match.end())
                 for attr_match in re.finditer(attr_pattern, inst_body):
-                    _add_param(inst_name, attr_match.group(1),
-                               float(attr_match.group(2)))
+                    meta = [attr_match.group(1)] if attr_match.group(1) else []
+                    _add_param(inst_name, attr_match.group(2),
+                               float(attr_match.group(3)), meta)
 
     def _find_controller(self) -> None:
         """Find the controller part instance.
@@ -1135,7 +1142,7 @@ class SysMLParser:
                     pass
 
             # Add constraints
-            for const_name, const_expr in part_def.constraints:
+            for const_name, const_expr, const_metadata in part_def.constraints:
                 try:
                     parser = ExpressionParser(const_expr)
                     expr = parser.parse()
@@ -1143,7 +1150,8 @@ class SysMLParser:
                         name=const_name,
                         expression=expr,
                         raw_text=const_expr,
-                        context=fqn
+                        context=fqn,
+                        metadata=const_metadata,
                     ))
                 except Exception:
                     pass
@@ -1174,7 +1182,7 @@ class SysMLParser:
         if self.system_part:
             for name, pdef in self.part_defs.items():
                 if 'System' in name or name == self.system_part or name == self.system_type:
-                    for const_name, const_expr in pdef.constraints:
+                    for const_name, const_expr, const_metadata in pdef.constraints:
                         try:
                             parser = ExpressionParser(const_expr)
                             expr = parser.parse()
@@ -1182,7 +1190,8 @@ class SysMLParser:
                                 name=const_name,
                                 expression=expr,
                                 raw_text=const_expr,
-                                context=self.system_part
+                                context=self.system_part,
+                                metadata=const_metadata,
                             ))
                         except Exception:
                             pass
