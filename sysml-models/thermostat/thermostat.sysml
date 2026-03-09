@@ -63,6 +63,8 @@ package Thermostat {
     }
 
     part def TemperatureSensor {
+        attribute lastReadingCelcius : Real;
+
         port environmentPort : TemperatureSensorPort;
         port upstreamPort : ~TemperatureSensorPort;
 
@@ -70,6 +72,7 @@ package Thermostat {
             in dt : Real;
             item temperatureReading : TemperatureReading;
             assign temperatureReading.temperatureCelcius := environmentPort.reading.temperatureCelcius;
+            assign lastReadingCelcius := temperatureReading.temperatureCelcius;
             send temperatureReading via upstreamPort;
         }
     }
@@ -192,6 +195,7 @@ package Thermostat {
         connect thermometer.upstreamPort to controller.thermometerPort;
 
         attribute currentTime : Real = 0;
+        attribute lastObservedTemperature : Real = thermometer.lastReadingCelcius;
 
         action step {
             in dt : Real;
@@ -210,24 +214,24 @@ package Thermostat {
 
         #Obligation
         requirement def 'Heat When Cold' {
-            doc /* When the temperature is below the setpoint minus tolerance, the heater shall be on. */
+            doc /* When the last observed temperature is below the setpoint minus tolerance, the heater shall be on. */
             subject s : HeatingCoolingSystem;
 
             require constraint {
-                currentTime > 0 implies 
-                    (s.environment.temperatureCelcius < s.controller.setPointCelcius - s.controller.toleranceCelcius
+                currentTime > 0 implies
+                    (s.lastObservedTemperature < s.controller.setPointCelcius - s.controller.toleranceCelcius
                         implies s.controller.heaterOn)
             }
         }
 
         #Obligation
         requirement def 'Cool When Hot' {
-            doc /* When the temperature is above the setpoint plus tolerance, the AC shall be on. */
+            doc /* When the last observed temperature is above the setpoint plus tolerance, the AC shall be on. */
             subject s : HeatingCoolingSystem;
 
             require constraint {
                 currentTime > 0 implies
-                    (s.environment.temperatureCelcius > s.controller.setPointCelcius + s.controller.toleranceCelcius
+                    (s.lastObservedTemperature > s.controller.setPointCelcius + s.controller.toleranceCelcius
                         implies s.controller.acOn)
             }
         }

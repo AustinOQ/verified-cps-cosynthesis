@@ -1,0 +1,105 @@
+-- Auto-generated nuXmv SMV model
+-- Source: sysml-models/thermostat/thermostat.sysml
+
+MODULE main
+VAR
+  ac_state : {reset, on};
+  heater_state : {reset, on};
+  environment_temperatureCelcius : real;
+  thermometer_temperatureReading_temperatureCelcius : real;
+  thermometer_lastReadingCelcius : real;
+  controller_heaterOn : boolean;
+  controller_acOn : boolean;
+  currentTime : real;
+  ac_heatOut_heat_rateWatts : real;
+  heater_heatOut_heat_rateWatts : real;
+
+FROZENVAR
+  environment_outsideTemperatureCelcius : real;
+  controller_setPointCelcius : real;
+
+IVAR
+  ac_cmdIn_HeatingCoolingOnCmd_available : boolean;
+  ac_cmdIn_HeatingCoolingResetCmd_available : boolean;
+  heater_cmdIn_HeatingCoolingOnCmd_available : boolean;
+  heater_cmdIn_HeatingCoolingResetCmd_available : boolean;
+  controller_policyCall_heaterState : boolean;
+  controller_policyCall_acState : boolean;
+
+DEFINE
+  environment_volumeMetersCubed := 20.0;
+  environment_heatLossCoefficientWattsPerCelcius := 10.0;
+  ac_heatOutputWatts := -2000.0;
+  heater_heatOutputWatts := 2000.0;
+  controller_toleranceCelcius := 1.0;
+  dt := 0.1;
+  lastObservedTemperature := thermometer_lastReadingCelcius;
+  environment_temperaturePort_reading_temperatureCelcius := environment_temperatureCelcius;
+  environment_acPort_heat_rateWatts := ac_heatOut_heat_rateWatts;
+  environment_heaterPort_heat_rateWatts := heater_heatOut_heat_rateWatts;
+  thermometer_environmentPort_reading_temperatureCelcius := environment_temperaturePort_reading_temperatureCelcius;
+  scan_fires := (!controller_heaterOn);
+
+INIT
+  ((((controller_setPointCelcius >= 12.78) & (controller_setPointCelcius <= 37.78)) & (environment_outsideTemperatureCelcius <= 50)) & (environment_outsideTemperatureCelcius >= (-30)));
+
+TRANS
+  ((controller_setPointCelcius > thermometer_temperatureReading_temperatureCelcius + controller_toleranceCelcius) = controller_policyCall_heaterState) & ((controller_setPointCelcius < thermometer_temperatureReading_temperatureCelcius - controller_toleranceCelcius) = controller_policyCall_acState) & (! (controller_policyCall_heaterState & controller_policyCall_acState));
+
+ASSIGN
+  init(ac_state) := reset;
+  init(heater_state) := reset;
+  init(environment_temperatureCelcius) := 23.9;
+  init(thermometer_temperatureReading_temperatureCelcius) := 0.0;
+  init(thermometer_lastReadingCelcius) := 0.0;
+  init(controller_heaterOn) := FALSE;
+  init(controller_acOn) := FALSE;
+  init(currentTime) := 0.0;
+  init(ac_heatOut_heat_rateWatts) := 0.0;
+  init(heater_heatOut_heat_rateWatts) := 0.0;
+  next(ac_state) :=
+    case
+      ac_state = reset & ac_cmdIn_HeatingCoolingOnCmd_available : on;
+      ac_state = on & ac_cmdIn_HeatingCoolingResetCmd_available : reset;
+      TRUE : ac_state;
+    esac;
+  next(heater_state) :=
+    case
+      heater_state = reset & heater_cmdIn_HeatingCoolingOnCmd_available : on;
+      heater_state = on & heater_cmdIn_HeatingCoolingResetCmd_available : reset;
+      TRUE : heater_state;
+    esac;
+  next(environment_temperatureCelcius) := ((environment_temperatureCelcius + ((((environment_heaterPort_heat_rateWatts + environment_acPort_heat_rateWatts) - (environment_heatLossCoefficientWattsPerCelcius * (environment_temperatureCelcius - environment_outsideTemperatureCelcius))) * dt) / ((environment_volumeMetersCubed * 1.2) * 1005))));
+  next(thermometer_temperatureReading_temperatureCelcius) := (thermometer_environmentPort_reading_temperatureCelcius);
+  next(thermometer_lastReadingCelcius) := (thermometer_temperatureReading_temperatureCelcius);
+  next(controller_heaterOn) := (controller_policyCall_heaterState);
+  next(controller_acOn) := (controller_policyCall_acState);
+  next(currentTime) := ((currentTime + dt));
+  next(ac_heatOut_heat_rateWatts) :=
+    case
+      ac_state = reset & ac_cmdIn_HeatingCoolingOnCmd_available : ac_heatOutputWatts;
+      ac_state = on & ac_cmdIn_HeatingCoolingResetCmd_available : 0;
+      TRUE : ac_heatOut_heat_rateWatts;
+    esac;
+  next(heater_heatOut_heat_rateWatts) :=
+    case
+      heater_state = reset & heater_cmdIn_HeatingCoolingOnCmd_available : heater_heatOutputWatts;
+      heater_state = on & heater_cmdIn_HeatingCoolingResetCmd_available : 0;
+      TRUE : heater_heatOut_heat_rateWatts;
+    esac;
+
+-- Verification properties
+
+-- Requirement: No Simultaneous Heating and Cooling
+INVARSPEC (!(controller_heaterOn & controller_acOn))
+
+-- Requirement: Heat When Cold
+INVARSPEC ((currentTime > 0) -> ((lastObservedTemperature < (controller_setPointCelcius - controller_toleranceCelcius)) -> controller_heaterOn))
+
+-- Requirement: Cool When Hot
+INVARSPEC ((currentTime > 0) -> ((lastObservedTemperature > (controller_setPointCelcius + controller_toleranceCelcius)) -> controller_acOn))
+
+-- TODO: additional verification properties
+INVARSPEC TRUE  -- placeholder for ac_state
+INVARSPEC TRUE  -- placeholder for heater_state
+

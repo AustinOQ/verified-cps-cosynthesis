@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from sysml_parser import (
+    ExpressionParser,
     Expr, LiteralExpr, RefExpr, BinaryExpr, TernaryExpr, UnaryExpr,
     AssignStmt, ItemDeclStmt, SendStmt, AcceptStmt, AttributeDeclStmt, IfStmt, PerformStmt,
     SubactionCallStmt, InputBindingStmt,
@@ -369,6 +370,16 @@ class SMVGenerator:
                             target_key = inst_fqn + "::" + "::".join(stmt.target)
                             self._da_keys.add(target_key)
 
+        # Identify #ScenarioInput parameters → FROZENVAR (not DEFINE)
+        self._scenario_input_keys: set[str] = {
+            p.qualified_name for p in self.parser.parameters
+            if 'ScenarioInput' in p.metadata
+        }
+
+        # Save #ScenarioConstraint constraints → INIT block
+        self._scenario_constraints = [c for c in self.parser.parsed_constraints
+            if 'ScenarioConstraint' in getattr(c, 'metadata', [])]
+
         # Filter out ScenarioConstraint — they are only for RL scenario generation.
         _constraints = [c for c in self.parser.parsed_constraints
                         if 'ScenarioConstraint' not in getattr(c, 'metadata', [])]
@@ -705,21 +716,11 @@ class SMVGenerator:
                 r'\s*(<|>|<=|>=)\s*'
                 r'(\([^()]+\)|[\w_.]+(?:\s*[-+*/]\s*[\w_.]+)*)',
                 r'(\1 \2 \3)', clean)
-            # In non-scan-cycle models, sensor readings are step-action VARs
-            # updated via next().  The TRANS sees the *previous* step's reading,
-            # but the sensor read is conceptually instantaneous within the same
-            # step.  Substitute each sensor VAR with its flow source (the value
-            # next() would compute), resolved through the DEFINE chain.
-            if self._scan_phase_count == 0:
-                for sa in self._step_actions:
-                    smv_n = self._smv(sa.target_key)
-                    if smv_n not in clean:
-                        continue
-                    # Resolve the step-action's RHS to SMV, then follow DEFINEs
-                    source_smv = self._to_smv(sa.expression, sa.context)
-                    resolved = self._resolve_define_chain(source_smv)
-                    if resolved != smv_n:
-                        clean = clean.replace(smv_n, resolved)
+            # In non-scan-cycle models the TRANS uses the sensor reading VAR
+            # (one step behind the environment).  This is intentional: the
+            # controller observes the reading, not the physical temperature,
+            # and the INVARSPEC checks lastObservedTemperature (= previous
+            # reading) which equals what the TRANS saw when it decided.
             self._neural_invar = clean
 
     def _collect_trigger_var_ivars(self, trigger_var: str, guard: Expr,
@@ -1273,12 +1274,46 @@ class SMVGenerator:
             lines.append(f"  {name} : real;")
         return lines
 
+    def _gen_frozenvar(self) -> list[str]:
+        """Generate FROZENVAR declarations for #ScenarioInput parameters."""
+        params = [p for p in self.parser.parameters
+                  if p.qualified_name in self._scenario_input_keys]
+        if not params:
+            return []
+        lines = ["FROZENVAR"]
+        for p in params:
+            smv_n = self._smv(p.qualified_name)
+            typ = "real" if self._is_real(p.qualified_name) else "integer"
+            lines.append(f"  {smv_n} : {typ};")
+        return lines
+
+    def _gen_scenario_init(self) -> list[str]:
+        """Generate INIT block from #ScenarioConstraint constraints."""
+        if not self._scenario_constraints:
+            return []
+        parts = []
+        for c in self._scenario_constraints:
+            expr = c.expression
+            if not expr and c.raw_text:
+                try:
+                    expr = ExpressionParser(c.raw_text).parse()
+                except Exception:
+                    pass
+            if expr:
+                smv_expr = self._to_smv(expr, c.context)
+                parts.append(smv_expr)
+        if not parts:
+            return []
+        return ["INIT", "  " + " &\n  ".join(parts) + ";"]
+
     def _gen_define(self) -> list[str]:
         lines = ["DEFINE"]
 
-        # Constants from parameters (excluding VAR targets)
+        # Constants from parameters (excluding VAR targets and FROZENVAR scenario inputs)
         for p in self.parser.parameters:
             if p.qualified_name in self._sa_keys or p.qualified_name in self._da_keys:
+                continue
+            if p.qualified_name in self._scenario_input_keys:
                 continue
             smv_n = self._smv(p.qualified_name)
             if self._is_real(p.qualified_name):
@@ -1694,6 +1729,11 @@ class SMVGenerator:
         ]
         parts.extend(self._gen_var())
 
+        frozen = self._gen_frozenvar()
+        if frozen:
+            parts.append("")
+            parts.extend(frozen)
+
         ivar = self._gen_ivar()
         if ivar:
             parts.append("")
@@ -1701,6 +1741,12 @@ class SMVGenerator:
 
         parts.append("")
         parts.extend(self._gen_define())
+
+        scenario_init = self._gen_scenario_init()
+        if scenario_init:
+            parts.append("")
+            parts.extend(scenario_init)
+
         if self._neural_invar:
             parts.append("")
             # Use TRANS (not INVAR) because the constraint references IVARs.
