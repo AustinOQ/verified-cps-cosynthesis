@@ -20,7 +20,6 @@ package CruiseControl {
 
     item def SpeedReading {
         attribute speedMps : Real;
-        attribute gapMeters : Real;
     }
 
     port def SpeedSensorPort {
@@ -48,8 +47,6 @@ package CruiseControl {
         attribute massKg : Real;
         attribute dragCoefficient : Real;
         attribute roadGradePercent : Real;
-        attribute gapMeters : Real;
-        attribute leadSpeedMps : Real;
 
         port speedSensorPort : ~SpeedSensorPort;
         port enginePort : DriveForcePort;
@@ -65,18 +62,13 @@ package CruiseControl {
                   - dragCoefficient * speedMps * speedMps
                   - massKg * 9.81 * roadGradePercent / 100.0)
                  * dt) / massKg;
-
-            // Gap to lead vehicle: closes when ego is faster, opens when slower.
-            assign gapMeters := gapMeters + (leadSpeedMps - speedMps) * dt;
         }
 
         bind speedSensorPort.reading.speedMps = speedMps;
-        bind speedSensorPort.reading.gapMeters = gapMeters;
     }
 
     part def SpeedSensor {
         attribute lastReadingMps : Real;
-        attribute lastGapMeters : Real;
 
         port vehiclePort : SpeedSensorPort;
         port upstreamPort : ~SpeedSensorPort;
@@ -85,9 +77,7 @@ package CruiseControl {
             in dt : Real;
             item speedReading : SpeedReading;
             assign speedReading.speedMps := vehiclePort.reading.speedMps;
-            assign speedReading.gapMeters := vehiclePort.reading.gapMeters;
             assign lastReadingMps := speedReading.speedMps;
-            assign lastGapMeters := speedReading.gapMeters;
             send speedReading via upstreamPort;
         }
     }
@@ -122,7 +112,6 @@ package CruiseControl {
     part def Controller {
         attribute targetSpeedMps : Real;
         attribute toleranceMps : Real;
-        attribute safeFollowingDistanceMeters : Real;
         attribute throttleOn : Boolean;
         attribute brakeOn : Boolean;
 
@@ -133,7 +122,6 @@ package CruiseControl {
         #Neural action def Policy {
             in currentSpeedMps : Real;
             in targetSpeed : Real;
-            in gapMeters : Real;
             in done : Boolean;
 
             out applyThrottle : Boolean;
@@ -143,8 +131,8 @@ package CruiseControl {
         #NeuralRequirement requirement def 'Neural Controller Soundness' {
             subject p : Policy;
             require constraint {
-                (p.targetSpeed > p.currentSpeedMps + toleranceMps and p.gapMeters >= safeFollowingDistanceMeters == p.applyThrottle) and
-                (p.targetSpeed < p.currentSpeedMps - toleranceMps or p.gapMeters < safeFollowingDistanceMeters == p.applyBrake) and
+                (p.targetSpeed > p.currentSpeedMps + toleranceMps == p.applyThrottle) and
+                (p.currentSpeedMps > p.targetSpeed + toleranceMps == p.applyBrake) and
                 (not (p.applyThrottle and p.applyBrake))
             }
         }
@@ -158,9 +146,8 @@ package CruiseControl {
             action policyCall : Policy {
                 in currentSpeedMps := reading.speedMps;
                 in targetSpeed := targetSpeedMps;
-                in gapMeters := reading.gapMeters;
                 in done := targetSpeedMps <= reading.speedMps + toleranceMps and
-                    targetSpeedMps >= reading.speedMps - toleranceMps and not throttleOn and not brakeOn;
+                    targetSpeedMps >= reading.speedMps - toleranceMps;
             }
 
             assign throttleOn := policyCall.applyThrottle;
@@ -205,7 +192,6 @@ package CruiseControl {
 
         attribute currentTime : Real = 0;
         attribute lastObservedSpeed : Real = speedSensor.lastReadingMps;
-        attribute lastObservedGap : Real = speedSensor.lastGapMeters;
 
         action step {
             in dt : Real;
@@ -222,50 +208,50 @@ package CruiseControl {
             }
         }
 
-        #Prohibition
-        requirement def 'No Throttle When Too Close' {
-            doc /* The controller shall not apply throttle when the gap to the lead vehicle is below the safe following distance. */
-            subject s : CruiseControlSystem;
-
-            require constraint {
-                s.lastObservedGap < s.controller.safeFollowingDistanceMeters implies not s.controller.throttleOn
-            }
-        }
-
-        #Prohibition
-        requirement def 'No Throttle When Overspeeding' {
-            doc /* The controller shall not apply throttle when speed exceeds target plus tolerance. */
+        #Obligation
+        requirement def 'No Throttle Above Target' {
+            doc /* The controller shall not apply throttle when speed is above the target speed. */
             subject s : CruiseControlSystem;
 
             require constraint {
                 currentTime > 0 implies
-                    (s.lastObservedSpeed > s.controller.targetSpeedMps + s.controller.toleranceMps
+                    (s.lastObservedSpeed > s.controller.targetSpeedMps
                         implies not s.controller.throttleOn)
             }
         }
 
         #Obligation
+        requirement def 'No Brake Below Target' {
+            doc /* The controller shall not brake when speed is below the target speed. */
+            subject s : CruiseControlSystem;
+
+            require constraint {
+                currentTime > 0 implies
+                    (s.lastObservedSpeed < s.controller.targetSpeedMps
+                        implies not s.controller.brakeOn)
+            }
+        }
+
+        #Obligation
         requirement def 'Accelerate When Below Target' {
-            doc /* When speed is below target minus tolerance and the gap is safe, throttle should be on. */
+            doc /* When speed is below target minus tolerance, throttle should be on. */
             subject s : CruiseControlSystem;
 
             require constraint {
                 currentTime > 0 implies
                     (s.lastObservedSpeed < s.controller.targetSpeedMps - s.controller.toleranceMps
-                        and s.lastObservedGap >= s.controller.safeFollowingDistanceMeters
                         implies s.controller.throttleOn)
             }
         }
 
         #Obligation
-        requirement def 'Brake When Above Target Or Too Close' {
-            doc /* When speed is above target plus tolerance or the gap is below safe following distance, brake should be on. */
+        requirement def 'Brake When Above Target' {
+            doc /* When speed is above target plus tolerance, brake should be on. */
             subject s : CruiseControlSystem;
 
             require constraint {
                 currentTime > 0 implies
                     (s.lastObservedSpeed > s.controller.targetSpeedMps + s.controller.toleranceMps
-                        or s.lastObservedGap < s.controller.safeFollowingDistanceMeters
                         implies s.controller.brakeOn)
             }
         }
@@ -277,8 +263,6 @@ package CruiseControl {
             attribute :>> massKg = 1500.0;
             attribute :>> dragCoefficient = 0.4;
             attribute :>> roadGradePercent = 0.0;
-            attribute :>> gapMeters = 100.0;
-            #ScenarioInput attribute :>> leadSpeedMps = 20.0;
         }
 
         part :>> engine {
@@ -292,13 +276,11 @@ package CruiseControl {
         part :>> controller {
             #ScenarioInput attribute :>> targetSpeedMps = 25.0;
             attribute :>> toleranceMps = 1.0;
-            attribute :>> safeFollowingDistanceMeters = 10.0;
         }
 
         #ScenarioConstraint constraint scenarioConstraint {
             controller.targetSpeedMps >= 5.0 and
-            controller.targetSpeedMps <= 25.0 and
-            vehicle.leadSpeedMps >= 5.0
+            controller.targetSpeedMps <= 25.0
         }
     }
 }

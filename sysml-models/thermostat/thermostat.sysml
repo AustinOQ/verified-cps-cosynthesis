@@ -150,7 +150,7 @@ package Thermostat {
                 in setPoint := setPointCelcius;
                 in temperatureCelcius := reading.temperatureCelcius;
                 in done := setPointCelcius <= reading.temperatureCelcius + toleranceCelcius and
-                setPointCelcius >= reading.temperatureCelcius - toleranceCelcius and not heaterOn and not acOn;
+                setPointCelcius >= reading.temperatureCelcius - toleranceCelcius;
             }
 
             // Need to turn off before we turn on. 
