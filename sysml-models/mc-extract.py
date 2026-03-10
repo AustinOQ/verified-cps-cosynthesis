@@ -688,8 +688,8 @@ class SMVGenerator:
             def _resolve_bare(m):
                 name = m.group(0)
                 # Skip SMV keywords and names already resolved
-                if name in ('TRUE', 'FALSE', 'not', 'case', 'esac',
-                            'next', 'init'):
+                if name in ('TRUE', 'FALSE', 'not', 'and', 'or',
+                            'implies', 'case', 'esac', 'next', 'init'):
                     return name
                 if name in _known_smv:
                     return name
@@ -700,14 +700,16 @@ class SMVGenerator:
                     return smv_n
                 return name
             clean = _re2.sub(r'\b([a-zA-Z_]\w*)\b', _resolve_bare, clean)
+            # Collapse whitespace before operator conversion so that
+            # multi-line expressions like "...) and\n(...)" become
+            # "...) and (...)" and the simple replace matches.
+            clean = ' '.join(clean.split())
             # Convert SysML operators to SMV.
             clean = clean.replace(' and ', ' & ')
             clean = clean.replace(' or ', ' | ')
             clean = clean.replace(' implies ', ' -> ')
             clean = _re2.sub(r'\bnot\b', '!', clean)
             clean = clean.replace('==', '=')
-            # Collapse whitespace.
-            clean = ' '.join(clean.split())
             # Parenthesise comparisons: "a < b = c" → "(a < b) = c"
             # so nuXmv doesn't choke on precedence.
             import re as _re
