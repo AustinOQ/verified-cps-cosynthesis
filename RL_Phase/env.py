@@ -72,6 +72,7 @@ def _to_float(val) -> float:
 #   ==            -> squared distance
 #   and           -> sum of sub-distances
 #   or            -> min of sub-distances
+#   not           -> boolean negation distance (value^2, 0 when falsy)
 #   +, -, *, /    -> arithmetic in comparands
 # ------------------------------------------------------------------
 
@@ -112,6 +113,13 @@ def _eval_dist_node(node, ns):
                 total += (cur - right) ** 2
             cur = right
         return total
+    # FIX 3: Handle boolean negation.
+    # `not x` should have distance 0 when x is falsy, positive when truthy.
+    # We evaluate the operand as an arithmetic value and use val^2 as
+    # the distance — 0 when the operand is 0 (False), 1 when it's 1 (True).
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+        val = _eval_arith_node(node.operand, ns)
+        return val ** 2
     return 0.0
 
 
@@ -134,6 +142,16 @@ def _eval_arith_node(node, ns):
 
 
 # ------------------------------------------------------------------
+# Done expression variable discovery
+# ------------------------------------------------------------------
+
+def _find_done_expr_vars(done_expr: str) -> set[str]:
+    """Return all variable names referenced in the done expression."""
+    tree = ast.parse(done_expr, mode='eval')
+    return {node.id for node in ast.walk(tree) if isinstance(node, ast.Name)}
+
+
+# ------------------------------------------------------------------
 # Scenario constraint evaluation
 # ------------------------------------------------------------------
 
@@ -144,8 +162,39 @@ def _normalize_constraint_expr(raw_text: str) -> str:
     and collapses whitespace so the expression can be eval'd with Parameter.name
     as variable names.
     """
-    expr = re.sub(r'(\w+)\.(\w+)', r'\2', raw_text)
+    # FIX 1: Only match identifiers (starting with letter/underscore), not
+    # decimal numbers like 12.78. The old regex r'(\w+)\.(\w+)' treated
+    # '12.78' as two \w+ groups separated by a dot, replacing it with '78'.
+    expr = re.sub(r'([a-zA-Z_]\w*)\.([a-zA-Z_]\w*)', r'\2', raw_text)
     return ' '.join(expr.split())
+
+
+def _parse_constraint_bounds(constraint_expr: str, param_names: list[str]) -> dict[str, tuple[float, float]]:
+    """Extract [lower, upper] bounds for each parameter from a constraint expression.
+
+    Parses patterns like 'paramName >= 12.78' and 'paramName <= 37.78' from
+    the normalized constraint string.
+
+    Returns:
+        Dict mapping param name -> (lower_bound, upper_bound).
+        Uses -inf/+inf when a bound is not found in the constraint.
+    """
+    bounds = {}
+    for name in param_names:
+        lower = -float('inf')
+        upper = float('inf')
+        # Match: name >= value  or  value <= name
+        for m in re.finditer(rf'{re.escape(name)}\s*>=\s*([-\d.eE]+)', constraint_expr):
+            lower = max(lower, float(m.group(1)))
+        for m in re.finditer(rf'([-\d.eE]+)\s*<=\s*{re.escape(name)}', constraint_expr):
+            lower = max(lower, float(m.group(1)))
+        # Match: name <= value  or  value >= name
+        for m in re.finditer(rf'{re.escape(name)}\s*<=\s*([-\d.eE]+)', constraint_expr):
+            upper = min(upper, float(m.group(1)))
+        for m in re.finditer(rf'([-\d.eE]+)\s*>=\s*{re.escape(name)}', constraint_expr):
+            upper = min(upper, float(m.group(1)))
+        bounds[name] = (lower, upper)
+    return bounds
 
 
 class SysMLEnv(gym.Env):
@@ -203,20 +252,70 @@ class SysMLEnv(gym.Env):
 
         # Pre-compile scenario constraint expression for rejection sampling.
         self._scenario_constraint_expr = None
+        self._scenario_bounds = {}
         if interface.scenario_constraints:
             raw = ' and '.join(c.raw_text for c in interface.scenario_constraints)
             self._scenario_constraint_expr = _normalize_constraint_expr(raw)
+            # FIX 4: Parse explicit bounds from constraint for sampling.
+            param_names = [p.name for p in (interface.scenario_inputs or [])]
+            self._scenario_bounds = _parse_constraint_bounds(
+                self._scenario_constraint_expr, param_names)
+
+        # FIX 2: Discover variables in done_expr that are NOT observations.
+        # Build a static lookup for parameters (e.g. toleranceCelcius) and
+        # identify engine-state variables (e.g. heaterOn, acOn) that must
+        # be read from the engine each step.
+        self._done_extra_static = {}   # name -> float (constant params)
+        self._done_extra_dynamic = []  # names to read from engine state
+        if self._done_expr:
+            from sysml_parser import SysMLParser
+            obs_set = {n for n in interface.obs_names if n.lower() != 'done'}
+            all_vars = _find_done_expr_vars(self._done_expr)
+            missing = all_vars - obs_set
+
+            if missing:
+                # Try to resolve from parser parameters (static values).
+                parser = self._twin._parser
+                param_by_name = {p.name: p.value for p in parser.parameters}
+                for var in missing:
+                    if var in param_by_name:
+                        self._done_extra_static[var] = param_by_name[var]
+                    else:
+                        # Must be dynamic state (e.g. controller attributes
+                        # like heaterOn, acOn). Will be resolved from engine
+                        # state at each step.
+                        self._done_extra_dynamic.append(var)
 
     # ------------------------------------------------------------------
     # Goal distance (GENERAL)
     # ------------------------------------------------------------------
 
     def _obs_dict(self, state: dict) -> dict:
-        """Build {obs_name: value} dict from state for distance computation."""
+        """Build {var_name: value} dict for distance computation.
+
+        Includes all variables referenced in done_expr:
+          - Observations from the Neural action's in-params (from state dict)
+          - Static parameters like toleranceCelcius (from parser, set at init)
+          - Dynamic engine state like heaterOn, acOn (resolved each call)
+        """
         d = {}
+        # Observations from state dict.
         for name in self.interface.obs_names:
             if name.lower() != 'done':
                 d[name] = _to_float(state.get(name))
+        # FIX 2: Add static parameter values (e.g. toleranceCelcius).
+        d.update(self._done_extra_static)
+        # FIX 2: Add dynamic engine state values (e.g. heaterOn, acOn).
+        if self._engine and self._done_extra_dynamic:
+            for var in self._done_extra_dynamic:
+                # Search engine state for a key ending with ::varName.
+                for key, val in self._engine.state.items():
+                    if key.endswith('::' + var):
+                        d[var] = _to_float(val)
+                        break
+                else:
+                    # Also check state dict directly (twin may surface it).
+                    d.setdefault(var, _to_float(state.get(var, 0.0)))
         return d
 
     def _goal_distance(self, state: dict) -> float:
@@ -232,10 +331,10 @@ class SysMLEnv(gym.Env):
     def _randomize_start(self) -> dict:
         """Randomize #ScenarioInput parameters and patch the engine.
 
-        Samples random values for each #ScenarioInput parameter, validates
-        them against the #ScenarioConstraint expression via rejection
-        sampling, and writes them directly to the engine state using each
-        parameter's qualified_name.
+        Samples random values for each #ScenarioInput parameter using
+        bounds parsed from #ScenarioConstraint, validates them via
+        rejection sampling, and writes them directly to the engine state
+        using each parameter's qualified_name.
 
         Returns the updated state dict (matching twin._model_inputs format).
         """
@@ -247,8 +346,19 @@ class SysMLEnv(gym.Env):
         for _ in range(1000):
             vals = {}
             for param in scenario_inputs:
-                # Sample uniformly in [0, default_value].
-                vals[param.name] = rng.uniform(0.0, param.value)
+                # FIX 4: Sample from constraint bounds when available,
+                # falling back to [0, default_value] if no bounds found.
+                lo, hi = self._scenario_bounds.get(
+                    param.name, (0.0, param.value))
+                # Replace infinite bounds with reasonable defaults.
+                if lo == -float('inf'):
+                    lo = min(0.0, param.value)
+                if hi == float('inf'):
+                    hi = max(0.0, param.value)
+                # Ensure lo <= hi.
+                if lo > hi:
+                    lo, hi = hi, lo
+                vals[param.name] = rng.uniform(lo, hi)
 
             # Validate against #ScenarioConstraint if present.
             if self._scenario_constraint_expr:
