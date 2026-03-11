@@ -1,0 +1,31 @@
+{
+  "obs_names": [
+    "setPoint",
+    "temperatureCelcius",
+    "done"
+  ],
+  "obs_types": [
+    "Real",
+    "Real",
+    "Boolean"
+  ],
+  "action_names": [
+    "heaterState",
+    "acState"
+  ],
+  "action_types": [
+    "Boolean",
+    "Boolean"
+  ],
+  "done_expr": "((setPoint) <= ((temperatureCelcius) + (toleranceCelcius))) and ((setPoint) >= ((temperatureCelcius) - (toleranceCelcius)))",
+  "obs_bindings": {
+    "setPoint": "setPointCelcius",
+    "temperatureCelcius": "reading.temperatureCelcius"
+  },
+  "neural_requirements": [
+    [
+      "Neural Controller Soundness",
+      "(setPoint > temperatureCelcius + toleranceCelcius == heaterState) and \n                (setPoint < temperatureCelcius - toleranceCelcius == acState) and \n                (not (heaterState and acState))"
+    ]
+  ]
+}

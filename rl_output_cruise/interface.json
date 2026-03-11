@@ -1,0 +1,31 @@
+{
+  "obs_names": [
+    "currentSpeedMps",
+    "targetSpeed",
+    "done"
+  ],
+  "obs_types": [
+    "Real",
+    "Real",
+    "Boolean"
+  ],
+  "action_names": [
+    "applyThrottle",
+    "applyBrake"
+  ],
+  "action_types": [
+    "Boolean",
+    "Boolean"
+  ],
+  "done_expr": "((targetSpeed) <= ((currentSpeedMps) + (toleranceMps))) and ((targetSpeed) >= ((currentSpeedMps) - (toleranceMps)))",
+  "obs_bindings": {
+    "currentSpeedMps": "reading.speedMps",
+    "targetSpeed": "targetSpeedMps"
+  },
+  "neural_requirements": [
+    [
+      "Neural Controller Soundness",
+      "(targetSpeed > currentSpeedMps + toleranceMps == applyThrottle) and\n                (currentSpeedMps > targetSpeed + toleranceMps == applyBrake) and\n                (not (applyThrottle and applyBrake))"
+    ]
+  ]
+}

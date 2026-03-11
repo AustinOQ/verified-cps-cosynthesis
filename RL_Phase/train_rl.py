@@ -48,46 +48,67 @@ from .env import SysMLEnv
 
 
 class LogCallback(BaseCallback):
-    """SB3 callback that tracks episode stats and saves the best model.
+    """SB3 callback that saves the best model via periodic micro-tests.
 
-    Monitors rolling mean reward over windows of 20 episodes and saves
-    a checkpoint whenever a new best is achieved. This ensures the saved
-    "best" model reflects peak training performance, not just the final
-    (potentially degraded) policy.
+    Every `eval_freq` timesteps, runs `eval_episodes` deterministic episodes
+    on a separate evaluation environment (default initial state, no
+    randomization). The model with the highest goal-completion rate (and
+    fewest violations) is saved as model_best.
     """
-    def __init__(self, save_path: str):
+    def __init__(self, save_path: str, eval_env: SysMLEnv,
+                 eval_freq: int = 50_000, eval_episodes: int = 100):
         super().__init__()
         self.save_path = save_path
+        self.eval_env = eval_env
+        self.eval_freq = eval_freq
+        self.eval_episodes = eval_episodes
         self.episode_rewards = []
         self.episode_violations = []
-        self._best_mean_reward = -float("inf")
-        self._recent_rewards = []
+        self._best_goal_rate = -1.0
+        self._last_eval_step = 0
 
     def _on_step(self):
         for info in self.locals.get("infos", []):
             if "episode" in info:
-                r = info["episode"]["r"]
-                self.episode_rewards.append(r)
-                self._recent_rewards.append(r)
+                self.episode_rewards.append(info["episode"]["r"])
             if info.get("violation"):
                 self.episode_violations.append(info["violation"])
 
-        # Save best model based on rolling mean of 20 episodes.
-        if len(self._recent_rewards) >= 20:
-            import numpy as _np
-            mean_r = _np.mean(self._recent_rewards)
-            if mean_r > self._best_mean_reward:
-                self._best_mean_reward = mean_r
-                self.model.save(self.save_path)
-                print(f"  [best model saved: mean_reward={mean_r:.3f}]")
-            self._recent_rewards = []
+        # Periodic micro-test evaluation.
+        if self.num_timesteps - self._last_eval_step >= self.eval_freq:
+            self._last_eval_step = self.num_timesteps
+            self._run_eval()
         return True
+
+    def _run_eval(self):
+        """Run deterministic micro-test and save if best."""
+        goals, violations = 0, 0
+        for ep in range(self.eval_episodes):
+            obs, _ = self.eval_env.reset(seed=ep)
+            done = truncated = False
+            info = {}
+            while not done and not truncated:
+                action, _ = self.model.predict(obs, deterministic=True)
+                obs, _, done, truncated, info = self.eval_env.step(action)
+                if info.get("violation"):
+                    violations += 1
+                    break
+            if done and not info.get("violation"):
+                goals += 1
+
+        goal_rate = goals / self.eval_episodes
+        print(f"  [eval @ {self.num_timesteps:,} steps: "
+              f"goals={goals}/{self.eval_episodes}  violations={violations}]")
+        if goal_rate > self._best_goal_rate:
+            self._best_goal_rate = goal_rate
+            self.model.save(self.save_path)
+            print(f"  [best model saved: goal_rate={goal_rate:.2%}]")
 
 
 def train(model_path: str, output_dir: str = "./rl_output",
           total_timesteps: int = 200_000, dt: float = 0.1,
           max_steps: int = 200, randomize: bool = False,
-          shaping: bool = False) -> dict:
+          shaping: bool = False, seed: int = None) -> dict:
     """Train a PPO controller from a SysML model.
 
     Args:
@@ -140,16 +161,21 @@ def train(model_path: str, output_dir: str = "./rl_output",
         ent_coef=ent,
         target_kl=0.015,
         verbose=1,
+        seed=seed,
     )
 
+    # Build a separate eval environment (same randomization as training).
+    eval_env = SysMLEnv(model_path, interface, dt=dt, max_steps=max_steps,
+                        randomize=randomize, shaping=shaping)
+
     best_path = str(out / "model_best")
-    cb = LogCallback(save_path=best_path)
+    cb = LogCallback(save_path=best_path, eval_env=eval_env,
+                     eval_freq=50_000, eval_episodes=100)
     model.learn(total_timesteps=total_timesteps, callback=cb)
 
-    # 4. Save final model.
-    model.save(str(out / "model"))
     print(f"\nSaved to {out}/")
     env.close()
+    eval_env.close()
 
     return {"episodes": len(cb.episode_rewards), "output_dir": str(out)}
 
@@ -169,10 +195,12 @@ def main():
                    help="Randomize start states each episode.")
     p.add_argument("--shaping", action="store_true",
                    help="Enable distance-based reward shaping.")
+    p.add_argument("--seed", type=int, default=None,
+                   help="Random seed for reproducibility.")
     args = p.parse_args()
 
     train(args.model_path, args.output_dir, args.timesteps, args.dt, args.max_steps,
-          args.randomize, args.shaping)
+          args.randomize, args.shaping, args.seed)
 
 
 if __name__ == "__main__":

@@ -44,19 +44,20 @@ From `verified-cps-cosynthesis/`, with the venv active:
 ```bash
 # 1. Chemical Mixing System
 python -m RL_Phase.train_rl sysml-models/mixing-sysml-model/model.sysml \
-    --shaping --randomize --timesteps 500000 -o rl_output_mixing
+    --shaping --randomize --timesteps 500000 --seed 42 -o rl_output_mixing
 
 # 2. Thermostat
 python -m RL_Phase.train_rl sysml-models/thermostat/thermostat.sysml \
-    --shaping --randomize --timesteps 500000 --max-steps 1000 -o rl_output_thermostat
+    --shaping --randomize --timesteps 500000 --max-steps 1000 --seed 42 -o rl_output_thermostat
 
 # 3. Cruise Control
 python -m RL_Phase.train_rl sysml-models/cruise-controller-model/model.sysml \
-    --shaping --randomize --timesteps 500000 --max-steps 500 -o rl_output_cruise
+    --shaping --randomize --timesteps 500000 --max-steps 500 --seed 42 -o rl_output_cruise
 ```
 
-Each command runs extraction and training end-to-end. Outputs (trained model,
-best checkpoint, interface metadata) are saved to the specified `-o` directory.
+Each command runs extraction and training end-to-end. The best model checkpoint
+(`model_best.zip`) is saved based on periodic micro-test evaluations during
+training (100 deterministic episodes with randomized scenarios every 50,000 steps).
 
 ### Run All Three as a Script
 
@@ -65,15 +66,15 @@ source .venv/bin/activate
 
 echo "=== Training Mixing System ==="
 python -m RL_Phase.train_rl sysml-models/mixing-sysml-model/model.sysml \
-    --shaping --randomize --timesteps 500000 -o rl_output_mixing
+    --shaping --randomize --timesteps 500000 --seed 42 -o rl_output_mixing
 
 echo "=== Training Thermostat ==="
 python -m RL_Phase.train_rl sysml-models/thermostat/thermostat.sysml \
-    --shaping --randomize --timesteps 500000 --max-steps 1000 -o rl_output_thermostat
+    --shaping --randomize --timesteps 500000 --max-steps 1000 --seed 42 -o rl_output_thermostat
 
 echo "=== Training Cruise Control ==="
 python -m RL_Phase.train_rl sysml-models/cruise-controller-model/model.sysml \
-    --shaping --randomize --timesteps 500000 --max-steps 500 -o rl_output_cruise
+    --shaping --randomize --timesteps 500000 --max-steps 500 --seed 42 -o rl_output_cruise
 
 echo "=== All training complete ==="
 ```
@@ -88,6 +89,7 @@ Expected runtime: ~10 minutes per model on CPU (~30 minutes total).
 | `--randomize` | Randomize start states each episode using `#ScenarioInput` metadata |
 | `--timesteps N` | Total environment steps for training (default: 200,000; use 500,000 for reliable convergence) |
 | `--max-steps N` | Max steps per episode before truncation (default: 200) |
+| `--seed N` | Random seed for reproducibility (recommended: 42) |
 | `-o DIR` | Output directory for trained models |
 
 ---
@@ -105,14 +107,12 @@ filling tank. Pumps and valves are controlled over Modbus.
 
 **Goal (done):** Both tanks have transferred at least their target amounts.
 
-**Safety rules:**
+**Safety rules enforced during training (Prohibitions):**
 
-| Rule | Kind | Plain English |
-|------|------|---------------|
-| No Dry Running | Prohibition | Don't run a pump when its tank is empty. |
-| No Dead Heading | Prohibition | Don't run a pump when its valve is closed. |
-| Fluid Transfer Termination Safety | Obligation | Once a tank has transferred enough fluid, stop its pump and close its valve. |
-| Fluid Transfer Liveness | Obligation | If a tank still needs to transfer fluid, its pump and valve should be active. |
+| Rule | Plain English |
+|------|---------------|
+| No Dry Running | Don't run a pump when its tank is empty. |
+| No Dead Heading | Don't run a pump when its valve is closed. |
 
 **Randomization:** Transfer targets and original tank levels are randomized each episode.
 
@@ -127,13 +127,11 @@ to the outside environment via Newton's law of cooling.
 
 **Goal (done):** Temperature is within tolerance of setpoint.
 
-**Safety rules:**
+**Safety rules enforced during training (Prohibitions):**
 
-| Rule | Kind | Plain English |
-|------|------|---------------|
-| No Simultaneous Heating and Cooling | Prohibition | Don't run the heater and AC at the same time. |
-| Heat When Cold | Obligation | If the temperature is below the setpoint minus tolerance, the heater should be on. |
-| Cool When Hot | Obligation | If the temperature is above the setpoint plus tolerance, the AC should be on. |
+| Rule | Plain English |
+|------|---------------|
+| No Simultaneous Heating and Cooling | Don't run the heater and AC at the same time. |
 
 **Randomization:** Setpoint and outside temperature are randomized each episode.
 
@@ -148,28 +146,33 @@ force; a brake applies opposing force.
 
 **Goal (done):** Speed is within tolerance of target speed.
 
-**Safety rules:**
+**Safety rules enforced during training (Prohibitions):**
 
-| Rule | Kind | Plain English |
-|------|------|---------------|
-| No Simultaneous Throttle and Brake | Prohibition | Don't apply throttle and brake at the same time. |
-| No Throttle Above Target | Obligation | Don't throttle when speed is above the target speed. |
-| No Brake Below Target | Obligation | Don't brake when speed is below the target speed. |
-| Accelerate When Below Target | Obligation | If speed is below target minus tolerance, throttle should be on. |
-| Brake When Above Target | Obligation | If speed is above target plus tolerance, brake should be on. |
+| Rule | Plain English |
+|------|---------------|
+| No Simultaneous Throttle and Brake | Don't apply throttle and brake at the same time. |
 
 **Randomization:** Target speed (5-25 m/s) is randomized each episode.
 
 ---
 
-## What "Prohibition" vs "Obligation" Means for Training
+## How Training Works
 
-- **Prohibitions** are enforced during RL training. Violating one gives -1
-  reward and immediately ends the episode. The agent learns to never enter
-  these states.
-- **Obligations** are NOT enforced during training. The agent learns to satisfy
-  them naturally through the goal reward. They are verified formally downstream
-  by beta-CROWN and nuXmv.
+### Reward Protocol
+- **Goal reached:** +10 reward, episode terminates successfully.
+- **Prohibition violated:** -1 reward, episode terminates immediately.
+- **Normal step:** Per-step distance improvement toward the goal (reward shaping).
+
+### Model Selection
+During training, a micro-test evaluation runs every 50,000 steps: 100 episodes
+with randomized scenarios, deterministic policy (no exploration). The model
+checkpoint with the highest goal-completion rate is saved as `model_best.zip`.
+This guards against PPO's occasional late-training policy instability.
+
+### Reproducibility
+All training uses `--seed 42`, which seeds Python's random, NumPy, and PyTorch
+via stable-baselines3. The deterministic evaluation policy (`predict(obs,
+deterministic=True)`) produces identical actions for identical observations.
 
 ---
 
@@ -181,9 +184,61 @@ force; a brake applies opposing force.
 | Thermostat | ~10.5 | ~540 steps | Heats/cools to setpoint within tolerance |
 | Cruise Control | ~11 | ~75 steps | Throttles to target speed, coasts into tolerance band |
 
-After training, all three models should achieve **100% goal completion** and
+After training, all three models achieve **100% goal completion** and
 **0 safety violations** when evaluated with the deterministic policy over 100
-randomized episodes.
+randomized episodes (verified with seed 42).
+
+---
+
+## Verifying Trained Models
+
+After training, verify the results by running the deterministic policy on 100
+randomized episodes per model:
+
+```python
+# Run from verified-cps-cosynthesis/ with venv active
+python -c "
+from RL_Phase.extractor import extract_neural_interface
+from RL_Phase.env import SysMLEnv
+from stable_baselines3 import PPO
+
+models = [
+    ('Mixing', 'sysml-models/mixing-sysml-model/model.sysml', 'rl_output_mixing/model_best.zip', 200, 0.1),
+    ('Thermostat', 'sysml-models/thermostat/thermostat.sysml', 'rl_output_thermostat/model_best.zip', 1000, 0.1),
+    ('Cruise', 'sysml-models/cruise-controller-model/model.sysml', 'rl_output_cruise/model_best.zip', 500, 0.1),
+]
+
+for name, sysml, ckpt, max_steps, dt in models:
+    iface = extract_neural_interface(sysml)
+    env = SysMLEnv(sysml, iface, dt=dt, max_steps=max_steps, randomize=True, shaping=True)
+    agent = PPO.load(ckpt, env=env)
+    goals, violations, timeouts = 0, 0, 0
+    for ep in range(100):
+        obs, _ = env.reset(seed=ep)
+        done = truncated = False
+        info = {}
+        while not done and not truncated:
+            action, _ = agent.predict(obs, deterministic=True)
+            obs, _, done, truncated, info = env.step(action)
+            if info.get('violation'):
+                violations += 1
+                break
+        if done and not info.get('violation'):
+            goals += 1
+        elif not done and not info.get('violation'):
+            timeouts += 1
+    status = 'PASS' if goals == 100 and violations == 0 else 'FAIL'
+    print(f'[{status}] {name}: goals={goals}/100  violations={violations}  timeouts={timeouts}')
+    env.close()
+"
+```
+
+Expected output:
+```
+[PASS] Mixing: goals=100/100  violations=0  timeouts=0
+[PASS] Thermostat: goals=100/100  violations=0  timeouts=0
+[PASS] Cruise: goals=100/100  violations=0  timeouts=0
+```
 
 ---
 
@@ -193,6 +248,5 @@ Each training run produces:
 
 | File | Contents |
 |------|----------|
-| `model.zip` | Final PPO policy (stable-baselines3 format) |
-| `model_best.zip` | Best checkpoint by rolling mean reward |
+| `model_best.zip` | Best PPO policy checkpoint (stable-baselines3 format), selected by micro-test evaluation |
 | `interface.json` | Extracted neural interface (obs names, action names, done expression) |

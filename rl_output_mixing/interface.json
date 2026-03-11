@@ -1,0 +1,47 @@
+{
+  "obs_names": [
+    "tank1VolumeMl",
+    "tank2VolumeMl",
+    "tank1TargetTransferMl",
+    "tank2TargetTransferMl",
+    "tank1OriginalMl",
+    "tank2OriginalMl",
+    "done"
+  ],
+  "obs_types": [
+    "Integer",
+    "Integer",
+    "Integer",
+    "Integer",
+    "Integer",
+    "Integer",
+    "Boolean"
+  ],
+  "action_names": [
+    "shouldOpenValve1",
+    "shouldOpenValve2",
+    "shouldTurnOnPump1",
+    "shouldTurnOnPump2"
+  ],
+  "action_types": [
+    "Boolean",
+    "Boolean",
+    "Boolean",
+    "Boolean"
+  ],
+  "done_expr": "(((tank1OriginalMl) - (tank1VolumeMl)) >= (tank1TargetTransferMl)) and (((tank2OriginalMl) - (tank2VolumeMl)) >= (tank2TargetTransferMl))",
+  "obs_bindings": {
+    "tank1VolumeMl": "volume1Res.response",
+    "tank2VolumeMl": "volume2Res.response",
+    "tank1TargetTransferMl": "tank1TransferMl",
+    "tank2TargetTransferMl": "tank2TransferMl",
+    "tank1OriginalMl": "tank1OriginalLevelMl",
+    "tank2OriginalMl": "tank2OriginalLevelMl"
+  },
+  "neural_requirements": [
+    [
+      "Neural Controller Soundness",
+      "(tank1OriginalMl - tank1VolumeMl < tank1TargetTransferMl == shouldTurnOnPump1) and \n                (shouldTurnOnPump1 implies shouldOpenValve1) and \n                (tank2OriginalMl - tank2VolumeMl < tank2TargetTransferMl == shouldTurnOnPump2) and \n                (shouldTurnOnPump2 implies shouldOpenValve2)"
+    ]
+  ]
+}
