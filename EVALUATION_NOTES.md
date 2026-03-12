@@ -2,7 +2,6 @@
     - Mixing model
     - Thermostat
     - Cruise controller
-    - IF WE HAVE TIME: Drone/Pendulum 
 
 - [] Table:
     Columns:

@@ -1,0 +1,125 @@
+-- Auto-generated nuXmv SMV model
+-- Source: sysml-models/cruise-controller-model/model.sysml
+
+MODULE main
+VAR
+  engine_state : {off, on};
+  brake_state : {off, on};
+  vehicle_speedMps : real;
+  vehicle_gapMeters : real;
+  speedSensor_speedReading_speedMps : real;
+  speedSensor_speedReading_gapMeters : real;
+  speedSensor_lastReadingMps : real;
+  speedSensor_lastGapMeters : real;
+  controller_throttleOn : boolean;
+  controller_brakeOn : boolean;
+  currentTime : real;
+  brake_forceOut_drive_forceNewtons : real;
+  engine_forceOut_drive_forceNewtons : real;
+
+FROZENVAR
+  vehicle_leadSpeedMps : real;
+  controller_targetSpeedMps : real;
+
+IVAR
+  engine_cmdIn_ActuatorOnCmd_available : boolean;
+  engine_cmdIn_ActuatorResetCmd_available : boolean;
+  brake_cmdIn_ActuatorOnCmd_available : boolean;
+  brake_cmdIn_ActuatorResetCmd_available : boolean;
+  controller_policyCall_applyThrottle : boolean;
+  controller_policyCall_applyBrake : boolean;
+
+DEFINE
+  vehicle_massKg := 1500.0;
+  vehicle_dragCoefficient := 0.4;
+  vehicle_roadGradePercent := 0.0;
+  engine_maxForceNewtons := 5000.0;
+  brake_maxForceNewtons := -8000.0;
+  controller_toleranceMps := 1.0;
+  controller_safeFollowingDistanceMeters := 10.0;
+  dt := 0.1;
+  lastObservedSpeed := speedSensor_lastReadingMps;
+  lastObservedGap := speedSensor_lastGapMeters;
+  vehicle_speedSensorPort_reading_speedMps := vehicle_speedMps;
+  vehicle_speedSensorPort_reading_gapMeters := vehicle_gapMeters;
+  vehicle_enginePort_drive_forceNewtons := engine_forceOut_drive_forceNewtons;
+  vehicle_brakePort_drive_forceNewtons := brake_forceOut_drive_forceNewtons;
+  speedSensor_vehiclePort_reading_gapMeters := vehicle_speedSensorPort_reading_gapMeters;
+  speedSensor_vehiclePort_reading_speedMps := vehicle_speedSensorPort_reading_speedMps;
+  scan_fires := (!controller_throttleOn);
+
+INIT
+  (((controller_targetSpeedMps >= 5) & (controller_targetSpeedMps <= 25)) & (vehicle_leadSpeedMps >= 5));
+
+TRANS
+  ((controller_targetSpeedMps > speedSensor_speedReading_speedMps + controller_toleranceMps) & (speedSensor_speedReading_gapMeters >= controller_safeFollowingDistanceMeters) = controller_policyCall_applyThrottle) & ((controller_targetSpeedMps < speedSensor_speedReading_speedMps - controller_toleranceMps) | (speedSensor_speedReading_gapMeters < controller_safeFollowingDistanceMeters) = controller_policyCall_applyBrake) & (! (controller_policyCall_applyThrottle & controller_policyCall_applyBrake));
+
+ASSIGN
+  init(engine_state) := off;
+  init(brake_state) := off;
+  init(vehicle_speedMps) := 0.0;
+  init(vehicle_gapMeters) := 100.0;
+  init(speedSensor_speedReading_speedMps) := 0.0;
+  init(speedSensor_speedReading_gapMeters) := 0.0;
+  init(speedSensor_lastReadingMps) := 0.0;
+  init(speedSensor_lastGapMeters) := 0.0;
+  init(controller_throttleOn) := FALSE;
+  init(controller_brakeOn) := FALSE;
+  init(currentTime) := 0.0;
+  init(brake_forceOut_drive_forceNewtons) := 0.0;
+  init(engine_forceOut_drive_forceNewtons) := 0.0;
+  next(engine_state) :=
+    case
+      engine_state = off & engine_cmdIn_ActuatorOnCmd_available : on;
+      engine_state = on & engine_cmdIn_ActuatorResetCmd_available : off;
+      TRUE : engine_state;
+    esac;
+  next(brake_state) :=
+    case
+      brake_state = off & brake_cmdIn_ActuatorOnCmd_available : on;
+      brake_state = on & brake_cmdIn_ActuatorResetCmd_available : off;
+      TRUE : brake_state;
+    esac;
+  next(vehicle_speedMps) := ((vehicle_speedMps + (((((vehicle_enginePort_drive_forceNewtons + vehicle_brakePort_drive_forceNewtons) - ((vehicle_dragCoefficient * vehicle_speedMps) * vehicle_speedMps)) - (((vehicle_massKg * 9.81) * vehicle_roadGradePercent) / 100)) * dt) / vehicle_massKg)));
+  next(vehicle_gapMeters) := ((vehicle_gapMeters + ((vehicle_leadSpeedMps - vehicle_speedMps) * dt)));
+  next(speedSensor_speedReading_speedMps) := (speedSensor_vehiclePort_reading_speedMps);
+  next(speedSensor_speedReading_gapMeters) := (speedSensor_vehiclePort_reading_gapMeters);
+  next(speedSensor_lastReadingMps) := (speedSensor_speedReading_speedMps);
+  next(speedSensor_lastGapMeters) := (speedSensor_speedReading_gapMeters);
+  next(controller_throttleOn) := (controller_policyCall_applyThrottle);
+  next(controller_brakeOn) := (controller_policyCall_applyBrake);
+  next(currentTime) := ((currentTime + dt));
+  next(brake_forceOut_drive_forceNewtons) :=
+    case
+      brake_state = off & brake_cmdIn_ActuatorOnCmd_available : brake_maxForceNewtons;
+      brake_state = on & brake_cmdIn_ActuatorResetCmd_available : 0;
+      TRUE : brake_forceOut_drive_forceNewtons;
+    esac;
+  next(engine_forceOut_drive_forceNewtons) :=
+    case
+      engine_state = off & engine_cmdIn_ActuatorOnCmd_available : engine_maxForceNewtons;
+      engine_state = on & engine_cmdIn_ActuatorResetCmd_available : 0;
+      TRUE : engine_forceOut_drive_forceNewtons;
+    esac;
+
+-- Verification properties
+
+-- Requirement: No Simultaneous Throttle and Brake
+INVARSPEC (!(controller_throttleOn & controller_brakeOn))
+
+-- Requirement: No Throttle When Too Close
+INVARSPEC ((lastObservedGap < controller_safeFollowingDistanceMeters) -> (!controller_throttleOn))
+
+-- Requirement: No Throttle When Overspeeding
+INVARSPEC ((currentTime > 0) -> ((lastObservedSpeed > (controller_targetSpeedMps + controller_toleranceMps)) -> (!controller_throttleOn)))
+
+-- Requirement: Accelerate When Below Target
+INVARSPEC ((currentTime > 0) -> (((lastObservedSpeed < (controller_targetSpeedMps - controller_toleranceMps)) & (lastObservedGap >= controller_safeFollowingDistanceMeters)) -> controller_throttleOn))
+
+-- Requirement: Brake When Above Target Or Too Close
+INVARSPEC ((currentTime > 0) -> (((lastObservedSpeed > (controller_targetSpeedMps + controller_toleranceMps)) | (lastObservedGap < controller_safeFollowingDistanceMeters)) -> controller_brakeOn))
+
+-- TODO: additional verification properties
+INVARSPEC TRUE  -- placeholder for engine_state
+INVARSPEC TRUE  -- placeholder for brake_state
+
