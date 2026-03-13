@@ -214,24 +214,24 @@ package Thermostat {
 
         #Obligation
         requirement def 'Heat When Cold' {
-            doc /* When the last observed temperature is below the setpoint minus tolerance, the heater shall be on. */
+            doc /* When the temperature is below the setpoint minus tolerance, the heater shall be on. */
             subject s : HeatingCoolingSystem;
 
             require constraint {
-                currentTime > 0 implies
-                    (s.lastObservedTemperature < s.controller.setPointCelcius - s.controller.toleranceCelcius
+                currentTime > 0 implies 
+                    (s.environment.temperatureCelcius < s.controller.setPointCelcius - s.controller.toleranceCelcius
                         implies s.controller.heaterOn)
             }
         }
 
         #Obligation
         requirement def 'Cool When Hot' {
-            doc /* When the last observed temperature is above the setpoint plus tolerance, the AC shall be on. */
+            doc /* When the temperature is above the setpoint plus tolerance, the AC shall be on. */
             subject s : HeatingCoolingSystem;
 
             require constraint {
                 currentTime > 0 implies
-                    (s.lastObservedTemperature > s.controller.setPointCelcius + s.controller.toleranceCelcius
+                    (s.environment.temperatureCelcius > s.controller.setPointCelcius + s.controller.toleranceCelcius
                         implies s.controller.acOn)
             }
         }
