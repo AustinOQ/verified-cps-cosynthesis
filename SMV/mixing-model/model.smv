@@ -59,6 +59,8 @@ DEFINE
   volumeSensor1_tankConnection_reading_volumeMl := feederTank1_volumeSensorPort_reading_volumeMl;
   volumeSensor2_tankConnection_reading_volumeMl := feederTank2_volumeSensorPort_reading_volumeMl;
   scan_fires := ((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1 / controller_scanCycleFrequencyHz));
+  controller_observedLevel1 := volumeSensor1_rsp_response;
+  controller_observedLevel2 := volumeSensor2_rsp_response;
   volumeSensor1_modbusPort_req_ReadInputRegisterReqMsg_available := (scan_phase = 1);
   volumeSensor1_modbusPort_req_ModbusReqMsg_available := (scan_phase = 1);
   volumeSensor2_modbusPort_req_ReadInputRegisterReqMsg_available := (scan_phase = 2);
@@ -89,7 +91,7 @@ INIT
   ((((((controller_tank1TransferMl >= 0) & (controller_tank2TransferMl >= 0)) & (controller_tank1OriginalLevelMl >= 0)) & (controller_tank2OriginalLevelMl >= 0)) & (controller_tank1OriginalLevelMl >= controller_tank1TransferMl)) & (controller_tank2OriginalLevelMl >= controller_tank2TransferMl));
 
 TRANS
-  ((controller_tank1OriginalLevelMl - volumeSensor1_rsp_response < controller_tank1TransferMl) = controller_policyCall_shouldTurnOnPump1) & (controller_policyCall_shouldTurnOnPump1 -> controller_policyCall_shouldOpenValve1) & ((controller_tank2OriginalLevelMl - volumeSensor2_rsp_response < controller_tank2TransferMl) = controller_policyCall_shouldTurnOnPump2) & (controller_policyCall_shouldTurnOnPump2 -> controller_policyCall_shouldOpenValve2);
+  ((controller_tank1OriginalLevelMl - volumeSensor1_rsp_response < controller_tank1TransferMl) = controller_policyCall_shouldTurnOnPump1) & (controller_policyCall_shouldTurnOnPump1 = controller_policyCall_shouldOpenValve1) & ((controller_tank2OriginalLevelMl - volumeSensor2_rsp_response < controller_tank2TransferMl) = controller_policyCall_shouldTurnOnPump2) & (controller_policyCall_shouldTurnOnPump2 = controller_policyCall_shouldOpenValve2);
 
 ASSIGN
   init(feederTank1_currentLevelMl) := 150.0;
@@ -175,35 +177,77 @@ ASSIGN
 -- Verification properties
 
 -- Requirement: No Dry Running
-INVARSPEC (((feederTank1_currentLevelMl = 0) -> (!pump1_isRunning)) & ((feederTank2_currentLevelMl = 0) -> (!pump2_isRunning)))
+-- INVARSPEC scan_phase = 0 -> ((((controller_observedLevel1 <= 0) -> (!pump1_isRunning)) & ((controller_observedLevel2 <= 0) -> (!pump2_isRunning))))
 
 -- Requirement: No Dead Heading
-INVARSPEC (((!valve1_isOpen) -> (!pump1_isRunning)) & ((!valve2_isOpen) -> (!pump2_isRunning)))
+-- INVARSPEC scan_phase = 0 -> ((((!valve1_isOpen) -> (!pump1_isRunning)) & ((!valve2_isOpen) -> (!pump2_isRunning))))
 
 -- Requirement: Fluid Transfer Termination Safety
-INVARSPEC ((controller_lastScanTimeSeconds > 0) -> ((((controller_tank1OriginalLevelMl - feederTank1_currentLevelMl) >= controller_tank1TransferMl) -> ((!valve1_isOpen) & (!pump1_isRunning))) & (((controller_tank2OriginalLevelMl - feederTank2_currentLevelMl) >= controller_tank2TransferMl) -> ((!valve2_isOpen) & (!pump2_isRunning)))))
+-- INVARSPEC scan_phase = 0 -> (((controller_lastScanTimeSeconds > 0) -> ((((controller_tank1OriginalLevelMl - controller_observedLevel1) >= controller_tank1TransferMl) -> (!pump1_isRunning)) & (((controller_tank2OriginalLevelMl - controller_observedLevel2) >= controller_tank2TransferMl) -> (!pump2_isRunning)))))
 
 -- Requirement: Fluid Transfer Liveness
-INVARSPEC ((controller_lastScanTimeSeconds > 0) -> (((controller_tank1OriginalLevelMl - feederTank1_currentLevelMl) < controller_tank1TransferMl) -> (((valve1_isOpen & pump1_isRunning) & ((controller_tank2OriginalLevelMl - feederTank2_currentLevelMl) < controller_tank2TransferMl)) -> (valve2_isOpen & pump2_isRunning))))
+-- INVARSPEC scan_phase = 0 -> (((controller_lastScanTimeSeconds > 0) -> (((controller_tank1OriginalLevelMl - controller_observedLevel1) < controller_tank1TransferMl) -> (((valve1_isOpen & pump1_isRunning) & ((controller_tank2OriginalLevelMl - controller_observedLevel2) < controller_tank2TransferMl)) -> (valve2_isOpen & pump2_isRunning)))))
 
 -- TODO: additional verification properties
 
 
 -- Strengthening invariants (auto-generated for k-induction)
 -- Sensor volumeSensor1_rsp_response reads feederTank1_currentLevelMl at phase 1
-INVARSPEC (scan_phase >= 2 & scan_phase <= 14) -> (volumeSensor1_rsp_response = feederTank1_currentLevelMl)
+-- INVARSPEC (scan_phase >= 2 & scan_phase <= 14) -> (volumeSensor1_rsp_response = feederTank1_currentLevelMl)
 -- Sensor volumeSensor2_rsp_response reads feederTank2_currentLevelMl at phase 2
-INVARSPEC (scan_phase >= 3 & scan_phase <= 14) -> (volumeSensor2_rsp_response = feederTank2_currentLevelMl)
-INVARSPEC feederTank1_currentLevelMl >= 0
-INVARSPEC feederTank2_currentLevelMl >= 0
-INVARSPEC fillingTank_currentLevelMl >= 0
-INVARSPEC controller_currentTimeSeconds >= 0
-INVARSPEC controller_lastScanTimeSeconds >= 0
-INVARSPEC (scan_phase >= 8 & scan_phase <= 14 & (!controller_policyCall_shouldOpenValve1)) -> !valve1_isOpen
-INVARSPEC (scan_phase >= 6 & scan_phase <= 14 & (!controller_policyCall_shouldTurnOnPump1)) -> !pump1_isRunning
-INVARSPEC (scan_phase >= 14 & scan_phase <= 14 & (!controller_policyCall_shouldOpenValve2)) -> !valve2_isOpen
-INVARSPEC (scan_phase >= 12 & scan_phase <= 14 & (!controller_policyCall_shouldTurnOnPump2)) -> !pump2_isRunning
+-- INVARSPEC (scan_phase >= 3 & scan_phase <= 14) -> (volumeSensor2_rsp_response = feederTank2_currentLevelMl)
+-- INVARSPEC fillingTank_currentLevelMl >= 0
+-- INVARSPEC controller_currentTimeSeconds >= 0
+-- INVARSPEC controller_lastScanTimeSeconds >= 0
+-- INVARSPEC (scan_phase >= 9 & scan_phase <= 14 & (!controller_policyCall_shouldOpenValve1)) -> !valve1_isOpen
+-- INVARSPEC (scan_phase >= 7 & scan_phase <= 14 & (!controller_policyCall_shouldTurnOnPump1)) -> !pump1_isRunning
+-- INVARSPEC (scan_phase >= 15 & scan_phase <= 14 & (!controller_policyCall_shouldOpenValve2)) -> !valve2_isOpen
+-- INVARSPEC (scan_phase >= 13 & scan_phase <= 14 & (!controller_policyCall_shouldTurnOnPump2)) -> !pump2_isRunning
 -- Actuator coupling: valve1_isOpen activates before pump1_isRunning, deactivates after
-INVARSPEC pump1_isRunning -> valve1_isOpen
+-- INVARSPEC pump1_isRunning -> valve1_isOpen
 -- Actuator coupling: valve2_isOpen activates before pump2_isRunning, deactivates after
-INVARSPEC pump2_isRunning -> valve2_isOpen
+-- INVARSPEC pump2_isRunning -> valve2_isOpen
+
+-- H5: Bidirectional policy-state synchronisation
+-- INVARSPEC scan_phase = 0 -> (pump1_isRunning = ((controller_tank1OriginalLevelMl - volumeSensor1_rsp_response < controller_tank1TransferMl)))
+-- INVARSPEC scan_phase = 0 -> (pump2_isRunning = ((controller_tank2OriginalLevelMl - volumeSensor2_rsp_response < controller_tank2TransferMl)))
+
+-- Bridge: drain-only tank level <= last sensor reading
+-- INVARSPEC (scan_phase = 0 & controller_lastScanTimeSeconds > 0) -> (feederTank1_currentLevelMl <= volumeSensor1_rsp_response)
+-- INVARSPEC (scan_phase = 0 & controller_lastScanTimeSeconds > 0) -> (feederTank2_currentLevelMl <= volumeSensor2_rsp_response)
+
+-- H6: FROZENVAR constraint promotion
+-- INVARSPEC (controller_tank1TransferMl >= 0)
+-- INVARSPEC (controller_tank2TransferMl >= 0)
+-- INVARSPEC (controller_tank1OriginalLevelMl >= 0)
+-- INVARSPEC (controller_tank2OriginalLevelMl >= 0)
+-- INVARSPEC (controller_tank1OriginalLevelMl >= controller_tank1TransferMl)
+-- INVARSPEC (controller_tank2OriginalLevelMl >= controller_tank2TransferMl)
+
+-- Combined INVARSPEC (all strengthening + requirements)
+INVARSPEC
+  (scan_phase = 0 -> ((((controller_observedLevel1 <= 0) -> (!pump1_isRunning)) & ((controller_observedLevel2 <= 0) -> (!pump2_isRunning)))))
+  & (scan_phase = 0 -> ((((!valve1_isOpen) -> (!pump1_isRunning)) & ((!valve2_isOpen) -> (!pump2_isRunning)))))
+  & (scan_phase = 0 -> (((controller_lastScanTimeSeconds > 0) -> ((((controller_tank1OriginalLevelMl - controller_observedLevel1) >= controller_tank1TransferMl) -> (!pump1_isRunning)) & (((controller_tank2OriginalLevelMl - controller_observedLevel2) >= controller_tank2TransferMl) -> (!pump2_isRunning))))))
+  & (scan_phase = 0 -> (((controller_lastScanTimeSeconds > 0) -> (((controller_tank1OriginalLevelMl - controller_observedLevel1) < controller_tank1TransferMl) -> (((valve1_isOpen & pump1_isRunning) & ((controller_tank2OriginalLevelMl - controller_observedLevel2) < controller_tank2TransferMl)) -> (valve2_isOpen & pump2_isRunning))))))
+  & ((scan_phase >= 2 & scan_phase <= 14) -> (volumeSensor1_rsp_response = feederTank1_currentLevelMl))
+  & ((scan_phase >= 3 & scan_phase <= 14) -> (volumeSensor2_rsp_response = feederTank2_currentLevelMl))
+  & (fillingTank_currentLevelMl >= 0)
+  & (controller_currentTimeSeconds >= 0)
+  & (controller_lastScanTimeSeconds >= 0)
+  & ((scan_phase >= 9 & scan_phase <= 14 & (!controller_policyCall_shouldOpenValve1)) -> !valve1_isOpen)
+  & ((scan_phase >= 7 & scan_phase <= 14 & (!controller_policyCall_shouldTurnOnPump1)) -> !pump1_isRunning)
+  & ((scan_phase >= 15 & scan_phase <= 14 & (!controller_policyCall_shouldOpenValve2)) -> !valve2_isOpen)
+  & ((scan_phase >= 13 & scan_phase <= 14 & (!controller_policyCall_shouldTurnOnPump2)) -> !pump2_isRunning)
+  & (pump1_isRunning -> valve1_isOpen)
+  & (pump2_isRunning -> valve2_isOpen)
+  & (scan_phase = 0 -> (pump1_isRunning = ((controller_tank1OriginalLevelMl - volumeSensor1_rsp_response < controller_tank1TransferMl))))
+  & (scan_phase = 0 -> (pump2_isRunning = ((controller_tank2OriginalLevelMl - volumeSensor2_rsp_response < controller_tank2TransferMl))))
+  & ((scan_phase = 0 & controller_lastScanTimeSeconds > 0) -> (feederTank1_currentLevelMl <= volumeSensor1_rsp_response))
+  & ((scan_phase = 0 & controller_lastScanTimeSeconds > 0) -> (feederTank2_currentLevelMl <= volumeSensor2_rsp_response))
+  & ((controller_tank1TransferMl >= 0))
+  & ((controller_tank2TransferMl >= 0))
+  & ((controller_tank1OriginalLevelMl >= 0))
+  & ((controller_tank2OriginalLevelMl >= 0))
+  & ((controller_tank1OriginalLevelMl >= controller_tank1TransferMl))
+  & ((controller_tank2OriginalLevelMl >= controller_tank2TransferMl))

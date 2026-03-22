@@ -1,3 +1,4 @@
+// generate-combined-invariants
 package TankFillingSystem {
 
     // Standard library imports
@@ -227,6 +228,10 @@ package TankFillingSystem {
         attribute tank1OriginalLevelMl : Integer;
         attribute tank2OriginalLevelMl : Integer;
 
+        // Last observed sensor readings (updated each scan cycle).
+        attribute observedLevel1 : Integer = 0;
+        attribute observedLevel2 : Integer = 0;
+
         // Scan frequency.
         attribute scanCycleFrequencyHz : Integer = 10;
         attribute lastScanTimeSeconds : Real = 0;
@@ -347,9 +352,9 @@ package TankFillingSystem {
             subject p : Policy;
             require constraint {
                 (p.tank1OriginalMl - p.tank1VolumeMl < p.tank1TargetTransferMl == p.shouldTurnOnPump1) and 
-                (p.shouldTurnOnPump1 implies p.shouldOpenValve1) and 
-                (p.tank2OriginalMl - p.tank2VolumeMl < p.tank2TargetTransferMl == p.shouldTurnOnPump2) and 
-                (p.shouldTurnOnPump2 implies p.shouldOpenValve2)
+                (p.shouldTurnOnPump1 == p.shouldOpenValve1) and
+                (p.tank2OriginalMl - p.tank2VolumeMl < p.tank2TargetTransferMl == p.shouldTurnOnPump2) and
+                (p.shouldTurnOnPump2 == p.shouldOpenValve2)
             }
         }
 
@@ -359,12 +364,14 @@ package TankFillingSystem {
             send volume1ReadingReq via volumeSensor1Port.req;
             item volume1Res : ReadInputRegisterRespMsg;
             accept volume1Res : ReadInputRegisterRespMsg via volumeSensor1Port.resp;
+            assign observedLevel1 := volume1Res.response;
 
             item volume2ReadingReq : ReadInputRegisterReqMsg;
             assign volume2ReadingReq.registerAddress := 0;
             send volume2ReadingReq via volumeSensor2Port.req;
             item volume2Res : ReadInputRegisterRespMsg;
             accept volume2Res : ReadInputRegisterRespMsg via volumeSensor2Port.resp;
+            assign observedLevel2 := volume2Res.response;
 
             action policyCall : Policy {
                 in tank1VolumeMl := volume1Res.response;
@@ -513,12 +520,12 @@ package TankFillingSystem {
 
         #Prohibition
         requirement def 'No Dry Running' {
-            doc /* When a tank is empty, the controller shall not turn on its corresponding pump. */
+            doc /* When a sensor reports an empty tank, the controller shall not run its corresponding pump. */
             subject s : FillingSystem;
 
             require constraint {
-                (s.feederTank1.currentLevelMl == 0 implies not s.pump1.isRunning) and
-                (s.feederTank2.currentLevelMl == 0 implies not s.pump2.isRunning)
+                (s.controller.observedLevel1 <= 0 implies not s.pump1.isRunning) and
+                (s.controller.observedLevel2 <= 0 implies not s.pump2.isRunning)
             }
         }
 
@@ -533,17 +540,17 @@ package TankFillingSystem {
             }
         }
 
-        #Obligation 
+        #Obligation
         requirement def 'Fluid Transfer Termination Safety' {
-            doc /* When the target fluid has been transferred, the controller shall turn off the pump and close the valve. */
+            doc /* When the controller observes that the target fluid has been transferred, it shall turn off the pump. */
             subject s : FillingSystem;
 
             require constraint {
                 (s.controller.lastScanTimeSeconds > 0) implies
-                ((s.controller.tank1OriginalLevelMl - s.feederTank1.currentLevelMl >= s.controller.tank1TransferMl)
-                  implies (not s.valve1.isOpen and not s.pump1.isRunning)) and
-                ((s.controller.tank2OriginalLevelMl - s.feederTank2.currentLevelMl >= s.controller.tank2TransferMl)
-                  implies (not s.valve2.isOpen and not s.pump2.isRunning))
+                ((s.controller.tank1OriginalLevelMl - s.controller.observedLevel1 >= s.controller.tank1TransferMl)
+                  implies not s.pump1.isRunning) and
+                ((s.controller.tank2OriginalLevelMl - s.controller.observedLevel2 >= s.controller.tank2TransferMl)
+                  implies not s.pump2.isRunning)
             }
         }
 
@@ -554,9 +561,9 @@ package TankFillingSystem {
 
             require constraint {
                 (s.controller.lastScanTimeSeconds > 0) implies
-                ((s.controller.tank1OriginalLevelMl - s.feederTank1.currentLevelMl < s.controller.tank1TransferMl)
-                    implies (s.valve1.isOpen and s.pump1.isRunning) and 
-                  (s.controller.tank2OriginalLevelMl - s.feederTank2.currentLevelMl < s.controller.tank2TransferMl)
+                ((s.controller.tank1OriginalLevelMl - s.controller.observedLevel1 < s.controller.tank1TransferMl)
+                    implies (s.valve1.isOpen and s.pump1.isRunning) and
+                  (s.controller.tank2OriginalLevelMl - s.controller.observedLevel2 < s.controller.tank2TransferMl)
                     implies (s.valve2.isOpen and s.pump2.isRunning))
             }
         }

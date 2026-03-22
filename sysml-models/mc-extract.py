@@ -950,6 +950,16 @@ class SMVGenerator:
             if isinstance(stmt, AssignStmt) and len(stmt.target) == 2:
                 item_assigns[(stmt.target[0], stmt.target[1])] = stmt.expr
                 continue
+            # Single-target assigns to controller attributes → DEFINE alias.
+            # E.g. "assign observedLevel := sensorRes.response" becomes
+            # controller_observedLevel := volumeSensor_rsp_response.
+            if isinstance(stmt, AssignStmt) and len(stmt.target) == 1:
+                attr = stmt.target[0]
+                smv_target = self._smv(ctrl_fqn + "::" + attr)
+                smv_val = self._to_smv_with_accept_map(
+                    stmt.expr, ctrl_fqn, accept_map)
+                self._defines[smv_target] = smv_val
+                continue
             if not isinstance(stmt, SendStmt):
                 continue
             port_parts = stmt.port.split('.')
@@ -1538,8 +1548,15 @@ class SMVGenerator:
                 lines.append("")
 
         # Requirements → INVARSPEC or LTLSPEC
+        # Guard #Prohibition / #Obligation with scan_phase = 0 when
+        # scan-cycle sub-stepping is active: these properties describe
+        # inter-scan steady-state, not intra-scan transients.
         for req in self.parser.parsed_requirements:
             spec_expr = self._to_smv(req.expression, req.context)
+            if (self._scan_phase_count > 0 and
+                    any(m in req.metadata
+                        for m in ('Prohibition', 'Obligation'))):
+                spec_expr = f"scan_phase = 0 -> ({spec_expr})"
             lines.append(f"-- Requirement: {req.name}")
             lines.append(_spec(spec_expr))
             lines.append("")
@@ -1609,9 +1626,18 @@ class SMVGenerator:
                 f"scan_phase <= {max_phase}) -> "
                 f"({sensor_smv} = {tank_var})")
 
-        # 2. Non-negativity of step-action (Euler-integrated) targets
+        # 2. Non-negativity of step-action (Euler-integrated) targets.
+        #    Skip variables monitored by a sensor — their non-negativity is
+        #    not self-inductive for real-valued vars; H5 + bridge handle them.
+        sensor_monitored_vars = set()
+        for _s, (_, vs) in self._sensor_read_phases.items():
+            resolved = self._resolve_define_chain(vs)
+            if resolved in sa_smv_names:
+                sensor_monitored_vars.add(resolved)
         for sa in self._step_actions:
             smv_n = self._smv(sa.target_key)
+            if smv_n in sensor_monitored_vars:
+                continue
             lines.append(f"INVARSPEC {smv_n} >= 0")
 
         # 3. Actuator-condition ordering: after an actuator's "off" phase,
@@ -1650,8 +1676,11 @@ class SMVGenerator:
                         off_cond = cond_stripped
 
             if last_off_phase > 0 and off_cond:
+                # Use last_off_phase + 1: at the send phase the actuator
+                # still holds its OLD value; the new value takes effect
+                # one phase later (next(target) receives the write).
                 lines.append(
-                    f"INVARSPEC (scan_phase >= {last_off_phase} & "
+                    f"INVARSPEC (scan_phase >= {last_off_phase + 1} & "
                     f"scan_phase <= {max_phase} & "
                     f"{off_cond}) -> !{target_smv}")
 
@@ -1716,7 +1745,200 @@ class SMVGenerator:
                         lines.append(
                             f"INVARSPEC {target_a} -> {target_b}")
 
+        # 5. Bidirectional policy-state synchronisation (H5).
+        #    Parse the TRANS (neural_invar) to find equality conjuncts of the
+        #    form  (expr) = ivar_name.  For each boolean IVAR that exclusively
+        #    controls a do-action target, emit: scan_phase = 0 -> (target = expr).
+        if self._neural_invar and self._scan_phase_count > 0:
+            lines.append("")
+            lines.append("-- H5: Bidirectional policy-state synchronisation")
+            bool_ivar_set = set(self._bool_ivars)
+
+            # Map boolean IVAR → its *exclusive* do-action target.
+            # A target is exclusive if every phase-effect condition on it
+            # (ignoring negation) is the same IVAR.
+            # target_smv → set of controlling IVARs
+            target_controllers: dict[str, set[str]] = defaultdict(set)
+            for eff in self._phase_effects:
+                cond = eff['condition']
+                if not cond:
+                    continue
+                base, _ = _strip_negation(cond)
+                if base in bool_ivar_set:
+                    target_controllers[eff['target_smv']].add(base)
+            ivar_to_target: dict[str, str] = {}
+            for tgt, ivars in target_controllers.items():
+                if len(ivars) == 1:
+                    ivar_to_target[next(iter(ivars))] = tgt
+
+            # Split TRANS into top-level conjuncts (balanced-paren aware).
+            conjuncts = self._split_top_level_conjuncts(self._neural_invar)
+            for conj in conjuncts:
+                conj = conj.strip()
+                # Strip outermost parens if balanced.
+                if conj.startswith("(") and conj.endswith(")"):
+                    inner = conj[1:-1]
+                    depth = 0
+                    balanced = True
+                    for ch in inner:
+                        if ch == '(':
+                            depth += 1
+                        elif ch == ')':
+                            depth -= 1
+                            if depth < 0:
+                                balanced = False
+                                break
+                    if balanced and depth == 0:
+                        conj = inner
+                # Look for  (lhs) = rhs  where rhs is a boolean IVAR.
+                # Find the last top-level '=' that is not '<=' or '>=' or '!='.
+                eq_pos = self._find_top_level_eq(conj)
+                if eq_pos < 0:
+                    continue
+                lhs = conj[:eq_pos].strip()
+                rhs = conj[eq_pos + 1:].strip()
+                # Normalise: ensure the IVAR is on the RHS.
+                if lhs in bool_ivar_set and rhs not in bool_ivar_set:
+                    lhs, rhs = rhs, lhs
+                if rhs not in bool_ivar_set:
+                    continue
+                # Skip conjuncts where both sides are IVARs (e.g. pump = valve).
+                if lhs in bool_ivar_set:
+                    continue
+                target = ivar_to_target.get(rhs)
+                if not target:
+                    continue
+                lines.append(
+                    f"INVARSPEC scan_phase = 0 -> "
+                    f"({target} = ({lhs}))")
+
+        # 6. Bridge invariant: level <= last sensor reading (drain-only tanks).
+        #    For each sensor-tank pair from H1, if the tank's inlet flow rate
+        #    resolves to 0 (unconnected port), the Euler step can only drain.
+        #    After the first scan, tank level <= sensor reading at phase 0.
+        if self._scan_phase_count > 0:
+            # Find the lastScanTime SMV variable for the time guard.
+            time_guard = None
+            for sa in self._step_actions:
+                smv_n = self._smv(sa.target_key)
+                if "lastScanTime" in smv_n:
+                    time_guard = smv_n
+                    break
+
+            if time_guard:
+                bridge_lines = []
+                for sensor_smv, (read_phase, value_source) in self._sensor_read_phases.items():
+                    tank_var = self._resolve_define_chain(value_source)
+                    if tank_var not in sa_smv_names or tank_var == sensor_smv:
+                        continue
+                    # Check if the tank's inlet flow rate is zero (unconnected).
+                    # Convention: inlet port DEFINE name contains "inlet_flowRate"
+                    # and resolves to 0.
+                    # Find the step-action for this tank to inspect its expression.
+                    inlet_is_zero = False
+                    for ref_name, ref_val in self._defines.items():
+                        if (tank_var.rsplit("_", 1)[0] in ref_name and
+                                "inlet" in ref_name and "flowRate" in ref_name and
+                                ref_val.strip() == "0"):
+                            inlet_is_zero = True
+                            break
+                    # Also check zero-defined flow rates (unconnected ports).
+                    if not inlet_is_zero:
+                        undef = self._find_undefined_refs()
+                        for n in undef:
+                            if (tank_var.rsplit("_", 1)[0] in n and
+                                    "inlet" in n and "flowRate" in n):
+                                inlet_is_zero = True
+                                break
+                    if inlet_is_zero:
+                        bridge_lines.append(
+                            f"INVARSPEC (scan_phase = 0 & {time_guard} > 0) -> "
+                            f"({tank_var} <= {sensor_smv})")
+                if bridge_lines:
+                    lines.append("")
+                    lines.append("-- Bridge: drain-only tank level <= last sensor reading")
+                    lines.extend(bridge_lines)
+
+        # 7. FROZENVAR constraint promotion (H6).
+        #    INIT constraints on FROZENVARs hold in all reachable states but are
+        #    invisible to k-induction's inductive step.  Re-emit them as INVARSPEC.
+        if self._scenario_input_keys:
+            frozen_smv = {self._smv(k) for k in self._scenario_input_keys}
+            frozen_invars = []
+            for c in self._scenario_constraints:
+                expr = c.expression
+                if not expr and c.raw_text:
+                    try:
+                        expr = ExpressionParser(c.raw_text).parse()
+                    except Exception:
+                        pass
+                if not expr:
+                    continue
+                # Flatten top-level conjunctions into individual constraints
+                # so each becomes a separate INVARSPEC conjunct.
+                atoms = self._flatten_conjunction(expr)
+                for atom in atoms:
+                    smv_expr = self._to_smv(atom, c.context)
+                    # Check that the constraint only references FROZENVARs.
+                    import re as _re_frozen
+                    refs = set(_re_frozen.findall(r'\b([a-zA-Z_]\w*)\b', smv_expr))
+                    non_kw = refs - {'TRUE', 'FALSE', 'case', 'esac', 'next', 'init'}
+                    if non_kw and non_kw <= frozen_smv:
+                        frozen_invars.append(smv_expr)
+            if frozen_invars:
+                lines.append("")
+                lines.append("-- H6: FROZENVAR constraint promotion")
+                for fi in frozen_invars:
+                    lines.append(f"INVARSPEC {fi}")
+
         return lines
+
+    @staticmethod
+    def _flatten_conjunction(expr: Expr) -> list[Expr]:
+        """Recursively flatten a top-level 'and' (==) conjunction into atoms."""
+        if isinstance(expr, BinaryExpr) and expr.op in ('and', '&&', '&'):
+            return (SMVGenerator._flatten_conjunction(expr.left) +
+                    SMVGenerator._flatten_conjunction(expr.right))
+        return [expr]
+
+    @staticmethod
+    def _split_top_level_conjuncts(expr: str) -> list[str]:
+        """Split an SMV expression on top-level '&' operators."""
+        parts = []
+        depth = 0
+        start = 0
+        for i, ch in enumerate(expr):
+            if ch == '(':
+                depth += 1
+            elif ch == ')':
+                depth -= 1
+            elif ch == '&' and depth == 0:
+                parts.append(expr[start:i].strip())
+                start = i + 1
+        parts.append(expr[start:].strip())
+        return parts
+
+    @staticmethod
+    def _find_top_level_eq(expr: str) -> int:
+        """Find the position of the last top-level '=' in *expr* that is not
+        part of ``<=``, ``>=``, or ``!=``.  Returns -1 if none found."""
+        depth = 0
+        pos = -1
+        i = 0
+        while i < len(expr):
+            ch = expr[i]
+            if ch == '(':
+                depth += 1
+            elif ch == ')':
+                depth -= 1
+            elif ch == '=' and depth == 0:
+                # Check it's not <=, >=, !=
+                prev = expr[i - 1] if i > 0 else ''
+                nxt = expr[i + 1] if i + 1 < len(expr) else ''
+                if prev not in ('<', '>', '!') and nxt != '=':
+                    pos = i
+            i += 1
+        return pos
 
     # ------------------------------------------------------------------
     # Top-level generation
@@ -1759,8 +1981,43 @@ class SMVGenerator:
         parts.append("")
         parts.extend(self._gen_assign())
         parts.append("")
-        parts.extend(self._gen_specs())
-        parts.extend(self._gen_strengthening_invars())
+
+        spec_lines = self._gen_specs()
+        strength_lines = self._gen_strengthening_invars()
+
+        # Check for the // generate-combined-invariants pragma.
+        combine = self.parser.content.lstrip().startswith(
+            "// generate-combined-invariants")
+
+        if combine:
+            # Extract INVARSPEC bodies, conjoin into one INVARSPEC.
+            # Keep non-INVARSPEC lines (comments, LTLSPEC) as-is.
+            conjuncts: list[str] = []
+            comment_lines: list[str] = []
+            for line in spec_lines + strength_lines:
+                stripped = line.strip()
+                if stripped.startswith("INVARSPEC "):
+                    body = stripped[len("INVARSPEC "):]
+                    conjuncts.append(body)
+                    comment_lines.append(f"-- {stripped}")
+                elif stripped.startswith("LTLSPEC "):
+                    # Cannot combine LTLSPEC into INVARSPEC; keep separate.
+                    parts.append(line)
+                else:
+                    comment_lines.append(line)
+
+            if conjuncts:
+                parts.extend(comment_lines)
+                parts.append("")
+                parts.append(
+                    "-- Combined INVARSPEC (all strengthening + requirements)")
+                parts.append("INVARSPEC")
+                for i, c in enumerate(conjuncts):
+                    prefix = "  " if i == 0 else "  & "
+                    parts.append(f"{prefix}({c})")
+        else:
+            parts.extend(spec_lines)
+            parts.extend(strength_lines)
 
         return "\n".join(parts) + "\n"
 

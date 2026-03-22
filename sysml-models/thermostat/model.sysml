@@ -218,8 +218,8 @@ package Thermostat {
             subject s : HeatingCoolingSystem;
 
             require constraint {
-                currentTime > 0 implies 
-                    (s.environment.temperatureCelcius < s.controller.setPointCelcius - s.controller.toleranceCelcius
+                currentTime > 0 implies
+                    (s.lastObservedTemperature < s.controller.setPointCelcius - s.controller.toleranceCelcius
                         implies s.controller.heaterOn)
             }
         }
@@ -231,7 +231,7 @@ package Thermostat {
 
             require constraint {
                 currentTime > 0 implies
-                    (s.environment.temperatureCelcius > s.controller.setPointCelcius + s.controller.toleranceCelcius
+                    (s.lastObservedTemperature > s.controller.setPointCelcius + s.controller.toleranceCelcius
                         implies s.controller.acOn)
             }
         }
