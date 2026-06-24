@@ -1,0 +1,239 @@
+{
+  "balance_oracle_classes": false,
+  "best_during_training": {
+    "best_any": {
+      "episode": 1400,
+      "override_rate": 0.0016288663444344116,
+      "safety_violation_rate": 0.0,
+      "success_rate": 1.0
+    },
+    "best_safe": {
+      "episode": 1400,
+      "override_rate": 0.0016288663444344116,
+      "safety_violation_rate": 0.0,
+      "success_rate": 1.0
+    },
+    "final_checkpoint_safe": true,
+    "override_rate": 0.0016288663444344116,
+    "safety_violation_rate": 0.0,
+    "selected_checkpoint_source": "safe_eval",
+    "selected_episode": 1400,
+    "selection_rule": "safe checkpoints only; highest success, tie-break lower override; fallback to best candidate if no safe checkpoint exists",
+    "success_rate": 1.0
+  },
+  "config_used": {
+    "bc_aux_coeff": 0.0,
+    "bptt_chunk_size": 200,
+    "clip_eps": 0.2,
+    "entropy_end": -5.0,
+    "entropy_start": -1.0,
+    "episodes_per_update": 100,
+    "eval_interval": 100,
+    "gamma": 0.99,
+    "hidden_dim": 64,
+    "lam": 0.95,
+    "max_grad_norm": 0.5,
+    "minibatch_size": 25,
+    "n_ppo_epochs": 4,
+    "oracle_batch_size": 512,
+    "oracle_epochs": 100,
+    "oracle_lr": 0.001,
+    "oracle_samples": 2000,
+    "ppo_episodes": 2000,
+    "ppo_lr": 0.0001,
+    "value_coeff": 0.5
+  },
+  "ensure_class_coverage": 200,
+  "eval": {
+    "mean_episode_steps": 509.4,
+    "mean_reward": -4.084000000000001,
+    "n_episodes": 100,
+    "n_steps": 50940,
+    "policy_us_mean": 46.13746882606988,
+    "policy_us_p95": 63.3,
+    "policy_us_p99": 77.65310000000001,
+    "pooled_override_rate": 0.001884570082449941,
+    "safety_violation_rate": 0.0,
+    "shield_us_mean": 10.272953808402042,
+    "shield_us_p95": 12.884049999999997,
+    "shield_us_p99": 14.628,
+    "success_rate": 1.0,
+    "total_us_mean": 63.887206360424024,
+    "total_us_p95": 87.22505,
+    "total_us_p99": 104.64120000000001,
+    "truncated_rate": 0.0,
+    "violation_rate": 0.0
+  },
+  "execution": {
+    "cpu_affinity_core": "",
+    "cpu_mode": "aggressive"
+  },
+  "model_path": "/home/csned/git_stuff/Code_AI/verified-cps-cosynthesis/sysml-models/thermostat/model.sysml",
+  "n_actions": 4,
+  "obs_dim": 3,
+  "peak_rss_mb": 242.51953125,
+  "seed": 50,
+  "test": {
+    "mean_episode_steps": 489.29,
+    "mean_reward": -3.882900000000001,
+    "n_episodes": 200,
+    "n_steps": 97858,
+    "policy_us_mean": 41.786922581700026,
+    "policy_us_p95": 60.014,
+    "policy_us_p99": 75.61786999999994,
+    "pooled_override_rate": 0.0017985243924870731,
+    "safety_violation_rate": 0.0,
+    "shield_us_mean": 9.202271740685484,
+    "shield_us_p95": 12.394,
+    "shield_us_p99": 13.686,
+    "success_rate": 1.0,
+    "total_us_mean": 57.82173729281203,
+    "total_us_p95": 82.66849999999994,
+    "total_us_p99": 101.46686999999993,
+    "truncated_rate": 0.0,
+    "violation_rate": 0.0
+  },
+  "train_seconds": 1297.383172750473,
+  "training_eval_history": [
+    {
+      "episode": 100,
+      "is_safe": true,
+      "override_rate": 0.0018336389398233039,
+      "safety_violation_rate": 0.0,
+      "success_rate": 1.0
+    },
+    {
+      "episode": 200,
+      "is_safe": true,
+      "override_rate": 0.0017432863886549272,
+      "safety_violation_rate": 0.0,
+      "success_rate": 1.0
+    },
+    {
+      "episode": 300,
+      "is_safe": true,
+      "override_rate": 0.001747529031530685,
+      "safety_violation_rate": 0.0,
+      "success_rate": 1.0
+    },
+    {
+      "episode": 400,
+      "is_safe": true,
+      "override_rate": 0.0016680720020530117,
+      "safety_violation_rate": 0.0,
+      "success_rate": 1.0
+    },
+    {
+      "episode": 500,
+      "is_safe": true,
+      "override_rate": 0.0017215486612212007,
+      "safety_violation_rate": 0.0,
+      "success_rate": 1.0
+    },
+    {
+      "episode": 600,
+      "is_safe": true,
+      "override_rate": 0.0017655977123994856,
+      "safety_violation_rate": 0.0,
+      "success_rate": 1.0
+    },
+    {
+      "episode": 700,
+      "is_safe": true,
+      "override_rate": 0.0017500661362202642,
+      "safety_violation_rate": 0.0,
+      "success_rate": 1.0
+    },
+    {
+      "episode": 800,
+      "is_safe": true,
+      "override_rate": 0.0017923264791617427,
+      "safety_violation_rate": 0.0,
+      "success_rate": 1.0
+    },
+    {
+      "episode": 900,
+      "is_safe": true,
+      "override_rate": 0.0020357433677623965,
+      "safety_violation_rate": 0.0,
+      "success_rate": 1.0
+    },
+    {
+      "episode": 1000,
+      "is_safe": true,
+      "override_rate": 0.002004956071187204,
+      "safety_violation_rate": 0.0,
+      "success_rate": 1.0
+    },
+    {
+      "episode": 1100,
+      "is_safe": true,
+      "override_rate": 0.0018098479334290717,
+      "safety_violation_rate": 0.0,
+      "success_rate": 1.0
+    },
+    {
+      "episode": 1200,
+      "is_safe": true,
+      "override_rate": 0.0017689926356067452,
+      "safety_violation_rate": 0.0,
+      "success_rate": 1.0
+    },
+    {
+      "episode": 1300,
+      "is_safe": true,
+      "override_rate": 0.0018898913312484532,
+      "safety_violation_rate": 0.0,
+      "success_rate": 1.0
+    },
+    {
+      "episode": 1400,
+      "is_safe": true,
+      "override_rate": 0.0016288663444344116,
+      "safety_violation_rate": 0.0,
+      "success_rate": 1.0
+    },
+    {
+      "episode": 1500,
+      "is_safe": true,
+      "override_rate": 0.0017137307919340404,
+      "safety_violation_rate": 0.0,
+      "success_rate": 1.0
+    },
+    {
+      "episode": 1600,
+      "is_safe": true,
+      "override_rate": 0.0017715693661039728,
+      "safety_violation_rate": 0.0,
+      "success_rate": 1.0
+    },
+    {
+      "episode": 1700,
+      "is_safe": true,
+      "override_rate": 0.0017336363986593213,
+      "safety_violation_rate": 0.0,
+      "success_rate": 1.0
+    },
+    {
+      "episode": 1800,
+      "is_safe": true,
+      "override_rate": 0.0016778207182580828,
+      "safety_violation_rate": 0.0,
+      "success_rate": 1.0
+    },
+    {
+      "episode": 1900,
+      "is_safe": true,
+      "override_rate": 0.0016337139144156688,
+      "safety_violation_rate": 0.0,
+      "success_rate": 1.0
+    },
+    {
+      "episode": 2000,
+      "is_safe": true,
+      "override_rate": 0.0017380903433195656,
+      "safety_violation_rate": 0.0,
+      "success_rate": 1.0
+    }
+  ]
+}

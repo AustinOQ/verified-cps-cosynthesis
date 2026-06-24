@@ -8,6 +8,7 @@ the implementation package name used by the neighboring CPU training program.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 
@@ -22,6 +23,9 @@ def main(argv=None) -> int:
     parser.add_argument("--ckpt", required=True,
                         help="CPU checkpoint to evaluate.")
     parser.add_argument("--seed", type=int, required=True)
+    parser.add_argument("--cpu-mode", choices=("single", "aggressive"),
+                        default="single")
+    parser.add_argument("--cpu-affinity-core", default="0")
     parser.add_argument("--dt", type=float, default=0.1)
     parser.add_argument("--max-steps", type=int, default=5000)
     parser.add_argument("--eval-episodes", type=int, default=100)
@@ -39,7 +43,7 @@ def main(argv=None) -> int:
 
     from handmade.eval_only import main as eval_main
 
-    return eval_main([
+    rc = eval_main([
         "--model-path", os.path.abspath(args.model_path),
         "--ckpt", os.path.abspath(args.ckpt),
         "--seed", str(args.seed),
@@ -49,6 +53,17 @@ def main(argv=None) -> int:
         "--test-episodes", str(args.test_episodes),
         "--out", os.path.abspath(args.out),
     ])
+    if rc == 0:
+        with open(args.out) as f:
+            data = json.load(f)
+        data["execution"] = {
+            "cpu_mode": args.cpu_mode,
+            "cpu_affinity_core": args.cpu_affinity_core
+            if args.cpu_mode == "single" else "",
+        }
+        with open(args.out, "w") as f:
+            json.dump(data, f, indent=2, sort_keys=True, default=str)
+    return rc
 
 
 if __name__ == "__main__":

@@ -114,6 +114,8 @@ def main(argv=None) -> int:
     parser.add_argument("--out", default=None)
     parser.add_argument("--seeds", default="")
     parser.add_argument("--models", default="")
+    parser.add_argument("--cpu-mode", default="")
+    parser.add_argument("--cpu-affinity-core", default="")
     args = parser.parse_args(argv)
 
     metrics_dir = Path(args.metrics_dir)
@@ -148,6 +150,9 @@ def main(argv=None) -> int:
         f"Generated: {now}",
         f"Models: {', '.join(model_order) if model_order else '-'}",
         f"Seeds: {seed_text}",
+        f"CPU execution mode: {args.cpu_mode or '-'}"
+        + (f" (core {args.cpu_affinity_core})"
+           if args.cpu_mode == "single" and args.cpu_affinity_core else ""),
         "",
         "Confidence intervals are 95% CI half-widths computed across the "
         "seed rows generated for this pipeline call. For n=1, the CI "

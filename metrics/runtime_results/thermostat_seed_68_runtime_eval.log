@@ -1,0 +1,13 @@
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+  [SpecShield] Loaded from /home/csned/git_stuff/Code_AI/verified-cps-cosynthesis/sysml-models/thermostat/model.sysml
+  [SpecShield] dead_actions=[3], n_valid=3
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+[eval_only seed=68] test_succ=1.0000 test_ov=0.00176 test_safety=0.00000 inf_peak_rss_mb=99.0 eval_s=9.4 test_s=20.8

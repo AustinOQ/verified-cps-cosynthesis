@@ -10,6 +10,9 @@ set -euo pipefail
 #   ./run_pipeline.sh --verify-only      # extract + verify; reuse CPU eval data
 #   ./run_pipeline.sh --model mixing     # run only one model
 #   ./run_pipeline.sh --num-seeds 30     # run 30 CPU training seeds per model
+#   ./run_pipeline.sh --cpu-mode single  # reproducible single-core timings
+#   ./run_pipeline.sh --cpu-mode aggressive  # use normal multicore scheduling
+#   ./run_pipeline.sh --jobs 32          # aggressive-mode seed parallelism
 # ============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -37,6 +40,10 @@ METRICS_DIR="$PIPELINE_DIR/metrics"
 CPU_RESULTS_DIR="$METRICS_DIR/cpu_training"
 CPU_DEFAULT_SEED=42
 NUM_SEEDS=1
+CPU_EXECUTION_MODE="${CPU_EXECUTION_MODE:-single}"
+CPU_AFFINITY_CORE="${CPU_AFFINITY_CORE:-0}"
+CPU_PARALLEL_JOBS="${CPU_PARALLEL_JOBS:-}"
+CPU_BOUND_PREFIX=()
 
 # Memory limit for nuXmv (KB). Default 10GB.
 NUXMV_MEM_LIMIT_KB="${NUXMV_MEM_LIMIT_KB:-10485760}"
@@ -49,6 +56,29 @@ MODELS=(
     "mixing|mixing-sysml-model/model.sysml|mixing-model|model.smv"
 )
 
+usage() {
+    cat <<EOF
+Usage: ./run_pipeline.sh [options]
+
+Options:
+  --force-full                  Regenerate requested outputs
+  --verify-only                 Extract + verify; reuse CPU eval data
+  --model NAME                  Run one model: thermostat, cruise, or mixing
+  --num-seeds N, --seeds N      Run N deterministic seeds starting at 42
+  --cpu-mode MODE               single or aggressive (default: single)
+  --single-core                 Alias for --cpu-mode single
+  --aggressive-multicore        Alias for --cpu-mode aggressive
+  --cpu-affinity-core CORE      CPU core used in single mode (default: 0)
+  --jobs N                      Parallel seed jobs in aggressive mode
+  -h, --help                    Show this help
+
+single mode caps common numeric thread pools to one thread and uses taskset
+when available so timing metrics are collected on one CPU core. aggressive mode
+leaves normal OS/library multicore scheduling in place and runs seed jobs in
+parallel. If --jobs is omitted in aggressive mode, the pipeline uses nproc.
+EOF
+}
+
 # --- Parse args ---
 FORCE_FULL=false
 VERIFY_ONLY=false
@@ -60,6 +90,12 @@ while [[ $# -gt 0 ]]; do
         --verify-only) VERIFY_ONLY=true; shift ;;
         --model) SINGLE_MODEL="$2"; shift 2 ;;
         --num-seeds|--seeds) NUM_SEEDS="$2"; shift 2 ;;
+        --cpu-mode) CPU_EXECUTION_MODE="$2"; shift 2 ;;
+        --single-core) CPU_EXECUTION_MODE="single"; shift ;;
+        --aggressive-multicore|--multicore) CPU_EXECUTION_MODE="aggressive"; shift ;;
+        --cpu-affinity-core) CPU_AFFINITY_CORE="$2"; shift 2 ;;
+        --jobs) CPU_PARALLEL_JOBS="$2"; shift 2 ;;
+        -h|--help) usage; exit 0 ;;
         *) echo "Unknown option: $1"; exit 1 ;;
     esac
 done
@@ -67,6 +103,32 @@ done
 if ! [[ "$NUM_SEEDS" =~ ^[0-9]+$ ]] || (( NUM_SEEDS < 1 )); then
     echo "Invalid --num-seeds value: $NUM_SEEDS"
     exit 1
+fi
+
+if [[ "$CPU_EXECUTION_MODE" == "multicore" ]]; then
+    CPU_EXECUTION_MODE="aggressive"
+fi
+case "$CPU_EXECUTION_MODE" in
+    single|aggressive) ;;
+    *) echo "Invalid --cpu-mode value: $CPU_EXECUTION_MODE"; exit 1 ;;
+esac
+if ! [[ "$CPU_AFFINITY_CORE" =~ ^[0-9]+$ ]]; then
+    echo "Invalid --cpu-affinity-core value: $CPU_AFFINITY_CORE"
+    exit 1
+fi
+if [[ -z "$CPU_PARALLEL_JOBS" ]]; then
+    if [[ "$CPU_EXECUTION_MODE" == "aggressive" ]]; then
+        CPU_PARALLEL_JOBS="$(nproc 2>/dev/null || echo 1)"
+    else
+        CPU_PARALLEL_JOBS=1
+    fi
+fi
+if ! [[ "$CPU_PARALLEL_JOBS" =~ ^[0-9]+$ ]] || (( CPU_PARALLEL_JOBS < 1 )); then
+    echo "Invalid --jobs value: $CPU_PARALLEL_JOBS"
+    exit 1
+fi
+if [[ "$CPU_EXECUTION_MODE" == "single" ]]; then
+    CPU_PARALLEL_JOBS=1
 fi
 
 # --- Helpers ---
@@ -78,6 +140,74 @@ sep()  { echo "─────────────────────�
 seed_for_index() {
     local idx="$1"
     echo $((CPU_DEFAULT_SEED + idx))
+}
+
+configure_cpu_execution() {
+    CPU_BOUND_PREFIX=()
+    if [[ "$CPU_EXECUTION_MODE" == "single" ]]; then
+        local thread_env=(
+            "OMP_NUM_THREADS=1"
+            "OPENBLAS_NUM_THREADS=1"
+            "MKL_NUM_THREADS=1"
+            "BLIS_NUM_THREADS=1"
+            "NUMEXPR_NUM_THREADS=1"
+            "VECLIB_MAXIMUM_THREADS=1"
+            "ACCELERATE_NUM_THREADS=1"
+            "GOTO_NUM_THREADS=1"
+            "OMP_DYNAMIC=FALSE"
+            "MKL_DYNAMIC=FALSE"
+        )
+        if command -v taskset >/dev/null 2>&1; then
+            CPU_BOUND_PREFIX=(env "${thread_env[@]}" taskset -c "$CPU_AFFINITY_CORE")
+        else
+            CPU_BOUND_PREFIX=(env "${thread_env[@]}")
+        fi
+    fi
+}
+
+run_cpu_bound() {
+    if ((${#CPU_BOUND_PREFIX[@]})); then
+        "${CPU_BOUND_PREFIX[@]}" "$@"
+    else
+        "$@"
+    fi
+}
+
+execution_label() {
+    if [[ "$CPU_EXECUTION_MODE" == "single" ]]; then
+        if command -v taskset >/dev/null 2>&1; then
+            echo "single-core (thread caps + taskset core $CPU_AFFINITY_CORE)"
+        else
+            echo "single-thread library caps (taskset unavailable)"
+        fi
+    else
+        echo "aggressive multicore (${CPU_PARALLEL_JOBS} seed job(s))"
+    fi
+}
+
+json_matches_execution_mode() {
+    local json_file="$1"
+    [[ -f "$json_file" ]] || return 1
+    "$PYTHON_BIN" - "$json_file" "$CPU_EXECUTION_MODE" "$CPU_AFFINITY_CORE" <<'PY'
+import json
+import sys
+
+path, expected_mode, expected_core = sys.argv[1:4]
+try:
+    with open(path) as f:
+        data = json.load(f)
+except Exception:
+    sys.exit(1)
+
+execution = data.get("execution", {})
+mode = execution.get("cpu_mode")
+core = execution.get("cpu_affinity_core")
+if mode != expected_mode:
+    sys.exit(1)
+if expected_mode == "single" and str(core) != str(expected_core):
+    sys.exit(1)
+sys.exit(0)
+PY
 }
 
 seed_list_display() {
@@ -125,12 +255,70 @@ cpu_seed_complete() {
     [[ -f "$seed_dir/summary.json" && -f "$seed_dir/best.npz" ]] || return 1
     grep -q '"selected_checkpoint_source"' "$seed_dir/summary.json" || return 1
     grep -q '"final_checkpoint_safe"' "$seed_dir/summary.json" || return 1
+    json_matches_execution_mode "$seed_dir/summary.json" || return 1
 }
 
 runtime_seed_complete() {
     local out_json="$1"
     [[ -f "$out_json" ]] || return 1
     grep -q '"final_checkpoint_safe"' "$out_json" || return 1
+    json_matches_execution_mode "$out_json" || return 1
+}
+
+wait_for_available_job_slot() {
+    while (( $(jobs -pr | wc -l) >= CPU_PARALLEL_JOBS )); do
+        sleep 1
+    done
+}
+
+wait_for_seed_jobs() {
+    local failed=0
+    local pid info name seed log_file seed_dir
+    for pid in "${seed_pids[@]}"; do
+        info="${seed_info[$pid]}"
+        IFS='|' read -r name seed log_file seed_dir <<< "$info"
+        if wait "$pid"; then
+            if [[ -f "$seed_dir/summary.json" && -f "$seed_dir/best.npz" ]]; then
+                ok "[$name] Seed $seed complete"
+            else
+                fail "[$name] Seed $seed finished without summary.json and best.npz"
+                failed=1
+            fi
+        else
+            fail "[$name] Seed $seed failed"
+            if [[ -f "$log_file" ]]; then
+                echo "      Last 40 log lines from $log_file:"
+                tail -40 "$log_file" | sed 's/^/      /'
+            fi
+            failed=1
+        fi
+    done
+    return "$failed"
+}
+
+wait_for_eval_jobs() {
+    local failed=0
+    local pid info name seed log_file out_json
+    for pid in "${seed_pids[@]}"; do
+        info="${seed_info[$pid]}"
+        IFS='|' read -r name seed log_file out_json <<< "$info"
+        if wait "$pid"; then
+            if [[ -f "$out_json" ]]; then
+                ok "[$name] Runtime eval seed $seed complete"
+            else
+                fail "[$name] Runtime eval seed $seed finished without output JSON"
+                failed=1
+            fi
+        else
+            fail "[$name] Runtime eval seed $seed failed"
+            if [[ -f "$log_file" ]]; then
+                echo "      Last 40 log lines from $log_file:"
+                tail -40 "$log_file" | sed 's/^/      /'
+            fi
+            failed=1
+        fi
+    done
+    return "$failed"
 }
 
 # ============================================================================
@@ -150,7 +338,7 @@ extract_smv() {
     fi
 
     mkdir -p "$smv_out_dir"
-    "$PYTHON_BIN" "$MC_EXTRACT" "$sysml_path" --dt 0.1 -o "$smv_path" 2>&1 | grep -v "ANTLR runtime" || true
+    run_cpu_bound "$PYTHON_BIN" "$MC_EXTRACT" "$sysml_path" --dt 0.1 -o "$smv_path" 2>&1 | grep -v "ANTLR runtime" || true
 
     if [[ -f "$smv_path" ]]; then
         local n_spec
@@ -197,6 +385,8 @@ train_model() {
     log "[$name] Training neural controller with CPU training program"
     mkdir -p "$model_out_dir"
 
+    local seed_pids=()
+    declare -A seed_info=()
     for ((i = 0; i < NUM_SEEDS; i++)); do
         seed="$(seed_for_index "$i")"
         seed_dir="$model_out_dir/seed_$seed"
@@ -208,31 +398,34 @@ train_model() {
 
         log "[$name] CPU training seed $seed"
         mkdir -p "$seed_dir"
-        "$PYTHON_BIN" "$CPU_TRAINING_ENTRY" \
-            --program-root "$CPU_TRAINING_REPO" \
-            --model-path "$sysml_path" \
-            --model-name "$name" \
-            --seed "$seed" \
-            --out "$seed_dir" \
-            --dt 0.1 \
-            --max-steps 5000 \
-            --ensure-class-coverage 200 \
-            --eval-episodes 100 \
-            --test-episodes 200 \
-            --oracle-samples 2000 \
-            --oracle-epochs 100 \
-            --ppo-episodes 2000 \
-            --minibatch-size 25 \
-            --bptt-chunk-size 200 \
-            2>&1 | tee "$model_out_dir/seed_${seed}_train_log.txt"
-
-        if [[ -f "$seed_dir/summary.json" && -f "$seed_dir/best.npz" ]]; then
-            ok "Saved CPU training output for seed $seed"
-        else
-            fail "CPU training did not produce summary.json and best.npz for seed $seed"
-            return 1
-        fi
+        local log_file="$model_out_dir/seed_${seed}_train_log.txt"
+        wait_for_available_job_slot
+        (
+            run_cpu_bound "$PYTHON_BIN" "$CPU_TRAINING_ENTRY" \
+                --program-root "$CPU_TRAINING_REPO" \
+                --model-path "$sysml_path" \
+                --model-name "$name" \
+                --seed "$seed" \
+                --out "$seed_dir" \
+                --cpu-mode "$CPU_EXECUTION_MODE" \
+                --cpu-affinity-core "$CPU_AFFINITY_CORE" \
+                --dt 0.1 \
+                --max-steps 5000 \
+                --ensure-class-coverage 200 \
+                --eval-episodes 100 \
+                --test-episodes 200 \
+                --oracle-samples 2000 \
+                --oracle-epochs 100 \
+                --ppo-episodes 2000 \
+                --minibatch-size 25 \
+                --bptt-chunk-size 200
+        ) > "$log_file" 2>&1 &
+        local pid=$!
+        seed_pids+=("$pid")
+        seed_info[$pid]="$name|$seed|$log_file|$seed_dir"
     done
+
+    wait_for_seed_jobs
 }
 
 # ============================================================================
@@ -284,7 +477,7 @@ verify_model() {
 
     log "[$name] Running IC3 (unbounded)..."
     ic3_start=$(date +%s%N)
-    timeout 120s /usr/bin/time -v "$NUXMV" -int "$smv_path" <<HEREDOC > "$ic3_out" 2>&1 || ic3_rc=$?
+    timeout 120s /usr/bin/time -v "${CPU_BOUND_PREFIX[@]}" "$NUXMV" -int "$smv_path" <<HEREDOC > "$ic3_out" 2>&1 || ic3_rc=$?
 go_msat
 check_invar_ic3
 quit
@@ -307,7 +500,7 @@ HEREDOC
 
     log "[$name] Running BMC (een-sorensson, k=200)..."
     bmc_start=$(date +%s%N)
-    /usr/bin/time -v "$NUXMV" -int "$smv_path" <<HEREDOC > "$bmc_out" 2>&1
+    /usr/bin/time -v "${CPU_BOUND_PREFIX[@]}" "$NUXMV" -int "$smv_path" <<HEREDOC > "$bmc_out" 2>&1
 go_msat
 msat_check_invar_bmc -a een-sorensson -k 200
 quit
@@ -367,6 +560,7 @@ write_results() {
 # Main
 # ============================================================================
 main() {
+    configure_cpu_execution
     echo ""
     echo "╔══════════════════════════════════════════════════════════════╗"
     echo "║  SysML → Neural Controller → Formal Verification Pipeline  ║"
@@ -375,6 +569,7 @@ main() {
     echo "  Mode:    $(if $FORCE_FULL; then echo 'FORCE FULL (all steps)'; elif $VERIFY_ONLY; then echo 'VERIFY ONLY'; else echo 'INCREMENTAL (skip existing)'; fi)"
     echo "  Models:  $(if [[ -n "$SINGLE_MODEL" ]]; then echo "$SINGLE_MODEL"; else echo "all"; fi)"
     echo "  Seeds:   $(seed_list_display)"
+    echo "  CPU:     $(execution_label)"
     echo "  Python:  $PYTHON_BIN"
     echo "  nuXmv:   $NUXMV"
     echo ""
@@ -557,7 +752,7 @@ generate_cpu_training_summary() {
     mkdir -p "$METRICS_DIR"
     local summary="$METRICS_DIR/cpu_training_summary.csv"
 
-    echo "system,seed,selected_checkpoint_source,selected_episode,selected_success_rate,selected_override_rate,selected_safety_violation_rate,final_checkpoint_safe,train_seconds,training_peak_rss_mb,eval_success_rate,eval_override_rate,eval_safety_violation_rate,test_success_rate,test_override_rate,test_safety_violation_rate,test_mean_episode_steps,test_n_steps,policy_us_mean,policy_us_p99,shield_us_mean,shield_us_p99,total_us_mean,total_us_p99" > "$summary"
+    echo "system,seed,cpu_mode,cpu_affinity_core,selected_checkpoint_source,selected_episode,selected_success_rate,selected_override_rate,selected_safety_violation_rate,final_checkpoint_safe,train_seconds,training_peak_rss_mb,eval_success_rate,eval_override_rate,eval_safety_violation_rate,test_success_rate,test_override_rate,test_safety_violation_rate,test_mean_episode_steps,test_n_steps,policy_us_mean,policy_us_p99,shield_us_mean,shield_us_p99,total_us_mean,total_us_p99" > "$summary"
 
     local wrote=false
     for entry in "${MODELS[@]}"; do
@@ -585,9 +780,12 @@ with open(summary_json) as f:
 eval_ = data.get("eval", {})
 test = data.get("test", {})
 best = data.get("best_during_training", {})
+execution = data.get("execution", {})
 row = {
     "system": system,
     "seed": data.get("seed", ""),
+    "cpu_mode": execution.get("cpu_mode", ""),
+    "cpu_affinity_core": execution.get("cpu_affinity_core", ""),
     "selected_checkpoint_source": best.get("selected_checkpoint_source", ""),
     "selected_episode": best.get("selected_episode", ""),
     "selected_success_rate": best.get("success_rate", ""),
@@ -636,9 +834,11 @@ run_runtime_monitor_eval() {
     local summary="$out_dir/runtime_monitor_summary.csv"
     mkdir -p "$out_dir"
 
-    echo "system,seed,episodes,total_steps,success_rate,safety_violation_rate,override_rate,final_checkpoint_safe,policy_us_mean,policy_us_p95,policy_us_p99,shield_us_mean,shield_us_p95,shield_us_p99,total_us_mean,total_us_p95,total_us_p99,inference_peak_rss_mb,eval_seconds,test_seconds" > "$summary"
+    echo "system,seed,cpu_mode,cpu_affinity_core,episodes,total_steps,success_rate,safety_violation_rate,override_rate,final_checkpoint_safe,policy_us_mean,policy_us_p95,policy_us_p99,shield_us_mean,shield_us_p95,shield_us_p99,total_us_mean,total_us_p95,total_us_p99,inference_peak_rss_mb,eval_seconds,test_seconds" > "$summary"
 
     local any_ckpt=false
+    local seed_pids=()
+    declare -A seed_info=()
     for entry in "${MODELS[@]}"; do
         IFS='|' read -r name sysml_rel _ _ <<< "$entry"
 
@@ -661,19 +861,43 @@ run_runtime_monitor_eval() {
 
             if [[ "$FORCE_FULL" == true ]] || ! runtime_seed_complete "$out_json"; then
                 log "[$name] Runtime monitor evaluation seed $seed"
-                "$PYTHON_BIN" "$CPU_EVAL_ENTRY" \
-                    --program-root "$CPU_TRAINING_REPO" \
-                    --model-path "$sysml_path" \
-                    --ckpt "$ckpt" \
-                    --seed "$seed" \
-                    --dt 0.1 \
-                    --max-steps 5000 \
-                    --eval-episodes 100 \
-                    --test-episodes 200 \
-                    --out "$out_json" \
-                    2>&1 | grep -v -E "ANTLR|SpecShield|ShieldNet"
+                local log_file="$out_dir/${name}_seed_${seed}_runtime_eval.log"
+                wait_for_available_job_slot
+                (
+                    run_cpu_bound "$PYTHON_BIN" "$CPU_EVAL_ENTRY" \
+                        --program-root "$CPU_TRAINING_REPO" \
+                        --model-path "$sysml_path" \
+                        --ckpt "$ckpt" \
+                        --seed "$seed" \
+                        --cpu-mode "$CPU_EXECUTION_MODE" \
+                        --cpu-affinity-core "$CPU_AFFINITY_CORE" \
+                        --dt 0.1 \
+                        --max-steps 5000 \
+                        --eval-episodes 100 \
+                        --test-episodes 200 \
+                        --out "$out_json"
+                ) > "$log_file" 2>&1 &
+                local pid=$!
+                seed_pids+=("$pid")
+                seed_info[$pid]="$name|$seed|$log_file|$out_json"
             fi
+        done
+    done
 
+    wait_for_eval_jobs || return 1
+
+    for entry in "${MODELS[@]}"; do
+        IFS='|' read -r name sysml_rel _ _ <<< "$entry"
+
+        if [[ -n "$SINGLE_MODEL" && "$name" != "$SINGLE_MODEL" ]]; then
+            continue
+        fi
+
+        local i seed seed_dir ckpt out_json
+        for ((i = 0; i < NUM_SEEDS; i++)); do
+            seed="$(seed_for_index "$i")"
+            seed_dir="$CPU_RESULTS_DIR/$name/seed_$seed"
+            out_json="$seed_dir/inference_summary.json"
             if [[ -f "$out_json" ]]; then
                 "$PYTHON_BIN" - "$out_json" "$summary" "$name" <<'PY'
 import csv
@@ -684,9 +908,12 @@ in_json, out_csv, system = sys.argv[1:4]
 with open(in_json) as f:
     data = json.load(f)
 test = data.get("test", {})
+execution = data.get("execution", {})
 row = {
     "system": system,
     "seed": data.get("seed", ""),
+    "cpu_mode": execution.get("cpu_mode", ""),
+    "cpu_affinity_core": execution.get("cpu_affinity_core", ""),
     "episodes": test.get("n_episodes", ""),
     "total_steps": test.get("n_steps", ""),
     "success_rate": test.get("success_rate", ""),
@@ -734,7 +961,9 @@ generate_human_report() {
         --metrics-dir "$METRICS_DIR" \
         --out "$METRICS_DIR/pipeline_report.md" \
         --seeds "$(seed_list_display)" \
-        --models "$(model_list_display)"
+        --models "$(model_list_display)" \
+        --cpu-mode "$CPU_EXECUTION_MODE" \
+        --cpu-affinity-core "$CPU_AFFINITY_CORE"
 }
 
 main "$@"

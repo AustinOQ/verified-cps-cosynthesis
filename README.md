@@ -27,6 +27,11 @@ Useful flags:
 | `--model NAME` | Run one model: `thermostat`, `cruise`, or `mixing`. |
 | `--num-seeds N` | Run `N` deterministic seeds starting at `42`. |
 | `--seeds N` | Alias for `--num-seeds N`. |
+| `--cpu-mode single` | Default. Cap numerical libraries to one thread and pin timed subprocesses to one CPU core when `taskset` is available. |
+| `--cpu-mode aggressive` | Use normal multicore scheduling for faster local runs. |
+| `--single-core` | Alias for `--cpu-mode single`. |
+| `--aggressive-multicore` | Alias for `--cpu-mode aggressive`. |
+| `--cpu-affinity-core N` | Core used by single-core mode. Defaults to `0`. |
 
 Common commands:
 
@@ -40,6 +45,9 @@ bash run_pipeline.sh --force-full
 # Reproduce the 30-seed statistical run
 bash run_pipeline.sh --force-full --num-seeds 30
 
+# Faster workstation run, not for reported timing statistics
+bash run_pipeline.sh --force-full --num-seeds 30 --cpu-mode aggressive
+
 # Re-run only extraction/formal verification for the mixing model
 bash run_pipeline.sh --verify-only --model mixing
 ```
@@ -52,6 +60,8 @@ Environment overrides:
 | `CPU_TRAINING_REPO` | Path to the CPU training program repo. Defaults to `../shield-pipeline-new-sysml`. |
 | `NUXMV_BIN` | Path to the nuXmv binary. Defaults to the included Linux binary or `nuXmv` on `PATH`. |
 | `NUXMV_MEM_LIMIT_KB` | Memory cap for nuXmv. Defaults to 10 GB. |
+| `CPU_EXECUTION_MODE` | `single` or `aggressive`. Defaults to `single`. |
+| `CPU_AFFINITY_CORE` | Core used in single-core mode. Defaults to `0`. |
 
 ## Outputs
 
@@ -66,6 +76,12 @@ Key generated files:
 | `metrics/cpu_training_summary.csv` | Per-model/per-seed training, selected checkpoint, safety, override, step, time, and RSS metrics. |
 | `metrics/runtime_results/runtime_monitor_summary.csv` | Runtime success, safety violation, override, latency, and inference RSS metrics. |
 | `metrics/pipeline_report.md` | Human-readable summary with means and 95% confidence intervals across seeds. |
+
+The pipeline defaults to single-core execution for reported timing statistics.
+In this mode, common numerical-library thread pools are capped at one thread and
+timed subprocesses are pinned with `taskset` when available. Use
+`--cpu-mode aggressive` only for faster local runs where timing comparability is
+not the goal.
 
 nuXmv settings are fixed in the pipeline: IC3 is unbounded, and BMC uses
 `-bmc -bmc_length 200 -bmc_inc_invar_alg een-sorensson`. The simulator and

@@ -1,0 +1,4 @@
+system,sysml_loc,smv_loc,reward_loc,smv_to_sysml_ratio
+thermostat,269,102,287,0.38
+cruise,305,122,287,0.40
+mixing,577,252,287,0.44

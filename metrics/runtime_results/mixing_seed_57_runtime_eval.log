@@ -1,0 +1,13 @@
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+  [SpecShield] Loaded from /home/csned/git_stuff/Code_AI/verified-cps-cosynthesis/sysml-models/mixing-sysml-model/model.sysml
+  [SpecShield] dead_actions=[1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14], n_valid=4
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+[eval_only seed=57] test_succ=1.0000 test_ov=0.16140 test_safety=0.00000 inf_peak_rss_mb=79.3 eval_s=2.1 test_s=4.1

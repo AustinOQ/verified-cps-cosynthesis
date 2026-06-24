@@ -1,0 +1,136 @@
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+  [SpecShield] Loaded from /home/csned/git_stuff/Code_AI/verified-cps-cosynthesis/sysml-models/thermostat/model.sysml
+  [SpecShield] dead_actions=[3], n_valid=3
+
+[seed 49] policy params: 25,541
+  obs_dim=3  n_actions=4  hidden=64
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+
+  Phase 1: Oracle data collection (target 2000, coverage>=200)
+  Oracle data (raw): 50000 samples, class dist: {0: 92, 1: 21440, 2: 28468}
+  Training oracle CE for 100 epochs ...
+  Oracle final: loss=0.0075 acc=99.8% (332.3s)
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+  Post-oracle eval (20 ep): success=100.0% override=0.0019
+
+  Phase 2: PPO (2000 episodes)
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+  [PPO] ep   100/2000 | ent_c=-1.00 | p_loss=-0.0024 | v_loss=0.0313 | entropy=0.007 | 41s
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+     eval ep 100: success=1.00 override=0.0017 safety=0.0000
+     >> new best candidate (succ=1.00, override=0.0017, safety=0.0000)
+     >> new best SAFE checkpoint (succ=1.00, override=0.0017)
+  [PPO] ep   200/2000 | ent_c=-1.20 | p_loss=-0.0134 | v_loss=0.0300 | entropy=0.008 | 92s
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+     eval ep 200: success=1.00 override=0.0020 safety=0.0000
+  [PPO] ep   300/2000 | ent_c=-1.40 | p_loss=-0.0034 | v_loss=0.0284 | entropy=0.008 | 142s
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+     eval ep 300: success=1.00 override=0.0018 safety=0.0000
+  [PPO] ep   400/2000 | ent_c=-1.60 | p_loss=-0.0111 | v_loss=0.0312 | entropy=0.008 | 193s
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+     eval ep 400: success=1.00 override=0.0017 safety=0.0000
+  [PPO] ep   500/2000 | ent_c=-1.80 | p_loss=-0.0029 | v_loss=0.0314 | entropy=0.007 | 245s
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+     eval ep 500: success=1.00 override=0.0020 safety=0.0000
+  [PPO] ep   600/2000 | ent_c=-2.00 | p_loss=-0.0044 | v_loss=0.0331 | entropy=0.006 | 296s
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+     eval ep 600: success=1.00 override=0.0019 safety=0.0000
+  [PPO] ep   700/2000 | ent_c=-2.20 | p_loss=-0.0062 | v_loss=0.0346 | entropy=0.005 | 346s
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+     eval ep 700: success=1.00 override=0.0019 safety=0.0000
+  [PPO] ep   800/2000 | ent_c=-2.40 | p_loss=-0.0028 | v_loss=0.0351 | entropy=0.006 | 395s
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+     eval ep 800: success=1.00 override=0.0018 safety=0.0000
+  [PPO] ep   900/2000 | ent_c=-2.60 | p_loss=-0.0020 | v_loss=0.0367 | entropy=0.006 | 445s
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+     eval ep 900: success=1.00 override=0.0017 safety=0.0000
+  [PPO] ep  1000/2000 | ent_c=-2.80 | p_loss=-0.0013 | v_loss=0.0301 | entropy=0.004 | 504s
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+     eval ep 1000: success=1.00 override=0.0019 safety=0.0000
+  [PPO] ep  1100/2000 | ent_c=-3.00 | p_loss=-0.0039 | v_loss=0.0334 | entropy=0.004 | 553s
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+     eval ep 1100: success=1.00 override=0.0017 safety=0.0000
+  [PPO] ep  1200/2000 | ent_c=-3.20 | p_loss=-0.0025 | v_loss=0.0326 | entropy=0.004 | 605s
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+     eval ep 1200: success=1.00 override=0.0018 safety=0.0000
+  [PPO] ep  1300/2000 | ent_c=-3.40 | p_loss=-0.0030 | v_loss=0.0314 | entropy=0.004 | 655s
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+     eval ep 1300: success=1.00 override=0.0020 safety=0.0000
+  [PPO] ep  1400/2000 | ent_c=-3.60 | p_loss=-0.0029 | v_loss=0.0314 | entropy=0.004 | 705s
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+     eval ep 1400: success=1.00 override=0.0017 safety=0.0000
+     >> new best candidate (succ=1.00, override=0.0017, safety=0.0000)
+     >> new best SAFE checkpoint (succ=1.00, override=0.0017)
+  [PPO] ep  1500/2000 | ent_c=-3.80 | p_loss=-0.0017 | v_loss=0.0300 | entropy=0.003 | 758s
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+     eval ep 1500: success=1.00 override=0.0018 safety=0.0000
+  [PPO] ep  1600/2000 | ent_c=-4.00 | p_loss=-0.0008 | v_loss=0.0276 | entropy=0.003 | 812s
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+     eval ep 1600: success=1.00 override=0.0017 safety=0.0000
+  [PPO] ep  1700/2000 | ent_c=-4.20 | p_loss=-0.0051 | v_loss=0.0274 | entropy=0.004 | 862s
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+     eval ep 1700: success=1.00 override=0.0015 safety=0.0000
+     >> new best candidate (succ=1.00, override=0.0015, safety=0.0000)
+     >> new best SAFE checkpoint (succ=1.00, override=0.0015)
+  [PPO] ep  1800/2000 | ent_c=-4.40 | p_loss=-0.0011 | v_loss=0.0260 | entropy=0.003 | 915s
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+     eval ep 1800: success=1.00 override=0.0019 safety=0.0000
+  [PPO] ep  1900/2000 | ent_c=-4.60 | p_loss=-0.0019 | v_loss=0.0255 | entropy=0.003 | 958s
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+     eval ep 1900: success=1.00 override=0.0017 safety=0.0000
+  [PPO] ep  2000/2000 | ent_c=-4.80 | p_loss=-0.0023 | v_loss=0.0261 | entropy=0.003 | 993s
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+     eval ep 2000: success=1.00 override=0.0017 safety=0.0000
+
+  Selected SAFE checkpoint from eval ep 1700: success=1.0000 override=0.00147
+
+  Final eval (100 ep) ...
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+  Final test (200 ep) ...
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+ANTLR runtime and generated code versions disagree: 4.10!=4.13.2
+  Final eval summary: success=1.0000 override=0.00198 safety=0.00000
+  Final test summary: success=1.0000 override=0.00176 safety=0.00000
+  Final chosen checkpoint is SAFE on final eval/test.
+
+========= CPU training summary =========
+  model            : thermostat
+  seed             : 49
+  selected_source  : safe_eval
+  selected_episode : 1700
+  selected_safe    : True
+  train_seconds    : 1342.2
+  peak_rss_mb      : 232.0
+  test.success     : 1.0000
+  test.override    : 0.0018
+  test.safety_viol : 0.0000
+  output           : /home/csned/git_stuff/Code_AI/verified-cps-cosynthesis/metrics/cpu_training/thermostat/seed_49/summary.json

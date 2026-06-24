@@ -1,0 +1,482 @@
+
+╔══════════════════════════════════════════════════════════════╗
+║  SysML → Neural Controller → Formal Verification Pipeline  ║
+╚══════════════════════════════════════════════════════════════╝
+
+  Mode:    FORCE FULL (all steps)
+  Models:  all
+  Seeds:   42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71
+  CPU:     aggressive multicore (32 seed job(s))
+  Python:  /home/csned/git_stuff/AI_venv/bin/python
+  nuXmv:   /home/csned/tools/nuXmv-2.1.0-linux64/bin/nuXmv
+
+────────────────────────────────────────────────────────────
+=== [15:54:15] Processing: thermostat
+────────────────────────────────────────────────────────────
+=== [15:54:15] [thermostat] Extracting SMV from SysML
+Wrote /home/csned/git_stuff/Code_AI/verified-cps-cosynthesis/SMV/thermostat/model.smv
+    ✓ Generated /home/csned/git_stuff/Code_AI/verified-cps-cosynthesis/SMV/thermostat/model.smv (3 INVARSPEC)
+=== [15:54:15] [thermostat] Training neural controller with CPU training program
+=== [15:54:15] [thermostat] CPU training seed 42
+=== [15:54:15] [thermostat] CPU training seed 43
+=== [15:54:15] [thermostat] CPU training seed 44
+=== [15:54:15] [thermostat] CPU training seed 45
+=== [15:54:15] [thermostat] CPU training seed 46
+=== [15:54:15] [thermostat] CPU training seed 47
+=== [15:54:15] [thermostat] CPU training seed 48
+=== [15:54:15] [thermostat] CPU training seed 49
+=== [15:54:15] [thermostat] CPU training seed 50
+=== [15:54:15] [thermostat] CPU training seed 51
+=== [15:54:15] [thermostat] CPU training seed 52
+=== [15:54:15] [thermostat] CPU training seed 53
+=== [15:54:15] [thermostat] CPU training seed 54
+=== [15:54:15] [thermostat] CPU training seed 55
+=== [15:54:15] [thermostat] CPU training seed 56
+=== [15:54:15] [thermostat] CPU training seed 57
+=== [15:54:15] [thermostat] CPU training seed 58
+=== [15:54:15] [thermostat] CPU training seed 59
+=== [15:54:15] [thermostat] CPU training seed 60
+=== [15:54:15] [thermostat] CPU training seed 61
+=== [15:54:15] [thermostat] CPU training seed 62
+=== [15:54:15] [thermostat] CPU training seed 63
+=== [15:54:15] [thermostat] CPU training seed 64
+=== [15:54:15] [thermostat] CPU training seed 65
+=== [15:54:15] [thermostat] CPU training seed 66
+=== [15:54:15] [thermostat] CPU training seed 67
+=== [15:54:15] [thermostat] CPU training seed 68
+=== [15:54:15] [thermostat] CPU training seed 69
+=== [15:54:15] [thermostat] CPU training seed 70
+=== [15:54:15] [thermostat] CPU training seed 71
+    ✓ [thermostat] Seed 42 complete
+    ✓ [thermostat] Seed 43 complete
+    ✓ [thermostat] Seed 44 complete
+    ✓ [thermostat] Seed 45 complete
+    ✓ [thermostat] Seed 46 complete
+    ✓ [thermostat] Seed 47 complete
+    ✓ [thermostat] Seed 48 complete
+    ✓ [thermostat] Seed 49 complete
+    ✓ [thermostat] Seed 50 complete
+    ✓ [thermostat] Seed 51 complete
+    ✓ [thermostat] Seed 52 complete
+    ✓ [thermostat] Seed 53 complete
+    ✓ [thermostat] Seed 54 complete
+    ✓ [thermostat] Seed 55 complete
+    ✓ [thermostat] Seed 56 complete
+    ✓ [thermostat] Seed 57 complete
+    ✓ [thermostat] Seed 58 complete
+    ✓ [thermostat] Seed 59 complete
+    ✓ [thermostat] Seed 60 complete
+    ✓ [thermostat] Seed 61 complete
+    ✓ [thermostat] Seed 62 complete
+    ✓ [thermostat] Seed 63 complete
+    ✓ [thermostat] Seed 64 complete
+    ✓ [thermostat] Seed 65 complete
+    ✓ [thermostat] Seed 66 complete
+    ✓ [thermostat] Seed 67 complete
+    ✓ [thermostat] Seed 68 complete
+    ✓ [thermostat] Seed 69 complete
+    ✓ [thermostat] Seed 70 complete
+    ✓ [thermostat] Seed 71 complete
+=== [16:16:54] [thermostat] Formal verification (IC3 + BMC)
+    ✓ 3 INVARSPEC properties found
+=== [16:16:54] [thermostat] Running IC3 (unbounded)...
+    ✓ IC3: 3 proven, 0 failed (103ms, 40.0 MB peak)
+=== [16:16:54] [thermostat] Running BMC (een-sorensson, k=200)...
+    ✓ BMC: 3 proven, 0 failed (10ms, 36.0 MB peak)
+
+────────────────────────────────────────────────────────────
+=== [16:16:54] Processing: cruise
+────────────────────────────────────────────────────────────
+=== [16:16:54] [cruise] Extracting SMV from SysML
+Wrote /home/csned/git_stuff/Code_AI/verified-cps-cosynthesis/SMV/cruise-control-model/out.smv
+    ✓ Generated /home/csned/git_stuff/Code_AI/verified-cps-cosynthesis/SMV/cruise-control-model/out.smv (5 INVARSPEC)
+=== [16:16:55] [cruise] Training neural controller with CPU training program
+=== [16:16:55] [cruise] CPU training seed 42
+=== [16:16:55] [cruise] CPU training seed 43
+=== [16:16:55] [cruise] CPU training seed 44
+=== [16:16:55] [cruise] CPU training seed 45
+=== [16:16:55] [cruise] CPU training seed 46
+=== [16:16:55] [cruise] CPU training seed 47
+=== [16:16:55] [cruise] CPU training seed 48
+=== [16:16:55] [cruise] CPU training seed 49
+=== [16:16:55] [cruise] CPU training seed 50
+=== [16:16:55] [cruise] CPU training seed 51
+=== [16:16:55] [cruise] CPU training seed 52
+=== [16:16:55] [cruise] CPU training seed 53
+=== [16:16:55] [cruise] CPU training seed 54
+=== [16:16:55] [cruise] CPU training seed 55
+=== [16:16:55] [cruise] CPU training seed 56
+=== [16:16:55] [cruise] CPU training seed 57
+=== [16:16:55] [cruise] CPU training seed 58
+=== [16:16:55] [cruise] CPU training seed 59
+=== [16:16:55] [cruise] CPU training seed 60
+=== [16:16:55] [cruise] CPU training seed 61
+=== [16:16:55] [cruise] CPU training seed 62
+=== [16:16:55] [cruise] CPU training seed 63
+=== [16:16:55] [cruise] CPU training seed 64
+=== [16:16:55] [cruise] CPU training seed 65
+=== [16:16:55] [cruise] CPU training seed 66
+=== [16:16:55] [cruise] CPU training seed 67
+=== [16:16:55] [cruise] CPU training seed 68
+=== [16:16:55] [cruise] CPU training seed 69
+=== [16:16:55] [cruise] CPU training seed 70
+=== [16:16:55] [cruise] CPU training seed 71
+    ✓ [cruise] Seed 42 complete
+    ✓ [cruise] Seed 43 complete
+    ✓ [cruise] Seed 44 complete
+    ✓ [cruise] Seed 45 complete
+    ✓ [cruise] Seed 46 complete
+    ✓ [cruise] Seed 47 complete
+    ✓ [cruise] Seed 48 complete
+    ✓ [cruise] Seed 49 complete
+    ✓ [cruise] Seed 50 complete
+    ✓ [cruise] Seed 51 complete
+    ✓ [cruise] Seed 52 complete
+    ✓ [cruise] Seed 53 complete
+    ✓ [cruise] Seed 54 complete
+    ✓ [cruise] Seed 55 complete
+    ✓ [cruise] Seed 56 complete
+    ✓ [cruise] Seed 57 complete
+    ✓ [cruise] Seed 58 complete
+    ✓ [cruise] Seed 59 complete
+    ✓ [cruise] Seed 60 complete
+    ✓ [cruise] Seed 61 complete
+    ✓ [cruise] Seed 62 complete
+    ✓ [cruise] Seed 63 complete
+    ✓ [cruise] Seed 64 complete
+    ✓ [cruise] Seed 65 complete
+    ✓ [cruise] Seed 66 complete
+    ✓ [cruise] Seed 67 complete
+    ✓ [cruise] Seed 68 complete
+    ✓ [cruise] Seed 69 complete
+    ✓ [cruise] Seed 70 complete
+    ✓ [cruise] Seed 71 complete
+=== [16:19:13] [cruise] Formal verification (IC3 + BMC)
+    ✓ 5 INVARSPEC properties found
+=== [16:19:13] [cruise] Running IC3 (unbounded)...
+    ✓ IC3: 5 proven, 0 failed (102ms, 41.9 MB peak)
+=== [16:19:13] [cruise] Running BMC (een-sorensson, k=200)...
+    ✓ BMC: 5 proven, 0 failed (13ms, 36.1 MB peak)
+
+────────────────────────────────────────────────────────────
+=== [16:19:13] Processing: mixing
+────────────────────────────────────────────────────────────
+=== [16:19:13] [mixing] Extracting SMV from SysML
+Wrote /home/csned/git_stuff/Code_AI/verified-cps-cosynthesis/SMV/mixing-model/model.smv
+    ✓ Generated /home/csned/git_stuff/Code_AI/verified-cps-cosynthesis/SMV/mixing-model/model.smv (27 INVARSPEC)
+=== [16:19:13] [mixing] Training neural controller with CPU training program
+=== [16:19:13] [mixing] CPU training seed 42
+=== [16:19:13] [mixing] CPU training seed 43
+=== [16:19:13] [mixing] CPU training seed 44
+=== [16:19:13] [mixing] CPU training seed 45
+=== [16:19:13] [mixing] CPU training seed 46
+=== [16:19:13] [mixing] CPU training seed 47
+=== [16:19:13] [mixing] CPU training seed 48
+=== [16:19:13] [mixing] CPU training seed 49
+=== [16:19:13] [mixing] CPU training seed 50
+=== [16:19:13] [mixing] CPU training seed 51
+=== [16:19:13] [mixing] CPU training seed 52
+=== [16:19:13] [mixing] CPU training seed 53
+=== [16:19:13] [mixing] CPU training seed 54
+=== [16:19:13] [mixing] CPU training seed 55
+=== [16:19:13] [mixing] CPU training seed 56
+=== [16:19:13] [mixing] CPU training seed 57
+=== [16:19:13] [mixing] CPU training seed 58
+=== [16:19:13] [mixing] CPU training seed 59
+=== [16:19:13] [mixing] CPU training seed 60
+=== [16:19:13] [mixing] CPU training seed 61
+=== [16:19:13] [mixing] CPU training seed 62
+=== [16:19:13] [mixing] CPU training seed 63
+=== [16:19:13] [mixing] CPU training seed 64
+=== [16:19:13] [mixing] CPU training seed 65
+=== [16:19:13] [mixing] CPU training seed 66
+=== [16:19:13] [mixing] CPU training seed 67
+=== [16:19:13] [mixing] CPU training seed 68
+=== [16:19:13] [mixing] CPU training seed 69
+=== [16:19:13] [mixing] CPU training seed 70
+=== [16:19:13] [mixing] CPU training seed 71
+    ✓ [mixing] Seed 42 complete
+    ✓ [mixing] Seed 43 complete
+    ✓ [mixing] Seed 44 complete
+    ✓ [mixing] Seed 45 complete
+    ✓ [mixing] Seed 46 complete
+    ✓ [mixing] Seed 47 complete
+    ✓ [mixing] Seed 48 complete
+    ✓ [mixing] Seed 49 complete
+    ✓ [mixing] Seed 50 complete
+    ✓ [mixing] Seed 51 complete
+    ✓ [mixing] Seed 52 complete
+    ✓ [mixing] Seed 53 complete
+    ✓ [mixing] Seed 54 complete
+    ✓ [mixing] Seed 55 complete
+    ✓ [mixing] Seed 56 complete
+    ✓ [mixing] Seed 57 complete
+    ✓ [mixing] Seed 58 complete
+    ✓ [mixing] Seed 59 complete
+    ✓ [mixing] Seed 60 complete
+    ✓ [mixing] Seed 61 complete
+    ✓ [mixing] Seed 62 complete
+    ✓ [mixing] Seed 63 complete
+    ✓ [mixing] Seed 64 complete
+    ✓ [mixing] Seed 65 complete
+    ✓ [mixing] Seed 66 complete
+    ✓ [mixing] Seed 67 complete
+    ✓ [mixing] Seed 68 complete
+    ✓ [mixing] Seed 69 complete
+    ✓ [mixing] Seed 70 complete
+    ✓ [mixing] Seed 71 complete
+=== [16:24:04] [mixing] Formal verification (IC3 + BMC)
+    ✓ 1 INVARSPEC properties found
+=== [16:24:04] [mixing] Running IC3 (unbounded)...
+    ✓ IC3: 1 proven, 0 failed (4204ms, 90.2 MB peak)
+=== [16:24:08] [mixing] Running BMC (een-sorensson, k=200)...
+    ✓ BMC: 1 proven, 0 failed (160ms, 49.8 MB peak)
+
+────────────────────────────────────────────────────────────
+=== [16:24:08] Pipeline complete
+
+Results written to: /home/csned/git_stuff/Code_AI/verified-cps-cosynthesis/SMV/verification_results.txt
+
+nuXmv Formal Verification Results
+Generated: Wed Jun 24 15:54:15 EDT 2026
+
+────────────────────────────────────────────────────────────
+MODEL: thermostat
+────────────────────────────────────────────────────────────
+
+IC3 (unbounded):
+  Runtime: 103ms
+  Peak memory: 40.0 MB
+-- invariant !(controller_heaterOn & controller_acOn)  is true
+-- invariant (currentTime > 0 -> (lastObservedTemperature < controller_setPointCelcius - controller_toleranceCelcius -> controller_heaterOn))  is true
+-- invariant (currentTime > 0 -> (lastObservedTemperature > controller_setPointCelcius + controller_toleranceCelcius -> controller_acOn))  is true
+
+BMC (een-sorensson k=200):
+  Runtime: 10ms
+  Peak memory: 36.0 MB
+-- invariant !(controller_heaterOn & controller_acOn)   is true
+-- invariant (currentTime > 0 -> (lastObservedTemperature < controller_setPointCelcius - controller_toleranceCelcius -> controller_heaterOn))   is true
+-- invariant (currentTime > 0 -> (lastObservedTemperature > controller_setPointCelcius + controller_toleranceCelcius -> controller_acOn))   is true
+
+────────────────────────────────────────────────────────────
+MODEL: cruise
+────────────────────────────────────────────────────────────
+
+IC3 (unbounded):
+  Runtime: 102ms
+  Peak memory: 41.9 MB
+-- invariant !(controller_throttleOn & controller_brakeOn)  is true
+-- invariant (lastObservedGap < controller_safeFollowingDistanceMeters -> !controller_throttleOn)  is true
+-- invariant (currentTime > 0 -> (lastObservedSpeed > controller_targetSpeedMps + controller_toleranceMps -> !controller_throttleOn))  is true
+-- invariant (currentTime > 0 -> ((lastObservedSpeed < controller_targetSpeedMps - controller_toleranceMps & lastObservedGap >= controller_safeFollowingDistanceMeters) -> controller_throttleOn))  is true
+-- invariant (currentTime > 0 -> ((lastObservedSpeed > controller_targetSpeedMps + controller_toleranceMps | lastObservedGap < controller_safeFollowingDistanceMeters) -> controller_brakeOn))  is true
+
+BMC (een-sorensson k=200):
+  Runtime: 13ms
+  Peak memory: 36.1 MB
+-- invariant !(controller_throttleOn & controller_brakeOn)   is true
+-- invariant (lastObservedGap < controller_safeFollowingDistanceMeters -> !controller_throttleOn)   is true
+-- invariant (currentTime > 0 -> (lastObservedSpeed > controller_targetSpeedMps + controller_toleranceMps -> !controller_throttleOn))   is true
+-- invariant (currentTime > 0 -> ((lastObservedSpeed < controller_targetSpeedMps - controller_toleranceMps & lastObservedGap >= controller_safeFollowingDistanceMeters) -> controller_throttleOn))   is true
+-- invariant (currentTime > 0 -> ((lastObservedSpeed > controller_targetSpeedMps + controller_toleranceMps | lastObservedGap < controller_safeFollowingDistanceMeters) -> controller_brakeOn))   is true
+
+────────────────────────────────────────────────────────────
+MODEL: mixing
+────────────────────────────────────────────────────────────
+
+IC3 (unbounded):
+  Runtime: 4204ms
+  Peak memory: 90.2 MB
+-- invariant (((((((((((((((((((((((((scan_phase = 0 -> ((controller_observedLevel1 <= 0 -> !pump1_isRunning) & (controller_observedLevel2 <= 0 -> !pump2_isRunning))) & (scan_phase = 0 -> ((!valve1_isOpen -> !pump1_isRunning) & (!valve2_isOpen -> !pump2_isRunning)))) & (scan_phase = 0 -> (controller_lastScanTimeSeconds > 0 -> ((controller_tank1OriginalLevelMl - controller_observedLevel1 >= controller_tank1TransferMl + controller_toleranceMl -> !pump1_isRunning) & (controller_tank2OriginalLevelMl - controller_observedLevel2 >= controller_tank2TransferMl + controller_toleranceMl -> !pump2_isRunning))))) & (scan_phase = 0 -> (controller_lastScanTimeSeconds > 0 -> (controller_tank1OriginalLevelMl - controller_observedLevel1 < controller_tank1TransferMl -> (((valve1_isOpen & pump1_isRunning) & controller_tank2OriginalLevelMl - controller_observedLevel2 < controller_tank2TransferMl) -> (valve2_isOpen & pump2_isRunning)))))) & ((scan_phase >= 2 & scan_phase <= 14) -> volumeSensor1_rsp_response = feederTank1_currentLevelMl)) & ((scan_phase >= 3 & scan_phase <= 14) -> volumeSensor2_rsp_response = feederTank2_currentLevelMl)) & fillingTank_currentLevelMl >= 0) & controller_currentTimeSeconds >= 0) & controller_lastScanTimeSeconds >= 0) & (((scan_phase >= 9 & scan_phase <= 14) & !controller_policyCall_shouldOpenValve1) -> !valve1_isOpen)) & (((scan_phase >= 7 & scan_phase <= 14) & !controller_policyCall_shouldTurnOnPump1) -> !pump1_isRunning)) & (((scan_phase >= 15 & scan_phase <= 14) & !controller_policyCall_shouldOpenValve2) -> !valve2_isOpen)) & (((scan_phase >= 13 & scan_phase <= 14) & !controller_policyCall_shouldTurnOnPump2) -> !pump2_isRunning)) & (pump1_isRunning -> valve1_isOpen)) & (pump2_isRunning -> valve2_isOpen)) & (scan_phase = 0 -> pump1_isRunning = (controller_tank1OriginalLevelMl - volumeSensor1_rsp_response < controller_tank1TransferMl))) & (scan_phase = 0 -> pump2_isRunning = (controller_tank2OriginalLevelMl - volumeSensor2_rsp_response < controller_tank2TransferMl))) & ((scan_phase = 0 & controller_lastScanTimeSeconds > 0) -> feederTank1_currentLevelMl <= volumeSensor1_rsp_response)) & ((scan_phase = 0 & controller_lastScanTimeSeconds > 0) -> feederTank2_currentLevelMl <= volumeSensor2_rsp_response)) & controller_tank1TransferMl >= 0) & controller_tank2TransferMl >= 0) & controller_tank1OriginalLevelMl >= 0) & controller_tank2OriginalLevelMl >= 0) & controller_tank1OriginalLevelMl >= controller_tank1TransferMl) & controller_tank2OriginalLevelMl >= controller_tank2TransferMl)  is true
+
+BMC (een-sorensson k=200):
+  Runtime: 160ms
+  Peak memory: 49.8 MB
+-- invariant (((((((((((((((((((((((((scan_phase = 0 -> ((controller_observedLevel1 <= 0 -> !pump1_isRunning) & (controller_observedLevel2 <= 0 -> !pump2_isRunning))) & (scan_phase = 0 -> ((!valve1_isOpen -> !pump1_isRunning) & (!valve2_isOpen -> !pump2_isRunning)))) & (scan_phase = 0 -> (controller_lastScanTimeSeconds > 0 -> ((controller_tank1OriginalLevelMl - controller_observedLevel1 >= controller_tank1TransferMl + controller_toleranceMl -> !pump1_isRunning) & (controller_tank2OriginalLevelMl - controller_observedLevel2 >= controller_tank2TransferMl + controller_toleranceMl -> !pump2_isRunning))))) & (scan_phase = 0 -> (controller_lastScanTimeSeconds > 0 -> (controller_tank1OriginalLevelMl - controller_observedLevel1 < controller_tank1TransferMl -> (((valve1_isOpen & pump1_isRunning) & controller_tank2OriginalLevelMl - controller_observedLevel2 < controller_tank2TransferMl) -> (valve2_isOpen & pump2_isRunning)))))) & ((scan_phase >= 2 & scan_phase <= 14) -> volumeSensor1_rsp_response = feederTank1_currentLevelMl)) & ((scan_phase >= 3 & scan_phase <= 14) -> volumeSensor2_rsp_response = feederTank2_currentLevelMl)) & fillingTank_currentLevelMl >= 0) & controller_currentTimeSeconds >= 0) & controller_lastScanTimeSeconds >= 0) & (((scan_phase >= 9 & scan_phase <= 14) & !controller_policyCall_shouldOpenValve1) -> !valve1_isOpen)) & (((scan_phase >= 7 & scan_phase <= 14) & !controller_policyCall_shouldTurnOnPump1) -> !pump1_isRunning)) & (((scan_phase >= 15 & scan_phase <= 14) & !controller_policyCall_shouldOpenValve2) -> !valve2_isOpen)) & (((scan_phase >= 13 & scan_phase <= 14) & !controller_policyCall_shouldTurnOnPump2) -> !pump2_isRunning)) & (pump1_isRunning -> valve1_isOpen)) & (pump2_isRunning -> valve2_isOpen)) & (scan_phase = 0 -> pump1_isRunning = (controller_tank1OriginalLevelMl - volumeSensor1_rsp_response < controller_tank1TransferMl))) & (scan_phase = 0 -> pump2_isRunning = (controller_tank2OriginalLevelMl - volumeSensor2_rsp_response < controller_tank2TransferMl))) & ((scan_phase = 0 & controller_lastScanTimeSeconds > 0) -> feederTank1_currentLevelMl <= volumeSensor1_rsp_response)) & ((scan_phase = 0 & controller_lastScanTimeSeconds > 0) -> feederTank2_currentLevelMl <= volumeSensor2_rsp_response)) & controller_tank1TransferMl >= 0) & controller_tank2TransferMl >= 0) & controller_tank1OriginalLevelMl >= 0) & controller_tank2OriginalLevelMl >= 0) & controller_tank1OriginalLevelMl >= controller_tank1TransferMl) & controller_tank2OriginalLevelMl >= controller_tank2TransferMl)   is true
+
+
+Evaluation summary: /home/csned/git_stuff/Code_AI/verified-cps-cosynthesis/metrics/evaluation_summary.csv
+Automation metrics: /home/csned/git_stuff/Code_AI/verified-cps-cosynthesis/metrics/automation_metrics.csv
+CPU training summary: /home/csned/git_stuff/Code_AI/verified-cps-cosynthesis/metrics/cpu_training_summary.csv
+=== [16:24:09] [thermostat] Runtime monitor evaluation seed 42
+=== [16:24:09] [thermostat] Runtime monitor evaluation seed 43
+=== [16:24:09] [thermostat] Runtime monitor evaluation seed 44
+=== [16:24:09] [thermostat] Runtime monitor evaluation seed 45
+=== [16:24:09] [thermostat] Runtime monitor evaluation seed 46
+=== [16:24:09] [thermostat] Runtime monitor evaluation seed 47
+=== [16:24:09] [thermostat] Runtime monitor evaluation seed 48
+=== [16:24:09] [thermostat] Runtime monitor evaluation seed 49
+=== [16:24:09] [thermostat] Runtime monitor evaluation seed 50
+=== [16:24:09] [thermostat] Runtime monitor evaluation seed 51
+=== [16:24:09] [thermostat] Runtime monitor evaluation seed 52
+=== [16:24:09] [thermostat] Runtime monitor evaluation seed 53
+=== [16:24:09] [thermostat] Runtime monitor evaluation seed 54
+=== [16:24:09] [thermostat] Runtime monitor evaluation seed 55
+=== [16:24:09] [thermostat] Runtime monitor evaluation seed 56
+=== [16:24:09] [thermostat] Runtime monitor evaluation seed 57
+=== [16:24:09] [thermostat] Runtime monitor evaluation seed 58
+=== [16:24:09] [thermostat] Runtime monitor evaluation seed 59
+=== [16:24:09] [thermostat] Runtime monitor evaluation seed 60
+=== [16:24:09] [thermostat] Runtime monitor evaluation seed 61
+=== [16:24:09] [thermostat] Runtime monitor evaluation seed 62
+=== [16:24:09] [thermostat] Runtime monitor evaluation seed 63
+=== [16:24:09] [thermostat] Runtime monitor evaluation seed 64
+=== [16:24:09] [thermostat] Runtime monitor evaluation seed 65
+=== [16:24:09] [thermostat] Runtime monitor evaluation seed 66
+=== [16:24:09] [thermostat] Runtime monitor evaluation seed 67
+=== [16:24:09] [thermostat] Runtime monitor evaluation seed 68
+=== [16:24:09] [thermostat] Runtime monitor evaluation seed 69
+=== [16:24:09] [thermostat] Runtime monitor evaluation seed 70
+=== [16:24:09] [thermostat] Runtime monitor evaluation seed 71
+=== [16:24:09] [cruise] Runtime monitor evaluation seed 42
+=== [16:24:09] [cruise] Runtime monitor evaluation seed 43
+=== [16:24:09] [cruise] Runtime monitor evaluation seed 44
+=== [16:24:15] [cruise] Runtime monitor evaluation seed 45
+=== [16:24:15] [cruise] Runtime monitor evaluation seed 46
+=== [16:24:20] [cruise] Runtime monitor evaluation seed 47
+=== [16:24:20] [cruise] Runtime monitor evaluation seed 48
+=== [16:24:25] [cruise] Runtime monitor evaluation seed 49
+=== [16:24:25] [cruise] Runtime monitor evaluation seed 50
+=== [16:24:30] [cruise] Runtime monitor evaluation seed 51
+=== [16:24:30] [cruise] Runtime monitor evaluation seed 52
+=== [16:24:35] [cruise] Runtime monitor evaluation seed 53
+=== [16:24:35] [cruise] Runtime monitor evaluation seed 54
+=== [16:24:40] [cruise] Runtime monitor evaluation seed 55
+=== [16:24:40] [cruise] Runtime monitor evaluation seed 56
+=== [16:24:40] [cruise] Runtime monitor evaluation seed 57
+=== [16:24:41] [cruise] Runtime monitor evaluation seed 58
+=== [16:24:41] [cruise] Runtime monitor evaluation seed 59
+=== [16:24:41] [cruise] Runtime monitor evaluation seed 60
+=== [16:24:41] [cruise] Runtime monitor evaluation seed 61
+=== [16:24:41] [cruise] Runtime monitor evaluation seed 62
+=== [16:24:41] [cruise] Runtime monitor evaluation seed 63
+=== [16:24:41] [cruise] Runtime monitor evaluation seed 64
+=== [16:24:41] [cruise] Runtime monitor evaluation seed 65
+=== [16:24:42] [cruise] Runtime monitor evaluation seed 66
+=== [16:24:42] [cruise] Runtime monitor evaluation seed 67
+=== [16:24:42] [cruise] Runtime monitor evaluation seed 68
+=== [16:24:42] [cruise] Runtime monitor evaluation seed 69
+=== [16:24:42] [cruise] Runtime monitor evaluation seed 70
+=== [16:24:42] [cruise] Runtime monitor evaluation seed 71
+=== [16:24:42] [mixing] Runtime monitor evaluation seed 42
+=== [16:24:43] [mixing] Runtime monitor evaluation seed 43
+=== [16:24:43] [mixing] Runtime monitor evaluation seed 44
+=== [16:24:43] [mixing] Runtime monitor evaluation seed 45
+=== [16:24:43] [mixing] Runtime monitor evaluation seed 46
+=== [16:24:43] [mixing] Runtime monitor evaluation seed 47
+=== [16:24:43] [mixing] Runtime monitor evaluation seed 48
+=== [16:24:43] [mixing] Runtime monitor evaluation seed 49
+=== [16:24:43] [mixing] Runtime monitor evaluation seed 50
+=== [16:24:44] [mixing] Runtime monitor evaluation seed 51
+=== [16:24:44] [mixing] Runtime monitor evaluation seed 52
+=== [16:24:44] [mixing] Runtime monitor evaluation seed 53
+=== [16:24:44] [mixing] Runtime monitor evaluation seed 54
+=== [16:24:44] [mixing] Runtime monitor evaluation seed 55
+=== [16:24:45] [mixing] Runtime monitor evaluation seed 56
+=== [16:24:45] [mixing] Runtime monitor evaluation seed 57
+=== [16:24:45] [mixing] Runtime monitor evaluation seed 58
+=== [16:24:46] [mixing] Runtime monitor evaluation seed 59
+=== [16:24:46] [mixing] Runtime monitor evaluation seed 60
+=== [16:24:46] [mixing] Runtime monitor evaluation seed 61
+=== [16:24:46] [mixing] Runtime monitor evaluation seed 62
+=== [16:24:46] [mixing] Runtime monitor evaluation seed 63
+=== [16:24:46] [mixing] Runtime monitor evaluation seed 64
+=== [16:24:46] [mixing] Runtime monitor evaluation seed 65
+=== [16:24:46] [mixing] Runtime monitor evaluation seed 66
+=== [16:24:46] [mixing] Runtime monitor evaluation seed 67
+=== [16:24:47] [mixing] Runtime monitor evaluation seed 68
+=== [16:24:47] [mixing] Runtime monitor evaluation seed 69
+=== [16:24:47] [mixing] Runtime monitor evaluation seed 70
+=== [16:24:47] [mixing] Runtime monitor evaluation seed 71
+    ✓ [thermostat] Runtime eval seed 42 complete
+    ✓ [thermostat] Runtime eval seed 43 complete
+    ✓ [thermostat] Runtime eval seed 44 complete
+    ✓ [thermostat] Runtime eval seed 45 complete
+    ✓ [thermostat] Runtime eval seed 46 complete
+    ✓ [thermostat] Runtime eval seed 47 complete
+    ✓ [thermostat] Runtime eval seed 48 complete
+    ✓ [thermostat] Runtime eval seed 49 complete
+    ✓ [thermostat] Runtime eval seed 50 complete
+    ✓ [thermostat] Runtime eval seed 51 complete
+    ✓ [thermostat] Runtime eval seed 52 complete
+    ✓ [thermostat] Runtime eval seed 53 complete
+    ✓ [thermostat] Runtime eval seed 54 complete
+    ✓ [thermostat] Runtime eval seed 55 complete
+    ✓ [thermostat] Runtime eval seed 56 complete
+    ✓ [thermostat] Runtime eval seed 57 complete
+    ✓ [thermostat] Runtime eval seed 58 complete
+    ✓ [thermostat] Runtime eval seed 59 complete
+    ✓ [thermostat] Runtime eval seed 60 complete
+    ✓ [thermostat] Runtime eval seed 61 complete
+    ✓ [thermostat] Runtime eval seed 62 complete
+    ✓ [thermostat] Runtime eval seed 63 complete
+    ✓ [thermostat] Runtime eval seed 64 complete
+    ✓ [thermostat] Runtime eval seed 65 complete
+    ✓ [thermostat] Runtime eval seed 66 complete
+    ✓ [thermostat] Runtime eval seed 67 complete
+    ✓ [thermostat] Runtime eval seed 68 complete
+    ✓ [thermostat] Runtime eval seed 69 complete
+    ✓ [thermostat] Runtime eval seed 70 complete
+    ✓ [thermostat] Runtime eval seed 71 complete
+    ✓ [cruise] Runtime eval seed 42 complete
+    ✓ [cruise] Runtime eval seed 43 complete
+    ✓ [cruise] Runtime eval seed 44 complete
+    ✓ [cruise] Runtime eval seed 45 complete
+    ✓ [cruise] Runtime eval seed 46 complete
+    ✓ [cruise] Runtime eval seed 47 complete
+    ✓ [cruise] Runtime eval seed 48 complete
+    ✓ [cruise] Runtime eval seed 49 complete
+    ✓ [cruise] Runtime eval seed 50 complete
+    ✓ [cruise] Runtime eval seed 51 complete
+    ✓ [cruise] Runtime eval seed 52 complete
+    ✓ [cruise] Runtime eval seed 53 complete
+    ✓ [cruise] Runtime eval seed 54 complete
+    ✓ [cruise] Runtime eval seed 55 complete
+    ✓ [cruise] Runtime eval seed 56 complete
+    ✓ [cruise] Runtime eval seed 57 complete
+    ✓ [cruise] Runtime eval seed 58 complete
+    ✓ [cruise] Runtime eval seed 59 complete
+    ✓ [cruise] Runtime eval seed 60 complete
+    ✓ [cruise] Runtime eval seed 61 complete
+    ✓ [cruise] Runtime eval seed 62 complete
+    ✓ [cruise] Runtime eval seed 63 complete
+    ✓ [cruise] Runtime eval seed 64 complete
+    ✓ [cruise] Runtime eval seed 65 complete
+    ✓ [cruise] Runtime eval seed 66 complete
+    ✓ [cruise] Runtime eval seed 67 complete
+    ✓ [cruise] Runtime eval seed 68 complete
+    ✓ [cruise] Runtime eval seed 69 complete
+    ✓ [cruise] Runtime eval seed 70 complete
+    ✓ [cruise] Runtime eval seed 71 complete
+    ✓ [mixing] Runtime eval seed 42 complete
+    ✓ [mixing] Runtime eval seed 43 complete
+    ✓ [mixing] Runtime eval seed 44 complete
+    ✓ [mixing] Runtime eval seed 45 complete
+    ✓ [mixing] Runtime eval seed 46 complete
+    ✓ [mixing] Runtime eval seed 47 complete
+    ✓ [mixing] Runtime eval seed 48 complete
+    ✓ [mixing] Runtime eval seed 49 complete
+    ✓ [mixing] Runtime eval seed 50 complete
+    ✓ [mixing] Runtime eval seed 51 complete
+    ✓ [mixing] Runtime eval seed 52 complete
+    ✓ [mixing] Runtime eval seed 53 complete
+    ✓ [mixing] Runtime eval seed 54 complete
+    ✓ [mixing] Runtime eval seed 55 complete
+    ✓ [mixing] Runtime eval seed 56 complete
+    ✓ [mixing] Runtime eval seed 57 complete
+    ✓ [mixing] Runtime eval seed 58 complete
+    ✓ [mixing] Runtime eval seed 59 complete
+    ✓ [mixing] Runtime eval seed 60 complete
+    ✓ [mixing] Runtime eval seed 61 complete
+    ✓ [mixing] Runtime eval seed 62 complete
+    ✓ [mixing] Runtime eval seed 63 complete
+    ✓ [mixing] Runtime eval seed 64 complete
+    ✓ [mixing] Runtime eval seed 65 complete
+    ✓ [mixing] Runtime eval seed 66 complete
+    ✓ [mixing] Runtime eval seed 67 complete
+    ✓ [mixing] Runtime eval seed 68 complete
+    ✓ [mixing] Runtime eval seed 69 complete
+    ✓ [mixing] Runtime eval seed 70 complete
+    ✓ [mixing] Runtime eval seed 71 complete
+Runtime monitor summary: /home/csned/git_stuff/Code_AI/verified-cps-cosynthesis/metrics/runtime_results/runtime_monitor_summary.csv
+Pipeline report: /home/csned/git_stuff/Code_AI/verified-cps-cosynthesis/metrics/pipeline_report.md

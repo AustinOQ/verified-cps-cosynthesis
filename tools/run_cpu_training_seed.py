@@ -9,6 +9,7 @@ the implementation package name while still reusing the updated trainer.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 
@@ -23,6 +24,9 @@ def main(argv=None) -> int:
     parser.add_argument("--model-name", required=True)
     parser.add_argument("--seed", type=int, required=True)
     parser.add_argument("--out", required=True)
+    parser.add_argument("--cpu-mode", choices=("single", "aggressive"),
+                        default="single")
+    parser.add_argument("--cpu-affinity-core", default="0")
     parser.add_argument("--dt", type=float, default=0.1)
     parser.add_argument("--max-steps", type=int, default=5000)
     parser.add_argument("--ensure-class-coverage", type=int, default=200)
@@ -67,6 +71,13 @@ def main(argv=None) -> int:
             "bc_aux_coeff": args.bc_aux_coeff,
         },
     )
+    summary["execution"] = {
+        "cpu_mode": args.cpu_mode,
+        "cpu_affinity_core": args.cpu_affinity_core
+        if args.cpu_mode == "single" else "",
+    }
+    with open(os.path.join(args.out, "summary.json"), "w") as f:
+        json.dump(summary, f, indent=2, sort_keys=True, default=str)
 
     test = summary["test"]
     best = summary.get("best_during_training", {})
