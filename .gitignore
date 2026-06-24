@@ -1,4 +1,6 @@
 __pycache__/
-.venv/
 *.pyc
-rl_output/
+*.backup
+*.bak
+*.bak.*
+*.tar.gz

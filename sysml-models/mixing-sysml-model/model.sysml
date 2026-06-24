@@ -228,6 +228,9 @@ package TankFillingSystem {
         attribute tank1OriginalLevelMl : Integer;
         attribute tank2OriginalLevelMl : Integer;
 
+        // Tolerance for goal completion. Allows the goal to be completed within a 5Ml interval and thus give safety buffer to task.
+        attribute toleranceMl : Integer = 2;
+
         // Last observed sensor readings (updated each scan cycle).
         attribute observedLevel1 : Integer = 0;
         attribute observedLevel2 : Integer = 0;
@@ -236,6 +239,7 @@ package TankFillingSystem {
         attribute scanCycleFrequencyHz : Integer = 10;
         attribute lastScanTimeSeconds : Real = 0;
         attribute currentTimeSeconds : Real = 0;
+
 
         // Ports.
         port pump1Port : ModbusMasterPort;
@@ -351,7 +355,7 @@ package TankFillingSystem {
         #NeuralRequirement requirement def 'Neural Controller Soundness' {
             subject p : Policy;
             require constraint {
-                (p.tank1OriginalMl - p.tank1VolumeMl < p.tank1TargetTransferMl == p.shouldTurnOnPump1) and 
+                (p.tank1OriginalMl - p.tank1VolumeMl < p.tank1TargetTransferMl == p.shouldTurnOnPump1) and
                 (p.shouldTurnOnPump1 == p.shouldOpenValve1) and
                 (p.tank2OriginalMl - p.tank2VolumeMl < p.tank2TargetTransferMl == p.shouldTurnOnPump2) and
                 (p.shouldTurnOnPump2 == p.shouldOpenValve2)
@@ -380,8 +384,8 @@ package TankFillingSystem {
                 in tank2TargetTransferMl := tank2TransferMl;
                 in tank1OriginalMl := tank1OriginalLevelMl;
                 in tank2OriginalMl := tank2OriginalLevelMl;
-                in done := (tank1OriginalLevelMl - volume1Res.response >= tank1TargetTransferMl) and
-                            (tank2OriginalLevelMl - volume2Res.response >= tank2TargetTransferMl);
+                in done := (tank1OriginalLevelMl - volume1Res.response >= tank1TransferMl) and
+                            (tank2OriginalLevelMl - volume2Res.response >= tank2TransferMl);
             }
 
             if policyCall.shouldOpenValve1 {
@@ -547,9 +551,9 @@ package TankFillingSystem {
 
             require constraint {
                 (s.controller.lastScanTimeSeconds > 0) implies
-                ((s.controller.tank1OriginalLevelMl - s.controller.observedLevel1 >= s.controller.tank1TransferMl)
+                ((s.controller.tank1OriginalLevelMl - s.controller.observedLevel1 >= s.controller.tank1TransferMl + s.controller.toleranceMl)
                   implies not s.pump1.isRunning) and
-                ((s.controller.tank2OriginalLevelMl - s.controller.observedLevel2 >= s.controller.tank2TransferMl)
+                ((s.controller.tank2OriginalLevelMl - s.controller.observedLevel2 >= s.controller.tank2TransferMl + s.controller.toleranceMl)
                   implies not s.pump2.isRunning)
             }
         }

@@ -149,6 +149,12 @@ def load_model(sysml_path: str) -> ModelInfo | None:
             continue
         unchanging[bare] = p.value
 
+    # Fix operator precedence so the monitor's AST matches the shield's AST
+    from shield import _fixup_precedence
+    out_set = set(out_names)
+    const_set = set(unchanging.keys())
+    req_ast = _fixup_precedence(req_ast, out_set, const_set, subject_var)
+
     return ModelInfo(
         in_params=in_names,
         out_params=out_names,

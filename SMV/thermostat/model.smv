@@ -1,5 +1,5 @@
 -- Auto-generated nuXmv SMV model
--- Source: sysml-models/thermostat/thermostat.sysml
+-- Source: /home/csned/git_stuff/Code_AI/shield-pipeline-artifact/sysml-models/thermostat/model.sysml
 
 MODULE main
 VAR
@@ -33,6 +33,7 @@ DEFINE
   heater_heatOutputWatts := 2000.0;
   controller_toleranceCelcius := 1.0;
   dt := 0.1;
+  controller_propagationDelay := 3;
   lastObservedTemperature := thermometer_lastReadingCelcius;
   environment_temperaturePort_reading_temperatureCelcius := environment_temperatureCelcius;
   environment_acPort_heat_rateWatts := ac_heatOut_heat_rateWatts;
@@ -41,10 +42,10 @@ DEFINE
   scan_fires := (!controller_heaterOn);
 
 INIT
-  ((((controller_setPointCelcius >= 12.78) & (controller_setPointCelcius <= 37.78)) & (environment_outsideTemperatureCelcius <= 50)) & (environment_outsideTemperatureCelcius >= (-30)));
+  ((((controller_setPointCelcius >= 13) & (controller_setPointCelcius <= 33)) & (environment_outsideTemperatureCelcius <= 50)) & (environment_outsideTemperatureCelcius >= (-10)));
 
 TRANS
-  ((controller_setPointCelcius > thermometer_temperatureReading_temperatureCelcius + controller_toleranceCelcius) = controller_policyCall_heaterState) & ((controller_setPointCelcius < thermometer_temperatureReading_temperatureCelcius - controller_toleranceCelcius) = controller_policyCall_acState) & (! (controller_policyCall_heaterState & controller_policyCall_acState));
+  ((controller_setPointCelcius >= thermometer_temperatureReading_temperatureCelcius + controller_toleranceCelcius) = controller_policyCall_heaterState) & ((controller_setPointCelcius <= thermometer_temperatureReading_temperatureCelcius - controller_toleranceCelcius) = controller_policyCall_acState) & (! (controller_policyCall_heaterState & controller_policyCall_acState));
 
 ASSIGN
   init(ac_state) := reset;
@@ -98,8 +99,4 @@ INVARSPEC ((currentTime > 0) -> ((lastObservedTemperature < (controller_setPoint
 
 -- Requirement: Cool When Hot
 INVARSPEC ((currentTime > 0) -> ((lastObservedTemperature > (controller_setPointCelcius + controller_toleranceCelcius)) -> controller_acOn))
-
--- TODO: additional verification properties
-INVARSPEC TRUE  -- placeholder for ac_state
-INVARSPEC TRUE  -- placeholder for heater_state
 

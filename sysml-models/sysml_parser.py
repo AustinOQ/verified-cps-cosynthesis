@@ -495,8 +495,8 @@ class SysMLParser:
         self._parse_part_definitions()
         self._parse_state_machines()
         self._identify_system_part()
-        self._parse_part_instances_regex()   # Fallback for instances PySysML2 missed
-        self._parse_parameters_regex()       # Fallback for attribute :>> values
+        self._parse_part_instances_regex()   # Secondary pass for part instances
+        self._parse_parameters_regex()       # Secondary pass for attribute values
         self._parse_ref_bindings()
         self._parse_flows()
         self._parse_item_types()
@@ -996,7 +996,7 @@ class SysMLParser:
             self.system_part = sorted(parents)[0]
 
     def _parse_part_instances_regex(self) -> None:
-        """Fallback regex parsing for part instances that PySysML2 missed."""
+        """Secondary regex parsing for part instances."""
         if not self.system_part:
             return
 
@@ -1026,9 +1026,8 @@ class SysMLParser:
                 )
 
     def _parse_parameters_regex(self) -> None:
-        """Regex fallback for attribute :>> name = value patterns.
+        """Secondary regex parsing for attribute :>> name = value patterns.
 
-        PySysML2 normally extracts these, but falls back to this when it fails.
         Searches two locations:
         1. The system instantiation block: part system : Type { part :>> name { ... } }
         2. The system type definition: part def Type { part name : X { attr :>> a = v; } }
@@ -1079,9 +1078,14 @@ class SysMLParser:
                 const_expr = const_match.group(3).strip()
                 # Avoid duplicates (may already be parsed from part def).
                 if not any(c.name == const_name for c in self.parsed_constraints):
+                    try:
+                        expr_parser = ExpressionParser(const_expr)
+                        parsed_expr = expr_parser.parse()
+                    except Exception:
+                        parsed_expr = None
                     self.parsed_constraints.append(Constraint(
                         name=const_name,
-                        expression=None,
+                        expression=parsed_expr,
                         raw_text=const_expr,
                         context=self.system_part,
                         metadata=const_metadata,

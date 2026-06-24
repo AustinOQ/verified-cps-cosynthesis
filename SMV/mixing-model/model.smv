@@ -1,5 +1,5 @@
 -- Auto-generated nuXmv SMV model
--- Source: sysml-models/mixing-sysml-model/model.sysml
+-- Source: /home/csned/git_stuff/Code_AI/shield-pipeline-artifact/sysml-models/mixing-sysml-model/model.sysml
 
 MODULE main
 VAR
@@ -44,6 +44,7 @@ DEFINE
   feederTank2_isEmpty := (feederTank2_currentLevelMl <= 0);
   fillingTank_isFull := (fillingTank_currentLevelMl >= fillingTank_capacityMl);
   fillingTank_isEmpty := (fillingTank_currentLevelMl <= 0);
+  controller_toleranceMl := 2;
   controller_scanCycleFrequencyHz := 10;
   feederTank1_volumeSensorPort_reading_volumeMl := feederTank1_currentLevelMl;
   feederTank2_volumeSensorPort_reading_volumeMl := feederTank2_currentLevelMl;
@@ -183,12 +184,10 @@ ASSIGN
 -- INVARSPEC scan_phase = 0 -> ((((!valve1_isOpen) -> (!pump1_isRunning)) & ((!valve2_isOpen) -> (!pump2_isRunning))))
 
 -- Requirement: Fluid Transfer Termination Safety
--- INVARSPEC scan_phase = 0 -> (((controller_lastScanTimeSeconds > 0) -> ((((controller_tank1OriginalLevelMl - controller_observedLevel1) >= controller_tank1TransferMl) -> (!pump1_isRunning)) & (((controller_tank2OriginalLevelMl - controller_observedLevel2) >= controller_tank2TransferMl) -> (!pump2_isRunning)))))
+-- INVARSPEC scan_phase = 0 -> (((controller_lastScanTimeSeconds > 0) -> ((((controller_tank1OriginalLevelMl - controller_observedLevel1) >= (controller_tank1TransferMl + controller_toleranceMl)) -> (!pump1_isRunning)) & (((controller_tank2OriginalLevelMl - controller_observedLevel2) >= (controller_tank2TransferMl + controller_toleranceMl)) -> (!pump2_isRunning)))))
 
 -- Requirement: Fluid Transfer Liveness
 -- INVARSPEC scan_phase = 0 -> (((controller_lastScanTimeSeconds > 0) -> (((controller_tank1OriginalLevelMl - controller_observedLevel1) < controller_tank1TransferMl) -> (((valve1_isOpen & pump1_isRunning) & ((controller_tank2OriginalLevelMl - controller_observedLevel2) < controller_tank2TransferMl)) -> (valve2_isOpen & pump2_isRunning)))))
-
--- TODO: additional verification properties
 
 
 -- Strengthening invariants (auto-generated for k-induction)
@@ -228,7 +227,7 @@ ASSIGN
 INVARSPEC
   (scan_phase = 0 -> ((((controller_observedLevel1 <= 0) -> (!pump1_isRunning)) & ((controller_observedLevel2 <= 0) -> (!pump2_isRunning)))))
   & (scan_phase = 0 -> ((((!valve1_isOpen) -> (!pump1_isRunning)) & ((!valve2_isOpen) -> (!pump2_isRunning)))))
-  & (scan_phase = 0 -> (((controller_lastScanTimeSeconds > 0) -> ((((controller_tank1OriginalLevelMl - controller_observedLevel1) >= controller_tank1TransferMl) -> (!pump1_isRunning)) & (((controller_tank2OriginalLevelMl - controller_observedLevel2) >= controller_tank2TransferMl) -> (!pump2_isRunning))))))
+  & (scan_phase = 0 -> (((controller_lastScanTimeSeconds > 0) -> ((((controller_tank1OriginalLevelMl - controller_observedLevel1) >= (controller_tank1TransferMl + controller_toleranceMl)) -> (!pump1_isRunning)) & (((controller_tank2OriginalLevelMl - controller_observedLevel2) >= (controller_tank2TransferMl + controller_toleranceMl)) -> (!pump2_isRunning))))))
   & (scan_phase = 0 -> (((controller_lastScanTimeSeconds > 0) -> (((controller_tank1OriginalLevelMl - controller_observedLevel1) < controller_tank1TransferMl) -> (((valve1_isOpen & pump1_isRunning) & ((controller_tank2OriginalLevelMl - controller_observedLevel2) < controller_tank2TransferMl)) -> (valve2_isOpen & pump2_isRunning))))))
   & ((scan_phase >= 2 & scan_phase <= 14) -> (volumeSensor1_rsp_response = feederTank1_currentLevelMl))
   & ((scan_phase >= 3 & scan_phase <= 14) -> (volumeSensor2_rsp_response = feederTank2_currentLevelMl))

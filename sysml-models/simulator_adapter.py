@@ -1,7 +1,7 @@
 """
-Adapter that wraps the SysML simulator as a twin callable for train.py.
+Adapter that wraps the SysML simulator as a twin callable for controller training.
 
-Twin protocol (from train.py):
+Twin protocol:
     state = twin()          # reset: returns initial state dict
     state = twin(action)    # step: advances simulation, returns new state dict
 

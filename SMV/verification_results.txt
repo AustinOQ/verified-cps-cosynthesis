@@ -1,0 +1,57 @@
+nuXmv Formal Verification Results
+Generated: Tue Jun 23 18:16:51 EDT 2026
+
+────────────────────────────────────────────────────────────
+MODEL: thermostat
+────────────────────────────────────────────────────────────
+
+IC3 (unbounded):
+  Runtime: 103ms
+  Peak memory: 40.1 MB
+-- invariant !(controller_heaterOn & controller_acOn)  is true
+-- invariant (currentTime > 0 -> (lastObservedTemperature < controller_setPointCelcius - controller_toleranceCelcius -> controller_heaterOn))  is true
+-- invariant (currentTime > 0 -> (lastObservedTemperature > controller_setPointCelcius + controller_toleranceCelcius -> controller_acOn))  is true
+
+BMC (een-sorensson k=200):
+  Runtime: 10ms
+  Peak memory: 36.3 MB
+-- invariant !(controller_heaterOn & controller_acOn)   is true
+-- invariant (currentTime > 0 -> (lastObservedTemperature < controller_setPointCelcius - controller_toleranceCelcius -> controller_heaterOn))   is true
+-- invariant (currentTime > 0 -> (lastObservedTemperature > controller_setPointCelcius + controller_toleranceCelcius -> controller_acOn))   is true
+
+────────────────────────────────────────────────────────────
+MODEL: cruise
+────────────────────────────────────────────────────────────
+
+IC3 (unbounded):
+  Runtime: 103ms
+  Peak memory: 42.5 MB
+-- invariant !(controller_throttleOn & controller_brakeOn)  is true
+-- invariant (lastObservedGap < controller_safeFollowingDistanceMeters -> !controller_throttleOn)  is true
+-- invariant (currentTime > 0 -> (lastObservedSpeed > controller_targetSpeedMps + controller_toleranceMps -> !controller_throttleOn))  is true
+-- invariant (currentTime > 0 -> ((lastObservedSpeed < controller_targetSpeedMps - controller_toleranceMps & lastObservedGap >= controller_safeFollowingDistanceMeters) -> controller_throttleOn))  is true
+-- invariant (currentTime > 0 -> ((lastObservedSpeed > controller_targetSpeedMps + controller_toleranceMps | lastObservedGap < controller_safeFollowingDistanceMeters) -> controller_brakeOn))  is true
+
+BMC (een-sorensson k=200):
+  Runtime: 11ms
+  Peak memory: 36.4 MB
+-- invariant !(controller_throttleOn & controller_brakeOn)   is true
+-- invariant (lastObservedGap < controller_safeFollowingDistanceMeters -> !controller_throttleOn)   is true
+-- invariant (currentTime > 0 -> (lastObservedSpeed > controller_targetSpeedMps + controller_toleranceMps -> !controller_throttleOn))   is true
+-- invariant (currentTime > 0 -> ((lastObservedSpeed < controller_targetSpeedMps - controller_toleranceMps & lastObservedGap >= controller_safeFollowingDistanceMeters) -> controller_throttleOn))   is true
+-- invariant (currentTime > 0 -> ((lastObservedSpeed > controller_targetSpeedMps + controller_toleranceMps | lastObservedGap < controller_safeFollowingDistanceMeters) -> controller_brakeOn))   is true
+
+────────────────────────────────────────────────────────────
+MODEL: mixing
+────────────────────────────────────────────────────────────
+
+IC3 (unbounded):
+  Runtime: 4405ms
+  Peak memory: 88.1 MB
+-- invariant (((((((((((((((((((((((((scan_phase = 0 -> ((controller_observedLevel1 <= 0 -> !pump1_isRunning) & (controller_observedLevel2 <= 0 -> !pump2_isRunning))) & (scan_phase = 0 -> ((!valve1_isOpen -> !pump1_isRunning) & (!valve2_isOpen -> !pump2_isRunning)))) & (scan_phase = 0 -> (controller_lastScanTimeSeconds > 0 -> ((controller_tank1OriginalLevelMl - controller_observedLevel1 >= controller_tank1TransferMl + controller_toleranceMl -> !pump1_isRunning) & (controller_tank2OriginalLevelMl - controller_observedLevel2 >= controller_tank2TransferMl + controller_toleranceMl -> !pump2_isRunning))))) & (scan_phase = 0 -> (controller_lastScanTimeSeconds > 0 -> (controller_tank1OriginalLevelMl - controller_observedLevel1 < controller_tank1TransferMl -> (((valve1_isOpen & pump1_isRunning) & controller_tank2OriginalLevelMl - controller_observedLevel2 < controller_tank2TransferMl) -> (valve2_isOpen & pump2_isRunning)))))) & ((scan_phase >= 2 & scan_phase <= 14) -> volumeSensor1_rsp_response = feederTank1_currentLevelMl)) & ((scan_phase >= 3 & scan_phase <= 14) -> volumeSensor2_rsp_response = feederTank2_currentLevelMl)) & fillingTank_currentLevelMl >= 0) & controller_currentTimeSeconds >= 0) & controller_lastScanTimeSeconds >= 0) & (((scan_phase >= 9 & scan_phase <= 14) & !controller_policyCall_shouldOpenValve1) -> !valve1_isOpen)) & (((scan_phase >= 7 & scan_phase <= 14) & !controller_policyCall_shouldTurnOnPump1) -> !pump1_isRunning)) & (((scan_phase >= 15 & scan_phase <= 14) & !controller_policyCall_shouldOpenValve2) -> !valve2_isOpen)) & (((scan_phase >= 13 & scan_phase <= 14) & !controller_policyCall_shouldTurnOnPump2) -> !pump2_isRunning)) & (pump1_isRunning -> valve1_isOpen)) & (pump2_isRunning -> valve2_isOpen)) & (scan_phase = 0 -> pump1_isRunning = (controller_tank1OriginalLevelMl - volumeSensor1_rsp_response < controller_tank1TransferMl))) & (scan_phase = 0 -> pump2_isRunning = (controller_tank2OriginalLevelMl - volumeSensor2_rsp_response < controller_tank2TransferMl))) & ((scan_phase = 0 & controller_lastScanTimeSeconds > 0) -> feederTank1_currentLevelMl <= volumeSensor1_rsp_response)) & ((scan_phase = 0 & controller_lastScanTimeSeconds > 0) -> feederTank2_currentLevelMl <= volumeSensor2_rsp_response)) & controller_tank1TransferMl >= 0) & controller_tank2TransferMl >= 0) & controller_tank1OriginalLevelMl >= 0) & controller_tank2OriginalLevelMl >= 0) & controller_tank1OriginalLevelMl >= controller_tank1TransferMl) & controller_tank2OriginalLevelMl >= controller_tank2TransferMl)  is true
+
+BMC (een-sorensson k=200):
+  Runtime: 156ms
+  Peak memory: 49.2 MB
+-- invariant (((((((((((((((((((((((((scan_phase = 0 -> ((controller_observedLevel1 <= 0 -> !pump1_isRunning) & (controller_observedLevel2 <= 0 -> !pump2_isRunning))) & (scan_phase = 0 -> ((!valve1_isOpen -> !pump1_isRunning) & (!valve2_isOpen -> !pump2_isRunning)))) & (scan_phase = 0 -> (controller_lastScanTimeSeconds > 0 -> ((controller_tank1OriginalLevelMl - controller_observedLevel1 >= controller_tank1TransferMl + controller_toleranceMl -> !pump1_isRunning) & (controller_tank2OriginalLevelMl - controller_observedLevel2 >= controller_tank2TransferMl + controller_toleranceMl -> !pump2_isRunning))))) & (scan_phase = 0 -> (controller_lastScanTimeSeconds > 0 -> (controller_tank1OriginalLevelMl - controller_observedLevel1 < controller_tank1TransferMl -> (((valve1_isOpen & pump1_isRunning) & controller_tank2OriginalLevelMl - controller_observedLevel2 < controller_tank2TransferMl) -> (valve2_isOpen & pump2_isRunning)))))) & ((scan_phase >= 2 & scan_phase <= 14) -> volumeSensor1_rsp_response = feederTank1_currentLevelMl)) & ((scan_phase >= 3 & scan_phase <= 14) -> volumeSensor2_rsp_response = feederTank2_currentLevelMl)) & fillingTank_currentLevelMl >= 0) & controller_currentTimeSeconds >= 0) & controller_lastScanTimeSeconds >= 0) & (((scan_phase >= 9 & scan_phase <= 14) & !controller_policyCall_shouldOpenValve1) -> !valve1_isOpen)) & (((scan_phase >= 7 & scan_phase <= 14) & !controller_policyCall_shouldTurnOnPump1) -> !pump1_isRunning)) & (((scan_phase >= 15 & scan_phase <= 14) & !controller_policyCall_shouldOpenValve2) -> !valve2_isOpen)) & (((scan_phase >= 13 & scan_phase <= 14) & !controller_policyCall_shouldTurnOnPump2) -> !pump2_isRunning)) & (pump1_isRunning -> valve1_isOpen)) & (pump2_isRunning -> valve2_isOpen)) & (scan_phase = 0 -> pump1_isRunning = (controller_tank1OriginalLevelMl - volumeSensor1_rsp_response < controller_tank1TransferMl))) & (scan_phase = 0 -> pump2_isRunning = (controller_tank2OriginalLevelMl - volumeSensor2_rsp_response < controller_tank2TransferMl))) & ((scan_phase = 0 & controller_lastScanTimeSeconds > 0) -> feederTank1_currentLevelMl <= volumeSensor1_rsp_response)) & ((scan_phase = 0 & controller_lastScanTimeSeconds > 0) -> feederTank2_currentLevelMl <= volumeSensor2_rsp_response)) & controller_tank1TransferMl >= 0) & controller_tank2TransferMl >= 0) & controller_tank1OriginalLevelMl >= 0) & controller_tank2OriginalLevelMl >= 0) & controller_tank1OriginalLevelMl >= controller_tank1TransferMl) & controller_tank2OriginalLevelMl >= controller_tank2TransferMl)   is true
+

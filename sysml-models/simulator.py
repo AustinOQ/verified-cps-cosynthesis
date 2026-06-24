@@ -250,7 +250,7 @@ class ConstraintSolver:
                 # Per-instance predicates: {fqn}::behavior.{state}
                 for state in sm.states:
                     self.state[f"{inst_fqn}::behavior.{state.name}"] = (state.name == current_state)
-            # Global fallback for constraints that reference bare 'behavior.X'
+            # Global state predicate for constraints that reference bare 'behavior.X'
             self.state[f"behavior.{current_state}"] = True
 
     def _solve_implies_constraint(self, constraint: Constraint):
@@ -460,7 +460,7 @@ class SimulationEngine:
                                          f"{attr_path.replace('.', '::')}")
                             self.state[state_key] = val
                 else:
-                    # Legacy state-flag trigger
+                    # State-flag trigger
                     trigger_key = f"{inst_fqn}::{trans.trigger}"
                     if not self.state.get(trigger_key, False):
                         continue

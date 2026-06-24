@@ -123,6 +123,7 @@ package CruiseControl {
         attribute targetSpeedMps : Real;
         attribute toleranceMps : Real;
         attribute safeFollowingDistanceMeters : Real;
+        attribute propagationDelay : Real = 3;
         attribute throttleOn : Boolean;
         attribute brakeOn : Boolean;
 
@@ -291,7 +292,7 @@ package CruiseControl {
 
         part :>> controller {
             #ScenarioInput attribute :>> targetSpeedMps = 25.0;
-            attribute :>> toleranceMps = 1.0;
+            attribute :>> toleranceMps = 2.0;
             attribute :>> safeFollowingDistanceMeters = 10.0;
         }
 

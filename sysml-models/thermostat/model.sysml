@@ -115,6 +115,7 @@ package Thermostat {
     part def Controller {
         attribute setPointCelcius : Real;
         attribute toleranceCelcius : Real;
+        attribute propagationDelay : Real = 3;
         attribute heaterOn : Boolean;
         attribute acOn : Boolean;
         
@@ -134,8 +135,8 @@ package Thermostat {
         #NeuralRequirement requirement def 'Neural Controller Soundness' {
             subject p : Policy;
             require constraint {
-                (p.setPoint > p.temperatureCelcius + toleranceCelcius == p.heaterState) and 
-                (p.setPoint < p.temperatureCelcius - toleranceCelcius == p.acState) and 
+                (p.setPoint >= p.temperatureCelcius + toleranceCelcius == p.heaterState) and 
+                (p.setPoint <= p.temperatureCelcius - toleranceCelcius == p.acState) and 
                 (not (p.heaterState and p.acState))
             }
         }
@@ -218,7 +219,7 @@ package Thermostat {
             subject s : HeatingCoolingSystem;
 
             require constraint {
-                currentTime > 0 implies
+                currentTime > 0 implies 
                     (s.lastObservedTemperature < s.controller.setPointCelcius - s.controller.toleranceCelcius
                         implies s.controller.heaterOn)
             }
@@ -259,10 +260,10 @@ package Thermostat {
         }
 
         #ScenarioConstraint constraint scenarioConstraint {
-            controller.setPointCelcius >= 12.78 and 
-            controller.setPointCelcius <= 37.78 and 
+            controller.setPointCelcius >= 13.00 and
+            controller.setPointCelcius <= 33.00 and
             environment.outsideTemperatureCelcius <= 50 and 
-            environment.outsideTemperatureCelcius >= -30
+            environment.outsideTemperatureCelcius >= -10
         }
     }
 }

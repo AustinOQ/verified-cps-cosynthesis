@@ -1166,7 +1166,7 @@ class SMVGenerator:
         for p in self.parser.parameters:
             if p.qualified_name == cap_key:
                 return int(p.value)
-        return self._max_int  # fallback: use configured max
+        return self._max_int  # default to configured max
 
     def _init_for(self, key: str) -> str:
         """Find the initial value for a parameter key, formatted for its type."""
@@ -1560,15 +1560,6 @@ class SMVGenerator:
             lines.append(f"-- Requirement: {req.name}")
             lines.append(_spec(spec_expr))
             lines.append("")
-
-        # Phase 1f: placeholder spec per SM instance
-        lines.append("-- TODO: additional verification properties")
-        for inst_fqn in self._sm_instances:
-            if self._is_single_state(inst_fqn):
-                continue
-            state_var = self._state_var(inst_fqn)
-            lines.append(_spec("TRUE") + f"  -- placeholder for {state_var}")
-        lines.append("")
 
         return lines
 
