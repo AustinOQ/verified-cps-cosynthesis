@@ -389,6 +389,7 @@ def one_step_transition_closure(
     q: set[str],
     *,
     timeout_ms: int = 1000,
+    include_artifacts: bool = False,
 ) -> dict[str, Any]:
     """Check one-step transition closure by self-composition.
 
@@ -456,6 +457,36 @@ def one_step_transition_closure(
     solver.add(z3.Or(*[_neq(left, right) for _label, left, right in disagreements]))
 
     result = solver.check()
+
+    def _artifacts() -> dict[str, Any]:
+        if not include_artifacts:
+            return {}
+        payload: dict[str, Any] = {
+            "smt2": solver.to_smt2(),
+            "z3_check_sat": str(result),
+            "replay": (
+                "Install z3 and run `z3 query.smt2`. The expected answer is "
+                "`unsat` for a discharged proof obligation, `sat` for a "
+                "counterexample, or `unknown` for a timeout/unsupported case."
+            ),
+        }
+        if result == z3.unsat:
+            try:
+                payload["z3_proof"] = str(solver.proof())
+                payload["z3_proof_available"] = True
+            except Exception as exc:
+                payload["z3_proof"] = ""
+                payload["z3_proof_available"] = False
+                payload["z3_proof_error"] = str(exc)
+        elif result == z3.sat:
+            try:
+                payload["z3_model"] = solver.model().sexpr()
+            except Exception as exc:
+                payload["z3_model_error"] = str(exc)
+        elif result == z3.unknown:
+            payload["reason_unknown"] = solver.reason_unknown()
+        return {"artifacts": payload}
+
     if result == z3.unsat:
         return {
             "status": "discharged",
@@ -467,6 +498,7 @@ def one_step_transition_closure(
             "q_size": len(q),
             "actions_size": len(model.actions),
             "visible_terms_checked": [label for label, _left, _right in disagreements],
+            **_artifacts(),
         }
     if result == z3.unknown:
         return {
@@ -477,6 +509,7 @@ def one_step_transition_closure(
             "logic": logic,
             "max_polynomial_degree": max_degree,
             "timeout_ms": timeout_ms,
+            **_artifacts(),
         }
 
     solver_model = solver.model()
@@ -525,4 +558,5 @@ def one_step_transition_closure(
         "same_q": q_witness,
         "same_action": action_witness,
         "hidden_state": hidden_witness,
+        **_artifacts(),
     }

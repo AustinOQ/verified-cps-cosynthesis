@@ -9,7 +9,7 @@ This battery is deliberately broader than validate_reference_models.py:
    certify.
 3. Mutated certificate artifacts must be rejected by the independent checker.
 
-The script does not modify the source SysML models or training programs.
+The script writes validation outputs to the selected output directory.
 """
 
 from __future__ import annotations

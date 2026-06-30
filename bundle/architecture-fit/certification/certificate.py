@@ -820,6 +820,7 @@ def build_certificate_for_path(
     horizon: int = 14,
     dt: float = 0.1,
     enable_sampled_memory: bool = True,
+    include_solver_artifacts: bool = False,
 ) -> dict[str, Any]:
     eq_model = extract_equation_model(model_path)
     relevance = compute_transition_closed_relevance(eq_model)
@@ -900,6 +901,7 @@ def build_certificate_for_path(
             eq_model,
             set(relevance.q),
             timeout_ms=1000,
+            include_artifacts=include_solver_artifacts,
         )
     }
     theorem_gate = _theorem_gate(

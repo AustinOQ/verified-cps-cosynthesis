@@ -2,27 +2,28 @@
 
 This directory is a presentable, branch-friendly artifact for the
 `architecture-fit` controller simplification work. It carries local copies of
-the code and models needed by the demo. It does not modify central programs,
-certification code, SysML models, or training experiments.
+the code and models needed by the demo. A run reads from `bundle/` and writes
+generated results to `outputs/latest/`.
 
 Read `README.md` first for the plain-language overview. In short, the
 memoryless stage checks whether a finite buffer is enough for the current
 controller decision. The Markov/MDP stage checks whether a finite buffer is
 enough for a proof that the next modeled step is determined.
 
-There are three simplified checks. The affine/rule stage is the only analytical
-fit implemented directly by this artifact. The memoryless and Markov/MDP stages
-produce buffer evidence that supports later feedforward or analytical fitting.
+There are three simplified checks plus one training stage. The affine/rule
+stage is analytical. The memoryless and Markov/MDP stages produce buffer
+evidence. The final stage sweeps small feedforward controllers from the
+Markov/MDP specs generated in the same run and selects the smallest good model.
 
 ## Source Files
 
 | file | role |
 |---|---|
-| `run_fitting_sequence.sh` | entry point using the project venv by default |
-| `src/run_fitting_sequence.py` | orchestrates the three-stage artifact report |
+| `run_fitting_sequence.sh` | portable entry point using `python3` or `PYTHON_BIN` |
+| `src/run_fitting_sequence.py` | orchestrates the artifact report and full reduced training sweep |
 | `src/mixing_rule_eval.py` | fresh artifact-local validation of the mixing NeuralRequirement rule |
-| `src/generate_markov_mdp.py` | generates the Markov/MDP Z3 check from bundled SysML without saving certificates |
-| `README.md` | quick usage and claim boundary |
+| `src/generate_markov_mdp.py` | generates Markov/MDP certificates, specs, SMT-LIB queries, and Z3 proof/counterexample files from bundled SysML |
+| `README.md` | quick usage and limitations |
 | `ABOUT.md` | concise checker overview and example output rows |
 
 ## Bundled Inputs
@@ -40,23 +41,16 @@ Runtime tools:
 | dependency | required for | notes |
 |---|---|---|
 | Bash | `run_fitting_sequence.sh` | Used only to choose the Python executable and start the runner. |
-| Python 3 | all stages | Tested with Python `3.13.7`. The artifact defaults to `/home/csned/git_stuff/AI_venv/bin/python`. Any compatible Python can be supplied with `PYTHON_BIN=/path/to/python`. |
-| `numpy` | fresh mixing rule evaluation | Tested with `numpy 1.26.4`. Required by the bundled environment and oracle code in `bundle/rl/`. |
+| Python 3 | all stages | The artifact defaults to `python3`. Any compatible Python can be supplied with `PYTHON_BIN`. |
+| `numpy` | fresh checks and handmade discrete training | Required by the bundled environment, oracle code, and handmade NumPy trainer. |
 | `z3-solver` | fresh Markov/MDP proof check | Required by the default run. The artifact builds the Z3 query from the bundled SysML files at run time. |
+| `torch` | continuous reduced training | Used by the bundled continuous MLP PPO trainer. It is forced to CPU by the artifact. |
 
 Optional Python packages:
 
 | dependency | needed when | notes |
 |---|---|---|
-| `pysysml2` | optional parser assist | The bundled parser has a regex fallback for these models. The default artifact does not require `pysysml2`. |
-
-Not required for the default artifact run:
-
-| dependency | why not required |
-|---|---|
-| `torch` | The artifact does not train neural networks. |
-| `pandas` | The runner uses Python standard library CSV and JSON readers. |
-| `scikit-learn` | No fitting routines from scikit-learn are used. |
+| `pysysml2` | optional parser assist | The bundled parser has a regex fallback for these models. |
 
 Bundled code required by the default run:
 
@@ -66,6 +60,10 @@ Bundled code required by the default run:
 | `bundle/architecture-fit/reconstruct_closure.py` | Finds finite buffers for the memoryless and Markov/MDP checks. |
 | `bundle/architecture-fit/sysml_deps.py` | Extracts dependency information from SysML for the memoryless check. |
 | `bundle/architecture-fit/certification/` | Builds and checks the Markov/MDP proof result in memory. |
+| `bundle/architecture-fit/reduced_handmade/` | Trains reduced discrete feedforward policies with handmade NumPy PPO. |
+| `bundle/architecture-fit/train_mlp_buffer.py` | Trains the reduced continuous cruise MLP policy on CPU. |
+| `bundle/architecture-fit/mlp_buffer.py` | Defines buffered continuous/discrete MLP environment wrappers and policy classes. |
+| `bundle/handmade/` | Handmade NumPy neural network, optimizer, oracle, PPO, and checkpoint helpers. |
 | `bundle/sysml-models/sysml_parser.py` | Parses the bundled SysML models. |
 | `bundle/sysml-models/simulator.py` | Runs the bundled simulation engine. |
 | `bundle/sysml-models/simulator_adapter.py` | Connects the simulator to the environment wrapper. |
@@ -84,12 +82,11 @@ Bundled SysML models:
 | Continuous cruise controller | `bundle/sysml-models/cruise-continuous-model/model.sysml` |
 | Mixing machine | `bundle/sysml-models/mixing-sysml-model/model.sysml` |
 
-Data policy:
+Generated data:
 
-The artifact does not bundle or save full Markov/MDP proof certificates. The
-Markov/MDP stage builds the symbolic proof obligation from the bundled SysML
-files. It calls Z3 during the run. It records only compact summaries of the
-result.
+Each run overwrites `outputs/latest/` and rebuilds generated artifacts from the
+bundled SysML files. The Markov/MDP stage saves fresh certificates,
+reduced-MDP specs, SMT-LIB queries, and proof or counterexample transcripts.
 
 ## Generated Output
 
@@ -102,5 +99,6 @@ Running `bash run_fitting_sequence.sh` from this directory regenerates
 | `outputs/latest/fitting_sequence_summary.json` | machine-readable report data |
 | `outputs/latest/01_affine_rule/` | affine/rule stage summaries and mixing metrics |
 | `outputs/latest/02_memoryless/` | memoryless controller summary |
-| `outputs/latest/03_markov_mdp/` | provable Markov/MDP summary |
+| `outputs/latest/03_markov_mdp/` | provable Markov/MDP certificates, specs, queries, proof files, and summaries |
+| `outputs/latest/04_reduced_training/` | full reduced feedforward sweep, selected-smallest-good table, summaries, logs, and weights |
 | `outputs/latest/logs/` | concise command summaries for fresh rerun stages |

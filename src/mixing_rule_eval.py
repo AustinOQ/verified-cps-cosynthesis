@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Fresh artifact-local evaluator for the mixing NeuralRequirement rule.
 
-This sidecar does not train a model and does not modify the central pipeline.
-It validates that the direct affine-predicate rule induced by the mixing
-NeuralRequirement agrees with the existing program shield/oracle and succeeds
-closed-loop in the existing SysML simulator.
+This sidecar validates that the direct affine-predicate rule induced by the
+mixing NeuralRequirement agrees with the program shield/oracle and succeeds
+closed-loop in the bundled SysML simulator.
 """
 
 from __future__ import annotations
@@ -23,7 +22,7 @@ from typing import Any
 THIS = Path(__file__).resolve()
 ARTIFACT = THIS.parents[1]
 DEFAULT_ARCH = ARTIFACT / "bundle" / "architecture-fit"
-ARCH = Path(os.environ.get("ARCHITECTURE_FIT_ROOT", DEFAULT_ARCH)).resolve()
+ARCH = DEFAULT_ARCH.resolve()
 REPO = ARCH.parent
 for path in (REPO, ARCH, REPO / "rl", REPO / "sysml-models"):
     text = str(path)
