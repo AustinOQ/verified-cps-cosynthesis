@@ -1,0 +1,46 @@
+# About The Checker Sequence
+
+This artifact runs three simplified checks. It writes one human-readable report
+plus concise logs for every fresh checker it runs.
+
+Run from this directory:
+
+```bash
+bash run_fitting_sequence.sh
+```
+
+The checker code and SysML models are copied into `bundle/`. The run does not
+need the parent project tree. The Markov/MDP stage generates its Z3 proof check
+fresh from the bundled SysML files.
+
+Main output:
+
+```text
+outputs/latest/fitting_sequence_report.md
+```
+
+Fresh command logs:
+
+```text
+outputs/latest/logs/
+```
+
+## Checkers
+
+| stage | what it checks | example result |
+|---|---|---|
+| Affine/rule fit | Whether a NeuralRequirement already gives a direct non-recurrent rule controller. | `cruise-discrete`: `0` learned params, safety `0`, pointwise agreement `1`. |
+| Memoryless controller check | Whether a finite buffer is enough for the current controller decision. | `cruise-discrete`: `b_obs=1`, `b_act=1`. |
+| Provable Markov/MDP check | Whether a finite buffer is enough to prove the next modeled step is determined. | `cruise-discrete`: `b_obs=1`, `b_act=2`, checker `passed`. |
+
+## Cruise Example
+
+The discrete cruise model is a useful small example.
+
+- Affine/rule fit. Throttle when target speed is above current speed beyond
+  tolerance and the gap is safe. Brake when current speed is above target beyond
+  tolerance. Brake when the following gap is unsafe. Otherwise coast.
+- Memoryless controller check. The current decision target is reconstructible with
+  current observation, `1` past observation, and `1` previous action.
+- Provable Markov/MDP check. The modeled next step is certified with
+  current observation, `1` past observation, and `2` previous actions.
