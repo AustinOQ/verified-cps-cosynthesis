@@ -48,7 +48,7 @@ training. The later checks add stronger evidence that a finite buffer is enough.
 - The Markov/MDP stage asks a stronger question. It checks whether the buffer is
   enough to make the next step of the modeled process determined. This stage
   generates proof obligations from the bundled SysML files. It calls Z3 during
-  the run. It does not save full proof certificates.
+  the run. It does not save full proof certificates but can modified to do so.
 - The exact shield is the program-based safety logic from the SysML
   requirement. It is not a learned shield.
 
@@ -83,8 +83,7 @@ PYTHON_BIN=/path/to/python bash run_fitting_sequence.sh
 ```
 
 The demo still needs a Python environment with the normal project packages,
-including `numpy` and `z3-solver`. The project venv already has what this
-artifact needs.
+including `numpy` and `z3-solver`.
 
 Advanced override:
 

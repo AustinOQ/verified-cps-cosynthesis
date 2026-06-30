@@ -91,9 +91,6 @@ Markov/MDP stage builds the symbolic proof obligation from the bundled SysML
 files. It calls Z3 during the run. It records only compact summaries of the
 result.
 
-The artifact also does not bundle old training or fit result files. The default
-output is regenerated from the bundled code and SysML files.
-
 ## Generated Output
 
 Running `bash run_fitting_sequence.sh` from this directory regenerates
