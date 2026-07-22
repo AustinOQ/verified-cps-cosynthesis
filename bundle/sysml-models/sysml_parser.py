@@ -76,6 +76,7 @@ class InParamStmt(ActionStmt):
     """in param : Type;"""
     name: str
     type_name: str
+    metadata: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -467,6 +468,14 @@ class SysMLParser:
     def __init__(self, file_path: str):
         self.file_path = file_path
         self.content = Path(file_path).read_text()
+        package_match = re.search(
+            r"\bpackage\s+(?:'([^']+)'|([A-Za-z_]\w*))\s*\{",
+            self.content,
+        )
+        self.package_name: Optional[str] = (
+            None if package_match is None
+            else package_match.group(1) or package_match.group(2)
+        )
 
         self.parameters: list[Parameter] = []
         self.state_machines: list[StateMachine] = []
@@ -488,6 +497,7 @@ class SysMLParser:
         self.step_action_bodies: list[tuple[str, list]] = []  # (inst_fqn, stmts)
         self.item_def_attrs: dict[str, dict[str, str]] = {}   # item_type -> {attr -> type}
         self.port_def_items: dict[str, dict[str, str]] = {}   # port_type -> {item_name -> item_type}
+        self.port_def_attrs: dict[str, dict[str, str]] = {}   # port_type -> {attr -> type}
         self.part_def_ports: dict[str, dict[str, str]] = {}   # part_type -> {port_name -> port_type}
 
     def parse(self) -> None:
@@ -798,8 +808,13 @@ class SysMLParser:
                 metadata = [ad_match.group(1)] if ad_match.group(1) else []
                 in_params = []
                 out_params = []
-                for pm in re.finditer(r'\bin\s+(\w+)\s*:\s*(\w+)\s*;', ad_body):
-                    in_params.append(InParamStmt(name=pm.group(1), type_name=pm.group(2)))
+                for pm in re.finditer(
+                        r'(?:#(\w+)\s+)?\bin\s+(\w+)\s*:\s*(\w+)\s*;', ad_body):
+                    in_params.append(InParamStmt(
+                        name=pm.group(2),
+                        type_name=pm.group(3),
+                        metadata=[pm.group(1)] if pm.group(1) else [],
+                    ))
                 for pm in re.finditer(r'\bout\s+(\w+)\s*:\s*(\w+)\s*;', ad_body):
                     out_params.append(OutParamStmt(name=pm.group(1), type_name=pm.group(2)))
                 part_def.action_defs.append(ActionDef(
@@ -948,6 +963,10 @@ class SysMLParser:
             for im in re.finditer(r'\bitem\s+(\w+)\s*:\s*(\w+)', body):
                 items[im.group(1)] = im.group(2)
             self.port_def_items[port_name] = items
+            attrs: dict[str, str] = {}
+            for am in re.finditer(r'\battribute\s+(\w+)\s*:\s*(\w+)', body):
+                attrs[am.group(1)] = am.group(2)
+            self.port_def_attrs[port_name] = attrs
 
     def _parse_connects(self) -> None:
         """Parse connect statements."""
@@ -956,27 +975,41 @@ class SysMLParser:
             self.connects.append((m.group(1), m.group(2)))
 
     def _identify_system_part(self) -> None:
-        # Look for an explicit top-level part named 'system'
-        match = re.search(r'\bpart\s+system\s*:\s*(\w+)\s*[;{]', self.content)
-        if match:
-            self.system_part = "system"
-            self.system_type = match.group(1)
-            # Remap part instances and parameters from system_type::* to system::*
+        # A package-level part instance identifies the root.  Its name is read
+        # from the file; it is not required to use a particular spelling.
+        uncommented = self._strip_line_comments(self.content)
+        depth = 0
+        depth_at = [0] * (len(uncommented) + 1)
+        for index, char in enumerate(uncommented):
+            depth_at[index] = depth
+            if char == "{":
+                depth += 1
+            elif char == "}":
+                depth = max(0, depth - 1)
+        roots = []
+        for match in re.finditer(
+                r'\bpart\s+(?!def\b)(\w+)\s*:\s*(\w+)\s*[;{]', uncommented):
+            if depth_at[match.start()] == 1 and match.group(2) in self.part_defs:
+                roots.append((match.group(1), match.group(2)))
+
+        if len(roots) == 1:
+            self.system_part, self.system_type = roots[0]
+            # Remap part instances and parameters from root type to root instance.
             prefix = f"{self.system_type}::"
             new_instances = {}
             for fqn, inst in self.part_instances.items():
                 if fqn.startswith(prefix):
-                    new_fqn = "system::" + fqn[len(prefix):]
+                    new_fqn = self.system_part + "::" + fqn[len(prefix):]
                     if inst.parent == self.system_type:
-                        inst.parent = "system"
+                        inst.parent = self.system_part
                     new_instances[new_fqn] = inst
-                # Drop any instances not under system_type (e.g. package-level parts)
+                # Drop instances outside the selected root type.
             self.part_instances = new_instances
             for param in self.parameters:
                 if param.qualified_name.startswith(prefix):
-                    new_qn = "system::" + param.qualified_name[len(prefix):]
+                    new_qn = self.system_part + "::" + param.qualified_name[len(prefix):]
                     param.qualified_name = new_qn
-                    param.part_path = ["system"] + param.part_path[1:]
+                    param.part_path = [self.system_part] + param.part_path[1:]
                     parts = new_qn.split('::')[1:]
                     cli = "-".join(parts)
                     param.cli_name = re.sub(r'([a-z])([A-Z])', r'\1-\2', cli).lower()
@@ -991,11 +1024,7 @@ class SysMLParser:
         if len(parents) == 1:
             self.system_part = parents.pop()
         elif parents:
-            for p in parents:
-                if 'System' in p:
-                    self.system_part = p
-                    return
-            self.system_part = sorted(parents)[0]
+            self.system_part = None
 
     def _parse_part_instances_regex(self) -> None:
         """Fallback regex parsing for part instances that PySysML2 missed."""
@@ -1112,28 +1141,17 @@ class SysMLParser:
                                float(attr_match.group(3)), meta)
 
     def _find_controller(self) -> None:
-        """Find the controller part instance.
-
-        Priority: (1) Controller name + exhibits state, (2) Controller name
-        without SM, (3) first exhibiting part.
-        """
-        # First pass: part whose type contains 'Controller' AND exhibits state
-        for fqn, inst in self.part_instances.items():
-            part_def = self.part_defs.get(inst.part_type)
-            if part_def and part_def.exhibits_state and 'Controller' in inst.part_type:
-                self.controller_part = fqn
-                return
-        # Second pass: part whose type contains 'Controller', no SM required
-        for fqn, inst in self.part_instances.items():
-            if 'Controller' in inst.part_type:
-                self.controller_part = fqn
-                return
-        # Third pass: take the first exhibiting part
-        for fqn, inst in self.part_instances.items():
-            part_def = self.part_defs.get(inst.part_type)
-            if part_def and part_def.exhibits_state:
-                self.controller_part = fqn
-                return
+        """Find the part instance that owns the file's #Neural action."""
+        neural_part_types = {
+            part_def.name
+            for part_def in self.part_defs.values()
+            if any("Neural" in action.metadata for action in part_def.action_defs)
+        }
+        candidates = sorted(
+            fqn for fqn, inst in self.part_instances.items()
+            if inst.part_type in neural_part_types
+        )
+        self.controller_part = candidates[0] if len(candidates) == 1 else None
 
     def _build_constraints(self) -> None:
         """Build parsed constraints from part definitions."""
@@ -1207,7 +1225,7 @@ class SysMLParser:
         # Add system-level constraints, requirements, and step actions
         if self.system_part:
             for name, pdef in self.part_defs.items():
-                if 'System' in name or name == self.system_part or name == self.system_type:
+                if name == self.system_type:
                     for const_name, const_expr, const_metadata in pdef.constraints:
                         try:
                             parser = ExpressionParser(const_expr)

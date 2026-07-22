@@ -27,8 +27,12 @@ ARTIFACT = THIS.parents[1]
 DEFAULT_ARCH = ARTIFACT / "bundle" / "architecture-fit"
 ARCH = DEFAULT_ARCH.resolve()
 REPO = ARCH.parent
+for import_path in (ARCH, REPO / "sysml-models", REPO / "rl"):
+    if str(import_path) not in sys.path:
+        sys.path.insert(0, str(import_path))
 
-MODEL_ORDER = ["thermostat", "cruise-discrete", "cruise-continuous", "mixing"]
+from sysml_inputs import SysMLInput, discover_sysml
+from shield import SpecShield, _collect_refs
 
 
 def read_json(path: Path) -> Any:
@@ -84,13 +88,16 @@ def display_command(cmd: list[str]) -> str:
 
 def run_command(cmd: list[str], log_path: Path, out_dir: Path) -> tuple[dict[str, Any], str]:
     env = dict(os.environ)
-    env["PYTHONPATH"] = ":".join([
+    python_paths = [
         str(REPO),
         str(ARCH),
         str(REPO / "sysml-models"),
         str(REPO / "rl"),
-    ])
-    env["CUDA_VISIBLE_DEVICES"] = ""
+    ]
+    if env.get("PYTHONPATH"):
+        python_paths.append(env["PYTHONPATH"])
+    env["PYTHONPATH"] = os.pathsep.join(python_paths)
+    env.setdefault("CUDA_VISIBLE_DEVICES", "")
     proc = subprocess.run(
         cmd,
         cwd=ARCH,
@@ -122,26 +129,23 @@ def compact_output(text: str, max_lines: int = 80) -> str:
     return "\n".join(head + [f"... omitted {omitted} lines ..."] + tail) + "\n"
 
 
-def model_from_path(line: str) -> str | None:
-    if "thermostat/model.sysml" in line:
-        return "thermostat"
-    if "cruise-controller-model/model.sysml" in line:
-        return "cruise-discrete"
-    if "cruise-continuous-model/model.sysml" in line:
-        return "cruise-continuous"
-    if "mixing-sysml-model/model.sysml" in line:
-        return "mixing"
-    return None
+def _model_order(models: list[SysMLInput]) -> dict[str, int]:
+    return {model.key: index for index, model in enumerate(models)}
 
 
-def parse_closure_text(text: str, stage: str) -> list[dict[str, Any]]:
+def parse_closure_text(
+    text: str,
+    stage: str,
+    models: list[SysMLInput],
+) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     current: str | None = None
+    paths = {str(model.path): model for model in models}
     pattern = re.compile(r"last (?P<b_act>\d+) actions \+ current \+ (?P<b_obs>\d+) past obs")
     for line in text.splitlines():
-        key = model_from_path(line)
-        if key:
-            current = key
+        model = paths.get(line.strip())
+        if model is not None:
+            current = model.key
             continue
         match = pattern.search(line)
         if match and current:
@@ -157,7 +161,8 @@ def parse_closure_text(text: str, stage: str) -> list[dict[str, Any]]:
                 ),
             })
             current = None
-    return sorted(rows, key=lambda r: MODEL_ORDER.index(r["model"]))
+    order = _model_order(models)
+    return sorted(rows, key=lambda row: order[row["model"]])
 
 
 def write_closure_log(log_path: Path, run: dict[str, Any], rows: list[dict[str, Any]],
@@ -191,123 +196,74 @@ def write_command_summary_log(log_path: Path, run: dict[str, Any],
     log_path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
 
 
-def stage_affine(out_dir: Path, py: str) -> dict[str, Any]:
+def stage_affine(
+    out_dir: Path,
+    py: str,
+    models: list[SysMLInput],
+) -> dict[str, Any]:
     stage_dir = out_dir / "01_affine_rule"
     log_dir = out_dir / "logs"
     stage_dir.mkdir(parents=True, exist_ok=True)
     log_dir.mkdir(parents=True, exist_ok=True)
     rows: list[dict[str, Any]] = []
-
-    jobs = str(min(8, os.cpu_count() or 1))
-    generated_specs = [
-        (
-            "thermostat",
-            [py, "analytic_fit/thermostat_rule_fit.py", "--episodes", "20",
-             "--jobs", jobs, "--out-dir", str(stage_dir / "thermostat_rule")],
-            log_dir / "01_thermostat_rule_fit.txt",
-            stage_dir / "thermostat_rule" / "report.json",
-        ),
-        (
-            "cruise",
-            [py, "analytic_fit/cruise_rule_fit.py", "--episodes", "20",
-             "--jobs", jobs, "--out-dir", str(stage_dir / "cruise_rule")],
-            log_dir / "01_cruise_rule_fit.txt",
-            stage_dir / "cruise_rule" / "report.json",
-        ),
-    ]
     rule_runs: list[dict[str, Any]] = []
-    for label, cmd, log_path, report_path in generated_specs:
+    for model in models:
+        report_path = stage_dir / "models" / f"{model.key}.json"
+        log_path = log_dir / f"01_rule_{model.key}.txt"
+        cmd = [
+            py,
+            str(ARTIFACT / "src" / "evaluate_sysml_rule.py"),
+            str(model.path),
+            "--episodes",
+            "20",
+            "--out-json",
+            str(report_path),
+        ]
         run, raw_text = run_command(cmd, log_path, out_dir)
-        rule_runs.append({"label": label, "run": run})
+        rule_runs.append({"model": model.key, "run": run})
         if run["returncode"] != 0 or not report_path.exists():
-            raise RuntimeError(f"{label} rule evaluation failed; see {log_path}")
+            raise RuntimeError(f"{model.key} rule extraction failed; see {log_path}")
         report = read_json(report_path)
-        episodes = report.get("episodes", report.get("episodes_per_model", ""))
-        generated_rows = []
-        for row in report.get("comparison_rows", []):
-            if row.get("method") != "analytic rule sidecar":
-                continue
-            generated = {
-                "model": row["model"],
-                "method": "NeuralRequirement rule",
-                "learned_params": row.get("learned_params"),
-                "recurrent_state": "no",
-                "episodes": episodes,
-                "success_rate": row.get("success_rate"),
-                "safety_violation_rate": row.get("safety_violation_rate"),
-                "override_rate": row.get("override_rate"),
-                "pointwise_agreement": row.get("pointwise_agreement"),
-                "freshness": "fresh artifact run",
-                "source": str(report_path.relative_to(out_dir)),
-            }
-            rows.append(generated)
-            generated_rows.append(generated)
+        row = {
+            "model": model.key,
+            "model_name": model.name,
+            "action_kind": model.action_kind,
+            "status": report.get("status", ""),
+            "method": report.get("method", ""),
+            "learned_params": report.get("learned_params", ""),
+            "recurrent_state": report.get("recurrent_state", ""),
+            "episodes": report.get("episodes", ""),
+            "success_rate": report.get("success_rate", ""),
+            "safety_violation_rate": report.get("safety_violation_rate", ""),
+            "override_rate": report.get("override_rate", ""),
+            "pointwise_agreement": report.get("pointwise_agreement", ""),
+            "source": str(report_path.relative_to(out_dir)),
+        }
+        rows.append(row)
+        metric_text = (
+            f"episodes={row['episodes']}, success={float(row['success_rate']):.3f}, "
+            f"safety={float(row['safety_violation_rate']):.3f}, "
+            f"override={float(row['override_rate']):.3f}"
+            if row["status"] == "evaluated"
+            else f"status={row['status']}"
+        )
         write_command_summary_log(
             log_path,
             run,
             [
-                f"{label} NeuralRequirement rule validation:",
-                *[
-                    f"- {row['model']}: episodes={row['episodes']}, "
-                    f"success={float(row['success_rate']):.3f}, "
-                    f"safety={float(row['safety_violation_rate']):.3f}, "
-                    f"override={float(row['override_rate']):.3f}, "
-                    f"pointwise={float(row['pointwise_agreement']):.3f}"
-                    for row in generated_rows
-                ],
+                f"{model.key} #NeuralRequirement extraction:",
+                f"- {metric_text}",
                 f"- metrics json: {report_path.relative_to(out_dir)}",
             ],
             raw_text,
         )
-
-    mix_json = stage_dir / "mixing_rule_eval.json"
-    mix_log = log_dir / "01_mixing_rule_eval.txt"
-    mix_cmd = [
-        py,
-        str(ARTIFACT / "src" / "mixing_rule_eval.py"),
-        "--episodes",
-        "20",
-        "--out-json",
-        str(mix_json),
-    ]
-    mix_run, mix_text = run_command(mix_cmd, mix_log, out_dir)
-    if mix_run["returncode"] != 0 or not mix_json.exists():
-        raise RuntimeError(f"mixing rule evaluation failed; see {mix_log}")
-    mix_report = read_json(mix_json)
-    mix_metrics = mix_report["metrics"]
-    write_command_summary_log(
-        mix_log,
-        mix_run,
-        [
-            "mixing NeuralRequirement rule validation:",
-            (
-                f"- episodes={mix_metrics['episodes']}, "
-                f"success={mix_metrics['success_rate']:.3f}, "
-                f"safety={mix_metrics['safety_violation_rate']:.3f}, "
-                f"override={mix_metrics['override_rate']:.3f}, "
-                f"pointwise={mix_metrics['pointwise_agreement']:.3f}"
-            ),
-            f"- metrics json: {mix_json.relative_to(out_dir)}",
-        ],
-        mix_text,
-    )
-    rows.append({
-        "model": "mixing",
-        "method": "NeuralRequirement rule",
-        "learned_params": 0,
-        "recurrent_state": "no",
-        "episodes": mix_report["episodes"],
-        "success_rate": mix_metrics["success_rate"],
-        "safety_violation_rate": mix_metrics["safety_violation_rate"],
-        "override_rate": mix_metrics["override_rate"],
-        "pointwise_agreement": mix_metrics["pointwise_agreement"],
-        "freshness": "fresh artifact run",
-        "source": str(mix_json.relative_to(out_dir)),
-    })
-
-    rows = sorted(rows, key=lambda r: MODEL_ORDER.index(r["model"]))
+    order = _model_order(models)
+    rows = sorted(rows, key=lambda row: order[row["model"]])
     fields = [
         "model",
+        "model_name",
+        "action_kind",
+        "status",
         "method",
         "learned_params",
         "recurrent_state",
@@ -316,49 +272,81 @@ def stage_affine(out_dir: Path, py: str) -> dict[str, Any]:
         "safety_violation_rate",
         "override_rate",
         "pointwise_agreement",
-        "freshness",
         "source",
     ]
     write_csv(stage_dir / "summary.csv", rows, fields)
     write_json(stage_dir / "summary.json", {
         "rule_runs": rule_runs,
-        "mixing_run": mix_run,
         "rows": rows,
     })
-    return {"rule_runs": rule_runs, "mixing_run": mix_run, "rows": rows, "fields": fields}
+    return {"rule_runs": rule_runs, "rows": rows, "fields": fields}
 
 
-def stage_weak(out_dir: Path, py: str) -> dict[str, Any]:
+def stage_weak(
+    out_dir: Path,
+    models: list[SysMLInput],
+) -> dict[str, Any]:
     stage_dir = out_dir / "02_memoryless"
     log_dir = out_dir / "logs"
     stage_dir.mkdir(parents=True, exist_ok=True)
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / "02_memoryless_check.txt"
-    cmd = [
-        py,
-        "reconstruct_closure.py",
-        "--legacy",
-        "--max-obs",
-        "2",
-        "--max-act",
-        "4",
-        "thermostat",
-        "cruise-continuous",
-        "cruise-discrete",
-        "mixing",
+    rows = []
+    log_lines = []
+    for model in models:
+        requirement = SpecShield(str(model.path))
+        references = _collect_refs(requirement.req_ast)
+        allowed = (
+            set(requirement.in_params)
+            | set(requirement.out_params)
+            | set(requirement.unchanging)
+            | {requirement.subject_var}
+        )
+        unresolved = sorted(references - allowed)
+        if unresolved:
+            raise RuntimeError(
+                f"{model.key} requirement references values outside its current "
+                f"neural inputs and outputs: {unresolved}"
+            )
+        row = {
+            "model": model.key,
+            "model_name": model.name,
+            "stage": "memoryless",
+            "b_obs": 0,
+            "b_act": 0,
+            "claim": "current neural inputs determine the current controller constraint",
+            "source": str(model.path),
+            "model_sha256": model.sha256,
+            "command_log": str(log_path.relative_to(out_dir)),
+        }
+        rows.append(row)
+        log_lines.append(
+            f"- {model.key}: current inputs={list(requirement.in_params)}, "
+            f"outputs={list(requirement.out_params)}"
+        )
+    log_path.write_text(
+        "SysML current-decision checks:\n" + "\n".join(log_lines) + "\n",
+        encoding="utf-8",
+    )
+    run = {
+        "command": "read #Neural action and #NeuralRequirement from each supplied SysML file",
+        "returncode": 0,
+        "log": str(log_path.relative_to(out_dir)),
+    }
+    fields = [
+        "model", "model_name", "stage", "b_obs", "b_act", "claim",
+        "source", "model_sha256", "command_log",
     ]
-    run, raw_text = run_command(cmd, log_path, out_dir)
-    rows = parse_closure_text(raw_text, "memoryless")
-    for row in rows:
-        row["command_log"] = str(log_path.relative_to(out_dir))
-    write_closure_log(log_path, run, rows, raw_text)
-    fields = ["model", "stage", "b_obs", "b_act", "claim", "command_log"]
     write_csv(stage_dir / "summary.csv", rows, fields)
     write_json(stage_dir / "summary.json", {"run": run, "rows": rows})
     return {"run": run, "rows": rows, "fields": fields}
 
 
-def stage_strict(out_dir: Path, py: str) -> dict[str, Any]:
+def stage_strict(
+    out_dir: Path,
+    py: str,
+    models: list[SysMLInput],
+) -> dict[str, Any]:
     stage_dir = out_dir / "03_markov_mdp"
     log_dir = out_dir / "logs"
     stage_dir.mkdir(parents=True, exist_ok=True)
@@ -372,13 +360,15 @@ def stage_strict(out_dir: Path, py: str) -> dict[str, Any]:
         "2",
         "--max-act",
         "4",
-        "thermostat",
-        "cruise-continuous",
-        "cruise-discrete",
-        "mixing",
+        *[str(model.path) for model in models],
     ]
     closure_run, closure_text = run_command(cmd, closure_log, out_dir)
-    closure_rows = parse_closure_text(closure_text, "markov_mdp")
+    closure_rows = parse_closure_text(closure_text, "markov_mdp", models)
+    if closure_run["returncode"] != 0 or len(closure_rows) != len(models):
+        raise RuntimeError(
+            "Markov/MDP buffer extraction did not produce one result for every "
+            f"SysML file; see {closure_log}"
+        )
     write_closure_log(closure_log, closure_run, closure_rows, closure_text)
 
     generation_json = stage_dir / "markov_mdp_generation.json"
@@ -393,19 +383,25 @@ def stage_strict(out_dir: Path, py: str) -> dict[str, Any]:
         "2",
         "--max-act",
         "4",
-        "thermostat",
-        "cruise-continuous",
-        "cruise-discrete",
-        "mixing",
+        *[str(model.path) for model in models],
     ]
     generation_run, generation_text = run_command(
         generation_cmd, generation_log, out_dir
     )
+    if generation_run["returncode"] != 0 or not generation_json.exists():
+        raise RuntimeError(
+            f"Markov/MDP proof generation failed; see {generation_log}"
+        )
     generation_summary = (
         read_json(generation_json) if generation_json.exists() else {"rows": []}
     )
     rows = generation_summary.get("rows", [])
-    rows = sorted(rows, key=lambda r: MODEL_ORDER.index(r["model"]))
+    if len(rows) != len(models):
+        raise RuntimeError(
+            "Markov/MDP proof generation did not produce one result for every SysML file"
+        )
+    order = _model_order(models)
+    rows = sorted(rows, key=lambda row: order[row["model"]])
     write_command_summary_log(
         generation_log,
         generation_run,
@@ -456,18 +452,23 @@ def stage_strict(out_dir: Path, py: str) -> dict[str, Any]:
     }
 
 
-def _model_path(name: str) -> Path:
-    paths = {
-        "thermostat": REPO / "sysml-models" / "thermostat" / "model.sysml",
-        "cruise-discrete": REPO / "sysml-models" / "cruise-controller-model" / "model.sysml",
-        "cruise-continuous": REPO / "sysml-models" / "cruise-continuous-model" / "model.sysml",
-        "mixing": REPO / "sysml-models" / "mixing-sysml-model" / "model.sysml",
-    }
-    return paths[name]
-
-
 def _spec_path(out_dir: Path, name: str) -> Path:
     return out_dir / "03_markov_mdp" / "reduced_mdp_specs" / f"{name}.reduced_mdp_spec.json"
+
+
+def _feedforward_architecture_from_spec(spec_path: Path) -> dict[str, Any]:
+    spec = read_json(spec_path)
+    architecture = spec.get("feedforward_architecture")
+    if not isinstance(architecture, dict):
+        raise RuntimeError(
+            f"reduced-MDP spec lacks a feedforward architecture: {spec_path}"
+        )
+    hidden_dim = architecture.get("hidden_dim")
+    if not isinstance(hidden_dim, int) or hidden_dim <= 0:
+        raise RuntimeError(
+            f"reduced-MDP spec has an invalid hidden size: {spec_path}"
+        )
+    return architecture
 
 
 def _read_training_summary(path: Path) -> dict[str, Any]:
@@ -515,19 +516,23 @@ def _run_training_job(job: dict[str, Any], py: str, out_dir: Path) -> dict[str, 
             py,
             "-m",
             "reduced_handmade.train_one_seed",
-            str(_model_path(name)),
+            str(job["model_path"]),
             "--out-dir",
             str(run_dir),
             "--seed",
             str(job["seed"]),
-            "--hidden-dim",
-            str(hidden_dim),
             "--max-obs",
             "2",
             "--max-act",
             "4",
             "--reduced-mdp-spec",
             str(job["spec_path"]),
+            "--collection-backend",
+            str(job["collection_backend"]),
+            "--collection-workers",
+            str(job["collection_workers"]),
+            "--collection-start-method",
+            str(job["collection_start_method"]),
             *job.get("overrides", []),
         ]
         weight_path = run_dir / "best.npz"
@@ -536,7 +541,7 @@ def _run_training_job(job: dict[str, Any], py: str, out_dir: Path) -> dict[str, 
         cmd = [
             py,
             "train_mlp_buffer.py",
-            str(_model_path(name)),
+            str(job["model_path"]),
             "--save-dir",
             str(run_dir),
             "--summary-json",
@@ -591,13 +596,15 @@ def _run_training_job(job: dict[str, Any], py: str, out_dir: Path) -> dict[str, 
     return row
 
 
-def _select_smallest_good(
+def _select_models(
     rows: list[dict[str, Any]],
     *,
     override_tolerance: float,
+    models: list[SysMLInput],
 ) -> list[dict[str, Any]]:
     selected: list[dict[str, Any]] = []
-    for model in sorted({r["model"] for r in rows}, key=MODEL_ORDER.index):
+    order = _model_order(models)
+    for model in sorted({r["model"] for r in rows}, key=order.__getitem__):
         candidates = [
             r for r in rows
             if r["model"] == model
@@ -635,6 +642,7 @@ def _select_smallest_good(
         selected.append({
             "model": model,
             "selection_status": "selected",
+            "selection_method": "sysml_derived_single_architecture",
             "hidden_dim": choice.get("hidden_dim", ""),
             "params": choice.get("params", ""),
             "test_safety": choice.get("test_safety", ""),
@@ -649,17 +657,19 @@ def _select_smallest_good(
     return selected
 
 
-def stage_training(out_dir: Path, py: str, *, smoke: bool = False,
+def stage_training(out_dir: Path, py: str, models: list[SysMLInput], *, smoke: bool = False,
                    jobs: int | None = None,
-                   override_tolerance: float = 0.01) -> dict[str, Any]:
+                   override_tolerance: float = 0.01,
+                   collection_backend: str = "auto",
+                   collection_workers_per_job: int | None = None,
+                   collection_start_method: str = "spawn") -> dict[str, Any]:
     stage_dir = out_dir / "04_reduced_training"
     log_dir = out_dir / "logs"
     stage_dir.mkdir(parents=True, exist_ok=True)
     log_dir.mkdir(parents=True, exist_ok=True)
     rows: list[dict[str, Any]] = []
-    hidden_dims = [2, 4, 8, 16, 32, 64]
-    discrete_models = ["thermostat", "cruise-discrete", "mixing"]
-    continuous_models = ["cruise-continuous"]
+    discrete_models = [model for model in models if model.action_kind == "discrete"]
+    continuous_models = [model for model in models if model.action_kind == "continuous"]
     job_count = max(1, jobs if jobs is not None else min(6, os.cpu_count() or 1))
     discrete_overrides: list[str] = []
     continuous_settings = {
@@ -670,7 +680,6 @@ def stage_training(out_dir: Path, py: str, *, smoke: bool = False,
         "max_steps": 1200,
     }
     if smoke:
-        hidden_dims = [2, 4]
         discrete_overrides = [
             "--oracle-samples", "96",
             "--oracle-epochs", "4",
@@ -694,68 +703,82 @@ def stage_training(out_dir: Path, py: str, *, smoke: bool = False,
         }
         job_count = min(job_count, 4)
 
+    cpu_count = max(1, os.cpu_count() or 1)
+    if collection_workers_per_job is None:
+        collection_workers_per_job = max(
+            1, min(8, cpu_count // max(job_count, 1))
+        )
+    else:
+        collection_workers_per_job = max(1, collection_workers_per_job)
+    if collection_backend == "serial":
+        collection_workers_per_job = 1
+
     runs: list[dict[str, Any]] = []
 
     training_jobs: list[dict[str, Any]] = []
-    for name in discrete_models:
+    architectures: dict[str, dict[str, Any]] = {}
+    for model in discrete_models:
+        name = model.key
         spec_path = _spec_path(out_dir, name)
         if not spec_path.exists():
-            rows.append({
-                "model": name,
-                "kind": "discrete",
-                "status": "skipped_no_run_local_certified_spec",
-                "summary_json": "",
-                "weights": "",
-                "command_log": "",
-            })
-            continue
-        for hidden_dim in hidden_dims:
-            run_dir = stage_dir / "runs" / name / f"h{hidden_dim}" / "seed_0"
-            training_jobs.append({
-                "model": name,
-                "kind": "discrete",
-                "hidden_dim": hidden_dim,
-                "seed": 0,
-                "run_dir": run_dir,
-                "log_path": log_dir / f"04_train_{name}_h{hidden_dim}.txt",
-                "spec_path": spec_path,
-                "overrides": discrete_overrides,
-            })
+            raise RuntimeError(
+                f"current run did not generate a reduced-MDP spec for {name}"
+            )
+        architecture = _feedforward_architecture_from_spec(spec_path)
+        architectures[name] = architecture
+        hidden_dim = int(architecture["hidden_dim"])
+        run_dir = stage_dir / "runs" / name / f"h{hidden_dim}" / "seed_0"
+        training_jobs.append({
+            "model": name,
+            "model_path": model.path,
+            "kind": "discrete",
+            "hidden_dim": hidden_dim,
+            "seed": 0,
+            "run_dir": run_dir,
+            "log_path": log_dir / f"04_train_{name}_h{hidden_dim}.txt",
+            "spec_path": spec_path,
+            "overrides": discrete_overrides,
+            "collection_backend": collection_backend,
+            "collection_workers": collection_workers_per_job,
+            "collection_start_method": collection_start_method,
+        })
 
-    for name in continuous_models:
+    for model in continuous_models:
+        name = model.key
         spec_path = _spec_path(out_dir, name)
         if not spec_path.exists():
-            rows.append({
-                "model": name,
-                "kind": "continuous",
-                "status": "skipped_no_run_local_certified_spec",
-                "summary_json": "",
-                "weights": "",
-                "command_log": "",
-            })
-            continue
-        for hidden_dim in hidden_dims:
-            run_dir = stage_dir / "runs" / name / f"h{hidden_dim}" / "seed_0"
-            training_jobs.append({
-                "model": name,
-                "kind": "continuous",
-                "hidden_dim": hidden_dim,
-                "seed": 0,
-                "run_dir": run_dir,
-                "log_path": log_dir / f"04_train_{name}_h{hidden_dim}.txt",
-                "spec_path": spec_path,
-                "continuous_episodes": continuous_settings["episodes"],
-                "continuous_episodes_per_update": continuous_settings["episodes_per_update"],
-                "continuous_eval_interval": continuous_settings["eval_interval"],
-                "continuous_eval_episodes": continuous_settings["eval_episodes"],
-                "continuous_max_steps": continuous_settings["max_steps"],
-            })
+            raise RuntimeError(
+                f"current run did not generate a reduced-MDP spec for {name}"
+            )
+        architecture = _feedforward_architecture_from_spec(spec_path)
+        architectures[name] = architecture
+        hidden_dim = int(architecture["hidden_dim"])
+        run_dir = stage_dir / "runs" / name / f"h{hidden_dim}" / "seed_0"
+        training_jobs.append({
+            "model": name,
+            "model_path": model.path,
+            "kind": "continuous",
+            "hidden_dim": hidden_dim,
+            "seed": 0,
+            "run_dir": run_dir,
+            "log_path": log_dir / f"04_train_{name}_h{hidden_dim}.txt",
+            "spec_path": spec_path,
+            "continuous_episodes": continuous_settings["episodes"],
+            "continuous_episodes_per_update": continuous_settings["episodes_per_update"],
+            "continuous_eval_interval": continuous_settings["eval_interval"],
+            "continuous_eval_episodes": continuous_settings["eval_episodes"],
+            "continuous_max_steps": continuous_settings["max_steps"],
+        })
 
     manifest = {
         "mode": "smoke" if smoke else "full",
-        "hidden_dims": hidden_dims,
+        "architecture_selection": "SysML-derived; one architecture per model",
+        "architectures": architectures,
         "seed": 0,
         "jobs": job_count,
+        "collection_backend": collection_backend,
+        "collection_workers_per_discrete_job": collection_workers_per_job,
+        "collection_start_method": collection_start_method,
         "discrete_training_defaults": (
             "train_one_seed defaults: 2000 PPO episodes, 100 episodes per update, "
             "100-episode eval/checkpoint interval, 100 eval episodes per checkpoint, "
@@ -764,9 +787,9 @@ def stage_training(out_dir: Path, py: str, *, smoke: bool = False,
         ),
         "continuous_training_settings": continuous_settings,
         "selection_rule": (
-            "safe candidates only; maximize test success; among max-success candidates "
-            f"choose the smallest parameter count within {override_tolerance:g} absolute "
-            "override of the best override at that success"
+            "each model uses the sole SysML-derived architecture; a trained model is "
+            "selected only from a zero-violation checkpoint, using test success and "
+            "then override rate"
         ),
     }
     write_json(stage_dir / "training_manifest.json", manifest)
@@ -797,8 +820,18 @@ def stage_training(out_dir: Path, py: str, *, smoke: bool = False,
                     "weights", "command_log",
                 ])
 
-    rows = sorted(rows, key=lambda r: MODEL_ORDER.index(r["model"]))
-    selected_rows = _select_smallest_good(rows, override_tolerance=override_tolerance)
+    order = _model_order(models)
+    rows = sorted(rows, key=lambda row: order[row["model"]])
+    failed = [row for row in rows if row.get("status") != "trained"]
+    if failed:
+        details = ", ".join(
+            f"{row['model']} ({row.get('command_log', 'no log')})"
+            for row in failed
+        )
+        raise RuntimeError(f"reduced training failed: {details}")
+    selected_rows = _select_models(
+        rows, override_tolerance=override_tolerance, models=models
+    )
     fields = [
         "model",
         "kind",
@@ -819,17 +852,17 @@ def stage_training(out_dir: Path, py: str, *, smoke: bool = False,
     ]
     write_csv(stage_dir / "summary.csv", rows, fields)
     selected_fields = [
-        "model", "selection_status", "hidden_dim", "params", "test_safety",
-        "test_success", "test_override", "best_success",
+        "model", "selection_status", "selection_method", "hidden_dim", "params",
+        "test_safety", "test_success", "test_override", "best_success",
         "best_override_at_best_success", "override_tolerance",
         "summary_json", "weights",
     ]
-    write_csv(stage_dir / "selected_smallest_good.csv", selected_rows, selected_fields)
+    write_csv(stage_dir / "selected_models.csv", selected_rows, selected_fields)
     write_json(stage_dir / "summary.json", {
         "manifest": manifest,
         "runs": runs,
         "rows": rows,
-        "selected_smallest_good": selected_rows,
+        "selected_models": selected_rows,
     })
     return {
         "runs": runs,
@@ -857,26 +890,26 @@ def write_report(out_dir: Path, summary: dict[str, Any]) -> None:
     lines.append("```")
     lines.append("")
     lines.append("The run overwrites generated outputs and rebuilds certificates, specs,")
-    lines.append("proof files, and trained weights from the bundled SysML models.")
+    lines.append("proof files, and trained weights from the SysML files supplied to this run.")
     lines.append("")
 
     affine = summary["stages"]["affine_rule"]
     lines.append("## 1. Affine/Rule Fit")
     lines.append("")
-    lines.append("Claim: the NeuralRequirement already induces a transparent rule/affine-predicate controller.")
+    lines.append("This stage reads each #NeuralRequirement directly from its SysML file.")
+    lines.append("A Boolean requirement is evaluated only when it determines one action.")
     lines.append("")
     lines.append(markdown_table(affine["rows"], affine["fields"]))
     lines.append("")
     lines.append("Every row in this stage is generated fresh by this artifact.")
     lines.append("")
-    lines.append("Fit status: this is the direct analytical path. The controller has zero")
-    lines.append("learned parameters when the requirement itself gives the rule.")
+    lines.append("No learned parameters are used when the requirement itself gives the action.")
     lines.append("")
 
     weak = summary["stages"]["memoryless"]
     lines.append("## 2. Memoryless Controller Check")
     lines.append("")
-    lines.append("Claim: a finite buffer is enough for the current controller decision.")
+    lines.append("Claim: the current controller inputs are enough for the current decision.")
     lines.append("This supports a memoryless controller, but it does not prove the full")
     lines.append("modeled process is Markov.")
     lines.append("")
@@ -892,7 +925,7 @@ def write_report(out_dir: Path, summary: dict[str, Any]) -> None:
     lines.append("## 3. Provable Markov/MDP Controller Check")
     lines.append("")
     lines.append("Claim: a finite buffer is enough to prove the next modeled step is")
-    lines.append("determined. This stage generates the proof obligations from the bundled")
+    lines.append("determined. This stage generates the proof obligations from the supplied")
     lines.append("SysML files and calls Z3 during the run. It saves certificates,")
     lines.append("reduced-MDP specs, SMT-LIB queries, and proof/counterexample transcripts.")
     lines.append("")
@@ -909,19 +942,16 @@ def write_report(out_dir: Path, summary: dict[str, Any]) -> None:
     lines.append("## 4. Reduced Feedforward Training")
     lines.append("")
     lines.append("Claim: the run-local certified specs can be consumed by non-recurrent")
-    lines.append("feedforward trainers. This stage sweeps hidden dimensions")
-    lines.append("2, 4, 8, 16, 32, and 64, then selects the smallest good model.")
+    lines.append("feedforward trainers. For each model, the SysML requirement determines")
+    lines.append("one hidden size from its comparison boundaries and outputs.")
     lines.append("Discrete models use the handmade NumPy PPO stack.")
-    lines.append("The continuous cruise model uses the bundled continuous MLP PPO stack.")
-    lines.append("All training runs on CPU and keeps the exact program shield or exact")
-    lines.append("continuous projection as the safety authority.")
+    lines.append("Real-valued actions use the bundled continuous MLP PPO stack.")
+    lines.append("All training runs on CPU and checks actions against the requirement")
+    lines.append("read from the current SysML file.")
     lines.append("")
-    lines.append("Selection rule: safe candidates only. Maximize held-out test success.")
-    lines.append("Among the max-success candidates, choose the smallest parameter count")
-    lines.append("within the configured override tolerance of the best override at that")
-    lines.append("success level.")
+    lines.append("Selection rule: train and evaluate the sole SysML-derived size.")
     lines.append("")
-    lines.append("### Selected Smallest Good")
+    lines.append("### Selected Models")
     lines.append("")
     lines.append(markdown_table(training["selected_rows"], training["selected_fields"]))
     lines.append("")
@@ -938,23 +968,47 @@ def write_report(out_dir: Path, summary: dict[str, Any]) -> None:
     lines.append("- Stage 3 is the stronger provable Markov/MDP claim.")
     lines.append("- Stage 4 trains small feedforward policies from the Stage 3 specs.")
     lines.append("")
-    lines.append("The exact shield / exact continuous projection remains the safety authority")
-    lines.append("across deployed/evaluated stages.")
+    lines.append("Training and evaluation check each action against the requirement")
+    lines.append("read from the current SysML file.")
     lines.append("")
     (out_dir / "fitting_sequence_report.md").write_text("\n".join(lines), encoding="utf-8")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
+    parser.add_argument("models", nargs="*", help="SysML file paths")
+    parser.add_argument(
+        "--models-root",
+        default=str(REPO / "sysml-models"),
+        help="directory searched recursively when no file paths are supplied",
+    )
     parser.add_argument("--out-dir", default=str(ARTIFACT / "outputs" / "latest"))
     parser.add_argument("--python-bin", default=sys.executable)
     parser.add_argument("--smoke-training", action="store_true",
-                        help="run a short Stage 4 wiring test instead of the full training sweep")
+                        help="run a short Stage 4 wiring test instead of full training")
     parser.add_argument("--training-jobs", type=int, default=None,
                         help="parallel Stage 4 training jobs; default=min(6,cpu_count)")
+    parser.add_argument(
+        "--collection-backend",
+        choices=("auto", "serial", "process"),
+        default="auto",
+        help="discrete episode collection backend",
+    )
+    parser.add_argument(
+        "--collection-workers-per-job",
+        type=int,
+        default=None,
+        help="simulator workers per discrete training job; default uses the CPU budget",
+    )
+    parser.add_argument(
+        "--collection-start-method",
+        default="spawn",
+        help="multiprocessing start method for discrete episode workers",
+    )
     parser.add_argument("--override-tolerance", type=float, default=0.01,
                         help="absolute override slack for selecting a smaller max-accuracy model")
     args = parser.parse_args()
+    models = discover_sysml(args.models, models_root=args.models_root)
 
     out_dir = Path(args.out_dir).resolve()
     if out_dir.exists():
@@ -965,17 +1019,29 @@ def main() -> int:
         "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "architecture_fit_root": str(ARCH),
         "python_bin": args.python_bin,
+        "sysml_inputs": [model.to_dict() for model in models],
         "stages": {},
     }
-    summary["stages"]["affine_rule"] = stage_affine(out_dir, args.python_bin)
-    summary["stages"]["memoryless"] = stage_weak(out_dir, args.python_bin)
-    summary["stages"]["markov_mdp"] = stage_strict(out_dir, args.python_bin)
+    write_json(out_dir / "sysml_inputs.json", summary["sysml_inputs"])
+    summary["stages"]["affine_rule"] = stage_affine(
+        out_dir, args.python_bin, models
+    )
+    summary["stages"]["memoryless"] = stage_weak(
+        out_dir, models
+    )
+    summary["stages"]["markov_mdp"] = stage_strict(
+        out_dir, args.python_bin, models
+    )
     summary["stages"]["reduced_training"] = stage_training(
         out_dir,
         args.python_bin,
+        models,
         smoke=args.smoke_training,
         jobs=args.training_jobs,
         override_tolerance=args.override_tolerance,
+        collection_backend=args.collection_backend,
+        collection_workers_per_job=args.collection_workers_per_job,
+        collection_start_method=args.collection_start_method,
     )
 
     write_json(out_dir / "fitting_sequence_summary.json", summary)

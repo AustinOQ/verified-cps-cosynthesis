@@ -65,7 +65,36 @@ def _const_number(model: EquationModel, expr: Expr) -> float | None:
     return None
 
 
-def _scan_delay_steps(model: EquationModel, cond: Expr, dt: float | None) -> int | None:
+def deterministic_state_variables(model: EquationModel) -> set[str]:
+    """Return state values fixed by SysML initial values and their equations."""
+    known: set[str] = set()
+    changed = True
+    while changed:
+        changed = False
+        for target in sorted(model.initial_values):
+            if target in known:
+                continue
+            transition = model.transitions.get(target)
+            if transition is None:
+                continue
+            if transition.raw_refs() - model.constants:
+                continue
+            support = {
+                ref for ref in equation_refs(model, transition)
+                if ref in model.state or ref in model.actions
+            }
+            if support <= known | {target}:
+                known.add(target)
+                changed = True
+    return known
+
+
+def _scan_delay_steps(
+    model: EquationModel,
+    cond: Expr,
+    dt: float | None,
+    deterministic_state: set[str],
+) -> tuple[int, str] | None:
     if dt is None or dt <= 0:
         return None
     if not isinstance(cond, Op) or cond.op != ">=" or len(cond.args) != 2:
@@ -77,7 +106,16 @@ def _scan_delay_steps(model: EquationModel, cond: Expr, dt: float | None) -> int
     if not all(isinstance(arg, Var) for arg in lhs.args):
         return None
     current, last = lhs.args
-    if "time" not in current.name.lower() or "last" not in last.name.lower():
+    if current.name not in deterministic_state or last.name not in deterministic_state:
+        return None
+    current_transition = model.transitions.get(current.name)
+    if current_transition is None:
+        return None
+    current_support = {
+        ref for ref in equation_refs(model, current_transition)
+        if ref in model.state or ref in model.actions
+    }
+    if current_support != {current.name}:
         return None
 
     period = None
@@ -91,7 +129,8 @@ def _scan_delay_steps(model: EquationModel, cond: Expr, dt: float | None) -> int
 
     if period is None or period <= 0:
         return None
-    return max(1, int(math.ceil((period / dt) - 1e-12)) + 1)
+    delay = max(1, int(math.ceil((period / dt) - 1e-12)) + 1)
+    return delay, current.name
 
 
 def sampled_memory_rules(
@@ -100,6 +139,7 @@ def sampled_memory_rules(
 ) -> tuple[list[dict[str, Any]], list[str]]:
     rules: list[dict[str, Any]] = []
     assumptions: list[str] = []
+    deterministic_state = deterministic_state_variables(model)
 
     for target, eq in sorted(model.transitions.items()):
         expr = eq.expr
@@ -110,14 +150,18 @@ def sampled_memory_rules(
         source = _copy_source(model, expr.then_expr)
         if source not in model.state:
             continue
-        delay = _scan_delay_steps(model, expr.cond, dt)
-        if delay is None:
+        schedule = _scan_delay_steps(
+            model, expr.cond, dt, deterministic_state
+        )
+        if schedule is None:
             continue
+        delay, schedule_state = schedule
         rules.append(
             {
                 "target": target,
                 "source": source,
                 "max_delay": delay,
+                "schedule_state": schedule_state,
                 "equation_pretty": eq.pretty(),
                 "equation_source": eq.source,
             }
@@ -190,8 +234,12 @@ def equation_reconstruction_trace(
     state = set(model.state)
     actions = set(model.actions)
     target = set(target or state)
-    time_vars = {
-        v for v in state if "currenttime" in v.lower() or "timeseconds" in v.lower()
+    memory_rules, memory_assumptions = ([], [])
+    if enable_sampled_memory:
+        memory_rules, memory_assumptions = sampled_memory_rules(model, dt)
+    schedule_state = deterministic_state_variables(model) | {
+        rule["schedule_state"] for rule in memory_rules
+        if rule.get("schedule_state") in state
     }
     taus = range(-horizon, 1)
     facts: dict[str, dict[str, Any]] = {}
@@ -199,7 +247,7 @@ def equation_reconstruction_trace(
     observation_sources: dict[str, str] = {}
 
     for tau in taus:
-        for var in sorted(time_vars):
+        for var in sorted(schedule_state):
             _add_fact(facts, var, tau, "deterministic_time_known")
 
     for obs_name, eq in sorted(model.observations.items()):
@@ -222,10 +270,6 @@ def equation_reconstruction_trace(
     for var in sorted(actions):
         for tau in range(-b_act, 0):
             _add_fact(facts, var, tau, "executed_action_history")
-
-    memory_rules, memory_assumptions = ([], [])
-    if enable_sampled_memory:
-        memory_rules, memory_assumptions = sampled_memory_rules(model, dt)
 
     changed = True
     while changed:

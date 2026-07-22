@@ -135,7 +135,7 @@ package CruiseControl {
             in currentSpeedMps : Real;
             in targetSpeed : Real;
             in gapMeters : Real;
-            in done : Boolean;
+            #Completion in done : Boolean;
 
             out applyThrottle : Boolean;
             out applyBrake : Boolean;
@@ -299,7 +299,8 @@ package CruiseControl {
         #ScenarioConstraint constraint scenarioConstraint {
             controller.targetSpeedMps >= 5.0 and
             controller.targetSpeedMps <= 25.0 and
-            vehicle.leadSpeedMps >= 5.0
+            vehicle.leadSpeedMps >= 5.0 and
+            vehicle.leadSpeedMps <= 20.0
         }
     }
 }

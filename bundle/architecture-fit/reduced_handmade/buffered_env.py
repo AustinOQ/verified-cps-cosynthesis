@@ -5,7 +5,7 @@ with the certified finite history:
 
     current obs ++ past observations ++ past executed actions
 
-The exact program shield still reads the simulator's current raw
+The SysML requirement check still reads the simulator's current raw
 ``_model_inputs``; the buffer only changes what the memoryless learner sees.
 """
 
@@ -78,8 +78,8 @@ class BufferedDiscreteEnv(SysMLEnv):
     def _push_act(self, action: int) -> None:
         self._act_hist = ([self._onehot(action)] + self._act_hist)[:self._n_act]
 
-    def reset(self) -> np.ndarray:
-        obs = super().reset()
+    def reset(self, seed: int | None = None) -> np.ndarray:
+        obs = super().reset(seed=seed)
         self._obs_hist = [
             np.zeros(self._base_obs_dim, dtype=np.float32)
             for _ in range(self._n_obs)
@@ -98,4 +98,3 @@ class BufferedDiscreteEnv(SysMLEnv):
         aug = self._augment(obs)
         self._push_obs(obs)
         return aug, reward, done, info
-

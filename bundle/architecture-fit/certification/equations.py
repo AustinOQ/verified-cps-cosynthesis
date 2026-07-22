@@ -151,6 +151,7 @@ class EquationModel:
     state: set[str]
     actions: set[str]
     constants: set[str] = field(default_factory=set)
+    initial_values: dict[str, Any] = field(default_factory=dict)
     definitions: dict[str, Equation] = field(default_factory=dict)
     observations: dict[str, Equation] = field(default_factory=dict)
     terminals: dict[str, Equation] = field(default_factory=dict)

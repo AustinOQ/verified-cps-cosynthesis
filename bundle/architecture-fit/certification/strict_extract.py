@@ -19,7 +19,7 @@ for _p in (_ARCH, _SYSML):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
-from sysml_deps import SysMLModel, _canon  # type: ignore
+from sysml_deps import SysMLModel  # type: ignore
 from sysml_parser import (  # type: ignore
     AssignStmt,
     BinaryExpr,
@@ -31,6 +31,7 @@ from sysml_parser import (  # type: ignore
     SubactionCallStmt,
     TernaryExpr,
     UnaryExpr,
+    ExpressionParser,
 )
 
 from .equations import Const, Equation, EquationModel, Expr, Ite, Op, RawRef, Var
@@ -68,9 +69,20 @@ class CertificationExtractor:
             actions=set(self.legacy.ACTIONS),
             constants=set(getattr(self.legacy, "consts", set())),
         )
+        self.flow_value_types: dict[str, str] = {}
+        for instance in self.parser.part_instances.values():
+            ports = self.parser.part_def_ports.get(instance.part_type, {})
+            for port_name, port_type in ports.items():
+                for attribute, type_name in self.parser.port_def_attrs.get(
+                    port_type, {}
+                ).items():
+                    self.flow_value_types[
+                        self.legacy._canon([instance.name, port_name, attribute])
+                    ] = type_name
 
     def extract(self) -> EquationModel:
         self._augment_state_from_step_body_assignments()
+        self._extract_initial_values()
         self._diagnose_parser_surface()
         self._build_same_cycle_definitions()
         self._build_terminal_equations()
@@ -79,6 +91,34 @@ class CertificationExtractor:
         self._build_transition_equations()
         self._audit_equations()
         return self.model
+
+    def _extract_initial_values(self) -> None:
+        owners = [(None, self.parser.system_type)] + [
+            (instance.name, instance.part_type)
+            for instance in self.parser.part_instances.values()
+        ]
+        for instance_name, part_type in owners:
+            part_def = self.parser.part_defs.get(part_type or "")
+            if part_def is None:
+                continue
+            for attribute, text in part_def.derived_attributes.items():
+                target = self.legacy._canon(
+                    [attribute] if instance_name is None
+                    else [instance_name, attribute]
+                )
+                if target not in self.model.state:
+                    continue
+                try:
+                    expression = ExpressionParser(text).parse()
+                except Exception:
+                    continue
+                if isinstance(expression, LiteralExpr):
+                    self.model.initial_values[target] = expression.value
+
+        for parameter in self.parser.parameters:
+            target = self.legacy._canon(parameter.qualified_name.split("::"))
+            if target in self.model.state and "ScenarioInput" not in parameter.metadata:
+                self.model.initial_values[target] = parameter.value
 
     def _inst_name(self, fqn: str) -> str:
         return fqn.split("::")[-1]
@@ -116,7 +156,7 @@ class CertificationExtractor:
             inst_name = self._inst_name(fqn)
             for stmt, _cond in self._walk_effective_assigns(stmts, inst_name):
                 if self._is_instance_attribute_assignment(inst_name, stmt):
-                    self.model.state.add(_canon([inst_name] + stmt.target))
+                    self.model.state.add(self.legacy._canon([inst_name] + stmt.target))
 
     def _ctx(self, context: str | None) -> list[str]:
         if context:
@@ -135,12 +175,15 @@ class CertificationExtractor:
         return self.legacy._qual(parts, ctx)  # pylint: disable=protected-access
 
     def _is_const_key(self, key: str) -> bool:
-        is_const = key in {"dt"} or key.endswith("_dt") or key in getattr(
-            self.legacy, "consts", set()
-        )
+        is_const = key in getattr(self.legacy, "consts", set())
         if is_const:
             self.model.constants.add(key)
         return is_const
+
+    def _is_numeric_flow_value(self, key: str) -> bool:
+        return self.flow_value_types.get(key, "").lower() in {
+            "integer", "real", "float", "double"
+        }
 
     def _resolve_ref(
         self,
@@ -160,10 +203,9 @@ class CertificationExtractor:
         if key in self.model.state or key in self.model.actions or key in self.model.definitions:
             return Var(key)
 
-        # Flow ports are handled by explicit same-cycle definitions in this
-        # extractor. Never let the legacy alias map collapse a multi-source
-        # flow merge to whichever source was seen last.
-        if "flowrate" in key.lower():
+        # Values declared as numeric port attributes are handled by the flow
+        # equations read from this SysML file.
+        if self._is_numeric_flow_value(key):
             return Var(key)
 
         if not allow_legacy_fallback:
@@ -308,18 +350,17 @@ class CertificationExtractor:
 
         referenced_keys = self._collect_referenced_value_keys()
         self._build_flow_definitions(referenced_keys)
-        self._build_unconnected_flow_defaults(referenced_keys)
 
     def _build_binding_definitions(self) -> None:
         for lhs, rhs in sorted(self.parser.parsed_bindings.items()):
-            target = _canon(lhs.split("::"))
-            rhs_key = _canon(rhs.split("::"))
+            target = self.legacy._canon(lhs.split("::"))
+            rhs_key = self.legacy._canon(rhs.split("::"))
             if not self._is_const_key(target):
                 self._add_definition(target, Var(rhs_key), "bind")
 
     def _build_derived_attribute_definitions(self) -> None:
         for derived in self.parser.derived_attributes:
-            target = _canon(derived.qualified_name.split("::"))
+            target = self.legacy._canon(derived.qualified_name.split("::"))
             if target in self.model.state:
                 continue
             ctx = self._ctx(derived.context)
@@ -328,6 +369,8 @@ class CertificationExtractor:
 
     def _build_constraint_definitions(self) -> None:
         for constraint in self.parser.parsed_constraints:
+            if "ScenarioConstraint" in getattr(constraint, "metadata", []):
+                continue
             ctx = self._ctx(constraint.context)
             implied: dict[str, list[tuple[object, Expr]]] = defaultdict(list)
 
@@ -400,12 +443,15 @@ class CertificationExtractor:
 
         for derived in self.parser.derived_attributes:
             add_expr(derived.expression, self._ctx(derived.context))
-            key = _canon(derived.qualified_name.split("::"))
+            key = self.legacy._canon(derived.qualified_name.split("::"))
             if not self._is_const_key(key):
                 keys.add(key)
 
         for lhs, rhs in self.parser.parsed_bindings.items():
-            for key in (_canon(lhs.split("::")), _canon(rhs.split("::"))):
+            for key in (
+                self.legacy._canon(lhs.split("::")),
+                self.legacy._canon(rhs.split("::")),
+            ):
                 if not self._is_const_key(key):
                     keys.add(key)
 
@@ -434,18 +480,19 @@ class CertificationExtractor:
             return set()
 
         suffixes: set[str] = set()
+        suffixes.update(self.parser.port_def_attrs.get(port_type, {}))
         for item_name, item_type in self.parser.port_def_items.get(port_type, {}).items():
             attrs = self.parser.item_def_attrs.get(item_type, {})
             if attrs:
                 for attr in attrs:
-                    suffixes.add(_canon([item_name, attr]))
+                    suffixes.add(self.legacy._canon([item_name, attr]))
             else:
                 suffixes.add(item_name)
         return suffixes
 
     def _flow_suffixes(self, from_port: str, to_port: str, keys: set[str]) -> set[str]:
-        from_prefix = _canon(from_port.split("."))
-        to_prefix = _canon(to_port.split("."))
+        from_prefix = self.legacy._canon(from_port.split("."))
+        to_prefix = self.legacy._canon(to_port.split("."))
         suffixes = (
             self._keys_below_prefix(from_prefix, keys)
             | self._keys_below_prefix(to_prefix, keys)
@@ -454,19 +501,13 @@ class CertificationExtractor:
         )
         return {suffix for suffix in suffixes if suffix}
 
-    def _sum_expr(self, terms: list[Expr]) -> Expr:
-        expr = terms[0]
-        for term in terms[1:]:
-            expr = Op("+", (expr, term))
-        return expr
-
     def _build_flow_definitions(self, referenced_keys: set[str]) -> None:
         by_target: dict[str, list[str]] = defaultdict(list)
         flow_sources: dict[str, list[str]] = defaultdict(list)
 
         for flow in self.parser.flows:
-            from_prefix = _canon(flow.from_port.split("."))
-            to_prefix = _canon(flow.to_port.split("."))
+            from_prefix = self.legacy._canon(flow.from_port.split("."))
+            to_prefix = self.legacy._canon(flow.to_port.split("."))
             suffixes = self._flow_suffixes(flow.from_port, flow.to_port, referenced_keys)
             for suffix in suffixes:
                 source = f"{from_prefix}_{suffix}"
@@ -481,31 +522,19 @@ class CertificationExtractor:
             if len(unique_sources) == 1:
                 self._add_definition(target, Var(unique_sources[0]), "flow copy")
                 continue
-            if "flowrate" in target.lower():
-                self._add_definition(
-                    target,
-                    self._sum_expr([Var(source) for source in unique_sources]),
-                    "additive flow merge",
-                )
-                continue
             self.model.add_diagnostic(
                 "error",
                 "unsupported_flow_merge",
-                "multiple flow sources need an explicit semantic merge equation",
+                "multiple flow sources need an equation in the SysML file",
                 f"{target} <- {', '.join(unique_sources)}",
             )
-
-    def _build_unconnected_flow_defaults(self, referenced_keys: set[str]) -> None:
-        for key in sorted(referenced_keys):
-            if key in self.model.definitions or key in self.model.state or key in self.model.actions:
-                continue
-            if "flowrate" in key.lower():
-                self._add_definition(key, Const(0), "unconnected flow default")
 
     def _diagnose_multiple_flows(self) -> None:
         by_to: dict[str, list[str]] = defaultdict(list)
         for flow in self.parser.flows:
-            by_to[_canon(flow.to_port.split("."))].append(_canon(flow.from_port.split(".")))
+            by_to[self.legacy._canon(flow.to_port.split("."))].append(
+                self.legacy._canon(flow.from_port.split("."))
+            )
         for to_port, sources in sorted(by_to.items()):
             if len(sources) > 1:
                 self.model.add_diagnostic(
@@ -517,8 +546,13 @@ class CertificationExtractor:
 
     def _build_observation_equations(self) -> None:
         ctx = self.legacy.ctrl_fqn.split("::")
+        neural_def = self._neural_action_def()
+        completion_names = {
+            item.name for item in neural_def.in_params
+            if "Completion" in item.metadata
+        } if neural_def is not None else set()
         for obs_name, ref in sorted(self.legacy.in_binds.items()):
-            if obs_name.lower() == "done":
+            if obs_name in completion_names:
                 continue
             expr = self._resolve_ref(ref, ctx)
             self.model.observations[obs_name] = Equation(
@@ -528,12 +562,13 @@ class CertificationExtractor:
                 source="Neural input binding",
             )
 
-    def _neural_action_name(self) -> str | None:
+    def _neural_action_def(self):
+        found = []
         for part_def in self.parser.part_defs.values():
             for action_def in part_def.action_defs:
                 if "Neural" in action_def.metadata:
-                    return action_def.name
-        return None
+                    found.append(action_def)
+        return found[0] if len(found) == 1 else None
 
     def _controller_part_def(self):
         ctrl_inst = self.legacy.inst_by_name.get(self.legacy.ctrl_inst)
@@ -542,38 +577,51 @@ class CertificationExtractor:
         return self.parser.part_defs.get(ctrl_inst.part_type)
 
     def _build_terminal_equations(self) -> None:
-        neural_name = self._neural_action_name()
+        neural_def = self._neural_action_def()
         ctrl_def = self._controller_part_def()
-        if neural_name is None or ctrl_def is None:
+        if neural_def is None or ctrl_def is None:
             self.model.add_diagnostic(
                 "warning",
                 "missing_terminal_binding",
-                "could not locate controller neural action for env.done extraction",
+                "could not locate the unique controller #Neural action",
             )
             return
+        completion_names = [
+            item.name for item in neural_def.in_params
+            if "Completion" in item.metadata
+        ]
+        if len(completion_names) != 1:
+            self.model.add_diagnostic(
+                "warning",
+                "missing_terminal_binding",
+                "#Neural action must mark exactly one input #Completion",
+            )
+            return
+        completion_name = completion_names[0]
 
         ctx = self.legacy.ctrl_fqn.split("::")
         for action in ctrl_def.actions:
             for stmt in self.legacy._flatten(action.body):  # pylint: disable=protected-access
-                if not isinstance(stmt, SubactionCallStmt) or stmt.type_name != neural_name:
+                if not isinstance(stmt, SubactionCallStmt) or stmt.type_name != neural_def.name:
                     continue
                 for binding in stmt.bindings:
                     if not isinstance(binding, InputBindingStmt):
                         continue
-                    if binding.name.lower() != "done":
+                    if binding.name != completion_name:
                         continue
-                    self.model.terminals["env.done"] = Equation(
-                        target="env.done",
+                    target = f"env.completion.{completion_name}"
+                    self.model.terminals[target] = Equation(
+                        target=target,
                         expr=self._expr(binding.expr, ctx),
                         kind="terminal",
-                        source=f"Neural done input binding in {action.name}",
+                        source=f"#Completion input binding in {action.name}",
                     )
                     return
 
         self.model.add_diagnostic(
             "warning",
             "missing_terminal_binding",
-            "neural action has no done input binding; env state.get('done') is absent",
+            f"#Completion input {completion_name} has no binding",
         )
 
     def _build_requirement_equations(self) -> None:
@@ -592,7 +640,7 @@ class CertificationExtractor:
         assigned = Counter()
         performed_assigned = Counter()
         for sa in self.parser.step_actions:
-            target = _canon(sa.target_key.split("::"))
+            target = self.legacy._canon(sa.target_key.split("::"))
             assigned[target] += 1
             ctx = self._ctx(sa.context)
             rhs = self._expr(sa.expression, ctx)
@@ -618,7 +666,7 @@ class CertificationExtractor:
             for stmt, cond in self._walk_effective_assigns(stmts, inst_name):
                 if not self._is_instance_attribute_assignment(inst_name, stmt):
                     continue
-                target = _canon([inst_name] + stmt.target)
+                target = self.legacy._canon([inst_name] + stmt.target)
                 performed_assigned[target] += 1
                 if target in self.model.transitions:
                     continue
@@ -657,27 +705,14 @@ class CertificationExtractor:
                     target,
                 )
 
-        # Preserve visibility into legacy-only transition facts (especially state
-        # machines and Modbus actuator latches) without pretending they are a full
-        # semantic equation extraction.
-        for target, deps in sorted(self.legacy.nsupp.items()):
-            if target in self.model.transitions:
-                continue
-            expr = Op("legacy_dep", tuple(Var(d) for d in sorted(deps)))
-            self.model.transitions[target] = Equation(
-                target=target,
-                expr=expr,
-                kind="legacy_transition_dependency",
-                source="sysml_deps fallback",
-            )
+    def _audit_equations(self) -> None:
+        for target in sorted(self.model.state - set(self.model.transitions)):
             self.model.add_diagnostic(
-                "warning",
-                "legacy_dependency_fallback",
-                "transition represented as dependency set, not semantic equation",
+                "error",
+                "missing_transition_equation",
+                "state value has no transition equation in the SysML file",
                 target,
             )
-
-    def _audit_equations(self) -> None:
         known_vars = self.model.state | self.model.actions | set(self.model.definitions)
         for eq in self.model.all_equations():
             unresolved_vars = sorted(ref for ref in eq.refs() if ref not in known_vars)
@@ -725,7 +760,7 @@ class CertificationExtractor:
                 for stmt in transition.do_action or []:
                     if not isinstance(stmt, AssignStmt):
                         continue
-                    target = _canon([inst] + stmt.target)
+                    target = self.legacy._canon([inst] + stmt.target)
                     refs = expr_refs(stmt.expr)
                     if any(ref and ref[0] in trig_vars for ref in refs):
                         dec = self.legacy._actuator_decision(  # pylint: disable=protected-access
@@ -762,26 +797,25 @@ class CertificationExtractor:
             state_var,
         )
 
-        on_expr = None
-        off_expr = None
+        active_expr = None
+        initial_expr = None
         for transition in sm.transitions:
-            target_state = (transition.to_state or "").lower()
             for stmt in transition.do_action or []:
                 if not isinstance(stmt, AssignStmt):
                     continue
-                target = _canon([inst] + stmt.target)
+                target = self.legacy._canon([inst] + stmt.target)
                 self.model.state.add(target)
                 expr = self._expr(stmt.expr, ctx)
-                if target_state in {"on", "running", "active"}:
-                    on_expr = expr
-                elif target_state in {"off", "reset", "inactive"}:
-                    off_expr = expr
+                if transition.to_state == sm.initial_state:
+                    initial_expr = expr
+                elif transition.to_state is not None:
+                    active_expr = expr
 
-        if on_expr is None or off_expr is None:
+        if active_expr is None or initial_expr is None:
             self.model.add_diagnostic(
                 "warning",
                 "state_machine_output_partial",
-                "could not derive on/off output equation for policy latch state machine",
+                "could not derive output equations for the initial and alternate states",
                 inst,
             )
             return
@@ -790,17 +824,17 @@ class CertificationExtractor:
             for stmt in transition.do_action or []:
                 if not isinstance(stmt, AssignStmt):
                     continue
-                target = _canon([inst] + stmt.target)
+                target = self.legacy._canon([inst] + stmt.target)
                 self.model.transitions[target] = Equation(
                     target=target,
-                    expr=Ite(Var(latch), on_expr, off_expr),
+                    expr=Ite(Var(latch), active_expr, initial_expr),
                     kind="state_machine_transition",
                     source=f"{inst}.{sm.name}: policy latch output",
                 )
                 self.model.add_diagnostic(
                     "info",
                     "policy_latch_output_equation",
-                    "two-state actuator output encoded as ite(policy, on_expr, off_expr)",
+                    "two-state output derived from initial and alternate state assignments",
                     target,
                 )
                 return

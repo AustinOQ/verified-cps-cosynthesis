@@ -9,7 +9,7 @@ Self-contained continuous counterpart to train.py:
   - GAE reused from ppo.py (distribution-agnostic)
 
 No oracle/BC warm-start phase: the shield already guarantees safe (and, in
-the cruise envelope, goal-driving) actions, so PPO is run from scratch.
+the SysML requirement) actions, so PPO is run from scratch.
 
 Usage:
     python rl/train_continuous.py [model.sysml] [--episodes N] ...
@@ -256,10 +256,7 @@ def summarize(res, label):
 
 def main():
     ap = argparse.ArgumentParser(description="Continuous shielded PPO training")
-    ap.add_argument("model", nargs="?",
-                    default=os.path.join(os.path.dirname(__file__), "..",
-                                         "sysml-models",
-                                         "cruise-continuous-model", "model.sysml"))
+    ap.add_argument("model", help="SysML file path")
     ap.add_argument("--episodes", type=int, default=2000)
     ap.add_argument("--episodes-per-update", type=int, default=20)
     ap.add_argument("--eval-interval", type=int, default=200)   # = checkpoint interval

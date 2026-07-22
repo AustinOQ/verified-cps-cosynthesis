@@ -24,6 +24,7 @@ for path in (REPO, ARCH, REPO / "rl", REPO / "sysml-models"):
         sys.path.insert(0, text)
 
 from certification.certificate import build_certificate_for_path, check_certificate
+from certification.reduced_mdp_spec import build_reduced_mdp_spec
 from handmade.optim import Adam
 from handmade.ppo_update import ppo_update
 from handmade.train_oracle import train_oracle
@@ -35,13 +36,7 @@ from reduced_handmade.episode import collect_episode
 from reduced_handmade.oracle_data import generate_oracle_data
 from reduced_handmade.policy import MLPActorCritic
 from reduced_handmade.train_one_seed import certify_minimal_buffer
-
-
-MODELS = {
-    "cruise": REPO / "sysml-models" / "cruise-controller-model" / "model.sysml",
-    "mixing": REPO / "sysml-models" / "mixing-sysml-model" / "model.sysml",
-    "thermostat": REPO / "sysml-models" / "thermostat" / "model.sysml",
-}
+from sysml_inputs import inspect_sysml
 
 
 def _ru_maxrss_mb() -> float:
@@ -81,11 +76,14 @@ def _mark(stages: list[dict], stage: str, start: float,
     )
 
 
-def profile_one(model_key: str, hidden_dim: int, out_dir: Path, *,
+def profile_one(model_path: str, out_dir: Path, *,
                 seed: int = 0, dt: float = 0.1, max_steps: int = 5000,
                 oracle_samples: int = 256, ensure_class_coverage: int = 16,
                 oracle_epochs: int = 1, ppo_episodes: int = 8) -> dict:
-    model_path = str(MODELS[model_key])
+    model = inspect_sysml(model_path)
+    if model.action_kind != "discrete":
+        raise ValueError(f"memory profiler requires Boolean #Neural outputs: {model.path}")
+    model_path = str(model.path)
     out_dir.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(seed)
     stages: list[dict] = []
@@ -100,6 +98,13 @@ def profile_one(model_key: str, hidden_dim: int, out_dir: Path, *,
     errors = check_certificate(cert)
     if errors:
         raise RuntimeError(errors)
+    reduced_spec = build_reduced_mdp_spec(
+        model_path,
+        certificate=cert,
+        dt=dt,
+        max_steps=max_steps,
+    )
+    hidden_dim = int(reduced_spec["feedforward_architecture"]["hidden_dim"])
     _mark(stages, "after_certificate", start,
           {"b_obs": b_obs, "b_act": b_act, "claim": cert.get("claim", {}).get("level")})
 
@@ -167,8 +172,10 @@ def profile_one(model_key: str, hidden_dim: int, out_dir: Path, *,
         _mark(stages, "after_one_ppo_update", start, metrics)
 
     result = {
-        "model": model_key,
+        "model": model.key,
+        "model_name": model.name,
         "model_path": model_path,
+        "model_sha256": model.sha256,
         "hidden_dim": hidden_dim,
         "seed": seed,
         "device": "cpu",
@@ -177,7 +184,7 @@ def profile_one(model_key: str, hidden_dim: int, out_dir: Path, *,
         "parameter_count": n_params,
         "stages": stages,
     }
-    path = out_dir / f"{model_key}_h{hidden_dim}_memory_profile.json"
+    path = out_dir / f"{model.key}_h{hidden_dim}_memory_profile.json"
     path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n",
                     encoding="utf-8")
     print(f"WROTE {path}")
@@ -186,10 +193,8 @@ def profile_one(model_key: str, hidden_dim: int, out_dir: Path, *,
 
 def main() -> int:
     ap = argparse.ArgumentParser()
+    ap.add_argument("model", nargs="+", help="SysML file path")
     ap.add_argument("--out-dir", default=None)
-    ap.add_argument("--models", nargs="+", default=["cruise", "mixing", "thermostat"])
-    ap.add_argument("--hidden-dims", nargs="+", type=int, default=None,
-                    help="one value for all models or same length as --models")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--oracle-samples", type=int, default=256)
     ap.add_argument("--ensure-class-coverage", type=int, default=16)
@@ -202,18 +207,10 @@ def main() -> int:
     ))
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    hidden_dims = args.hidden_dims or [2, 4, 2]
-    if len(hidden_dims) == 1:
-        hidden_dims = hidden_dims * len(args.models)
-    if len(hidden_dims) != len(args.models):
-        raise SystemExit("--hidden-dims must have length 1 or match --models")
-
     results = []
-    for model_key, hidden_dim in zip(args.models, hidden_dims):
-        if model_key not in MODELS:
-            raise SystemExit(f"unknown model {model_key}; valid={sorted(MODELS)}")
+    for model_path in args.model:
         results.append(profile_one(
-            model_key, hidden_dim, out_dir, seed=args.seed,
+            model_path, out_dir, seed=args.seed,
             oracle_samples=args.oracle_samples,
             ensure_class_coverage=args.ensure_class_coverage,
             oracle_epochs=args.oracle_epochs,
@@ -229,4 +226,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

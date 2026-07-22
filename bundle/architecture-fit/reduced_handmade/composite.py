@@ -24,6 +24,23 @@ class ProgramShieldComposite:
         self.spec_shield = spec_shield
         self.obs_names = list(obs_names)
 
+    def _requirement_inputs(self, raw_obs: dict) -> dict:
+        missing = [name for name in self.obs_names if name not in raw_obs]
+        if missing:
+            raise KeyError(
+                "SysML simulation omitted controller inputs: "
+                + ", ".join(missing)
+            )
+        return {
+            name: value if isinstance(value := raw_obs[name], bool) else float(value)
+            for name in self.obs_names
+        }
+
+    def requirement_holds(self, action: int, raw_obs: dict) -> bool:
+        """Check the executed action against the current SysML requirement."""
+        inputs = self._requirement_inputs(raw_obs)
+        return int(self.spec_shield(action, inputs)) == int(action)
+
     def act(self, obs_norm: np.ndarray, h_prev: np.ndarray,
             raw_obs: dict, greedy: bool, rng=None):
         t0 = time.perf_counter_ns()
@@ -40,8 +57,7 @@ class ProgramShieldComposite:
             gumbel = -np.log(-np.log(np.clip(u, 1e-30, None)))
             proposed = int(np.argmax(logits[0] + gumbel))
 
-        obs_dict = {name: float(raw_obs.get(name, 0.0))
-                    for name in self.obs_names}
+        obs_dict = self._requirement_inputs(raw_obs)
         t2 = time.perf_counter_ns()
         final = int(self.spec_shield(proposed, obs_dict))
         t3 = time.perf_counter_ns()
@@ -61,4 +77,3 @@ class ProgramShieldComposite:
             probs[0],
             timing_us,
         )
-

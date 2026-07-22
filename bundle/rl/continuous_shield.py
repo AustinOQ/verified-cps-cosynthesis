@@ -46,10 +46,8 @@ class ContinuousShield:
     """
 
     def __init__(self, model_path: str, eps: float = 1e-6):
-        # Reuse the discrete shield's parsing: it locates the #Neural action
-        # def + #NeuralRequirement, resolves controller constants (incl. the
-        # part-def-default fallback), and applies _fixup_precedence so the
-        # biconditionals are structured exactly as the verifier sees them.
+        # Reuse the requirement parser so the interval is rebuilt from the
+        # current SysML file.
         spec = SpecShield(model_path)
 
         self.req_ast = spec.req_ast
@@ -63,13 +61,16 @@ class ContinuousShield:
             raise ValueError(
                 "ContinuousShield handles exactly one real output; got "
                 f"{self.out_params}")
+        if (spec.output_types[0] or "").lower() not in {
+            "real", "float", "double", "integer", "int"
+        }:
+            raise ValueError("ContinuousShield output must be numeric")
         self.out_names = set(self.out_params)
 
         if self.req_ast is None:
             raise ValueError("ContinuousShield: model has no #NeuralRequirement")
 
-        # Static range from bare (condition-free) output bounds, used as the
-        # infeasible-interval fallback (most conservative = lower bound).
+        # Static range from bare output bounds in the current requirement.
         self.act_low, self.act_high = self._static_range()
 
     # ------------------------------------------------------------------
@@ -88,8 +89,8 @@ class ContinuousShield:
                 return comp.op, float(_evaluate(comp.right, values, self.subject_var))
             if right_has and not left_has:
                 return _FLIP[comp.op], float(_evaluate(comp.left, values, self.subject_var))
-        except Exception:
-            return None
+        except Exception as exc:
+            raise ValueError(f"could not evaluate continuous bound: {exc}") from exc
         return None
 
     def _apply(self, op, k, lo, hi):
@@ -123,15 +124,12 @@ class ContinuousShield:
             elif self._refs_output(c.right) and not self._refs_output(c.left):
                 comp, cond = c.right, c.left
             else:
-                return lo, hi  # both/neither sides reference the output — skip
+                raise ValueError("unsupported equality in continuous requirement")
             res = self._output_comparison_bound(comp, values)
             if res is None:
-                return lo, hi
+                raise ValueError("continuous equality does not contain an output bound")
             op, k = res
-            try:
-                cond_true = bool(_evaluate(cond, values, self.subject_var))
-            except Exception:
-                return lo, hi
+            cond_true = bool(_evaluate(cond, values, self.subject_var))
             return self._apply(op if cond_true else _NEG[op], k, lo, hi)
 
         # one-directional:  condition implies (out <cmp> K)
@@ -140,11 +138,8 @@ class ContinuousShield:
             if self._refs_output(comp) and not self._refs_output(cond):
                 res = self._output_comparison_bound(comp, values)
                 if res is not None:
-                    try:
-                        if bool(_evaluate(cond, values, self.subject_var)):
-                            return self._apply(res[0], res[1], lo, hi)
-                    except Exception:
-                        pass
+                    if bool(_evaluate(cond, values, self.subject_var)):
+                        return self._apply(res[0], res[1], lo, hi)
             return lo, hi
 
         # negated bound:  not (out <cmp> K)
@@ -172,10 +167,10 @@ class ContinuousShield:
                 res = self._output_comparison_bound(clause, {**self.unchanging})
                 if res is not None:
                     lo, hi = self._apply(res[0], res[1], lo, hi)
-        if lo == float("-inf"):
-            lo = -1.0
-        if hi == float("inf"):
-            hi = 1.0
+        if lo == float("-inf") or hi == float("inf"):
+            raise ValueError(
+                "continuous #NeuralRequirement must state lower and upper output bounds"
+            )
         return lo, hi
 
     # ------------------------------------------------------------------
@@ -188,9 +183,7 @@ class ContinuousShield:
         Returns (safe_force, overridden)."""
         lo, hi = self.safe_interval(obs_dict)
         if lo > hi:
-            # Over-constrained / inconsistent envelope: fall back to the most
-            # conservative action (the lower range bound, e.g. full brake).
-            return float(self.act_low), True
+            raise ValueError("#NeuralRequirement gives an empty continuous interval")
         safe = min(max(float(proposed), lo), hi)
         overridden = abs(safe - float(proposed)) > 1e-9
         return float(safe), overridden

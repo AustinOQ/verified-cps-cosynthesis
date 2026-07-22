@@ -11,6 +11,7 @@ import os
 import sys
 import tempfile
 import time
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -29,6 +30,7 @@ from certification.certificate import (
     check_certificate,
     write_certificate,
 )
+from certification.feedforward_architecture import derive_feedforward_architecture
 from certification.reduced_mdp_spec import (
     build_reduced_mdp_spec,
     check_reduced_mdp_spec,
@@ -39,18 +41,31 @@ from certification.reduced_mdp_spec import (
 from handmade.io import load_policy, save_policy
 from handmade.losses import ppo_update_grads
 from mlp_buffer import BufferedContinuousEnv
+from oracle import extract_interface
 
 from reduced_handmade.buffered_env import BufferedDiscreteEnv
+from reduced_handmade.collection import (
+    CollectionSettings,
+    DiscreteRuntime,
+    build_episode_collector,
+    generate_oracle_data_with_backend,
+    make_episode_jobs,
+)
 from reduced_handmade.composite import ProgramShieldComposite
 from reduced_handmade.policy import MLPActorCritic
 from reduced_handmade.train_one_seed import train_one_seed
+from sysml_inputs import discover_sysml
 
 
+_DISCOVERED = {
+    item.key: item.path
+    for item in discover_sysml([], models_root=REPO / "sysml-models")
+}
 MODELS = {
-    "cruise": REPO / "sysml-models" / "cruise-controller-model" / "model.sysml",
-    "cruise-continuous": REPO / "sysml-models" / "cruise-continuous-model" / "model.sysml",
-    "mixing": REPO / "sysml-models" / "mixing-sysml-model" / "model.sysml",
-    "thermostat": REPO / "sysml-models" / "thermostat" / "model.sysml",
+    "cruise": _DISCOVERED["cruise-control"],
+    "cruise-continuous": _DISCOVERED["cruise-control-continuous"],
+    "mixing": _DISCOVERED["tank-filling-system"],
+    "thermostat": _DISCOVERED["thermostat"],
 }
 
 
@@ -227,6 +242,162 @@ def check_buffered_env(model_key: str = "mixing") -> dict:
             "augmented_obs_dim": int(obs0.shape[0])}
 
 
+def check_derived_feedforward_architectures() -> dict:
+    cases = {
+        "thermostat": {"n_obs": 1, "n_act": 2, "hidden": 2, "params": 47},
+        "cruise": {"n_obs": 1, "n_act": 2, "hidden": 3, "params": 77},
+        "mixing": {"n_obs": 2, "n_act": 1, "hidden": 4, "params": 245},
+    }
+    details = {}
+    for model_key, expected in cases.items():
+        model_path = str(MODELS[model_key])
+        env = BufferedDiscreteEnv(
+            model_path,
+            dt=0.1,
+            max_steps=20,
+            phase=1,
+            rng_seed=41,
+            n_obs=expected["n_obs"],
+            n_act=expected["n_act"],
+        )
+        try:
+            input_dim = env.obs_dim
+            action_count = env.n_actions
+        finally:
+            env.close()
+        iface = extract_interface(model_path, dt=0.1)
+        architecture = derive_feedforward_architecture(
+            iface["spec_shield"],
+            input_dim=input_dim,
+            action_count=action_count,
+        )
+        _assert(architecture["hidden_dim"] == expected["hidden"],
+                f"unexpected derived hidden size for {model_key}")
+        _assert(architecture["parameter_count"] == expected["params"],
+                f"unexpected derived parameter count for {model_key}")
+        policy = MLPActorCritic(
+            input_dim, action_count, architecture["hidden_dim"], seed=43)
+        actual_params = sum(value.size for value in policy.parameters().values())
+        _assert(actual_params == architecture["parameter_count"],
+                f"runtime parameter count differs for {model_key}")
+        details[model_key] = architecture
+    return details
+
+
+def check_parallel_collection_equivalence(model_key: str = "cruise") -> dict:
+    model_path = str(MODELS[model_key].resolve())
+    n_obs = 1
+    n_act = 1
+    probe = BufferedDiscreteEnv(
+        model_path, dt=0.1, max_steps=20, phase=2,
+        rng_seed=19, n_obs=n_obs, n_act=n_act)
+    try:
+        obs_dim = probe.obs_dim
+        n_actions = probe.n_actions
+    finally:
+        probe.close()
+
+    iface = extract_interface(model_path, dt=0.1)
+    policy = MLPActorCritic(obs_dim, n_actions, hidden_dim=2, seed=23)
+    composite = ProgramShieldComposite(
+        policy, iface["spec_shield"], iface["obs_names"])
+    runtime = DiscreteRuntime(
+        model_path=model_path,
+        dt=0.1,
+        max_steps=20,
+        phase=2,
+        n_obs=n_obs,
+        n_act=n_act,
+        obs_dim=obs_dim,
+        n_actions=n_actions,
+        hidden_dim=2,
+    )
+    serial_settings = CollectionSettings(backend="serial", workers=1)
+    process_settings = CollectionSettings(backend="process", workers=2)
+    jobs = make_episode_jobs(4, seed_base=29)
+
+    with build_episode_collector(
+        serial_settings, runtime, composite
+    ) as serial_collector, build_episode_collector(
+        process_settings, runtime, composite
+    ) as process_collector:
+        serial_episodes = serial_collector.collect(policy, jobs, greedy=False)
+        process_episodes = process_collector.collect(policy, jobs, greedy=False)
+        _assert(len(serial_episodes) == len(process_episodes),
+                "serial and process collectors returned different episode counts")
+        array_fields = (
+            "obs", "actions", "rewards", "values", "log_probs",
+            "dones", "overrides",
+        )
+        for index, (serial_ep, process_ep) in enumerate(zip(
+            serial_episodes, process_episodes
+        )):
+            for field in array_fields:
+                _assert(
+                    np.array_equal(
+                        np.asarray(getattr(serial_ep, field)),
+                        np.asarray(getattr(process_ep, field)),
+                    ),
+                    f"episode {index} differs in {field}",
+                )
+            _assert(serial_ep.outcome == process_ep.outcome,
+                    f"episode {index} differs in outcome")
+            _assert(serial_ep.violations == process_ep.violations,
+                    f"episode {index} differs in violations")
+            _assert(serial_ep.safety_viol == process_ep.safety_viol,
+                    f"episode {index} differs in safety result")
+
+        eval_jobs = make_episode_jobs(4, seed_base=31)
+        serial_summary = serial_collector.evaluate(policy, eval_jobs)
+        process_summary = process_collector.evaluate(policy, eval_jobs)
+        deterministic_summary_fields = (
+            "n_episodes", "n_steps", "success_rate", "violation_rate",
+            "truncated_rate", "pooled_override_rate", "mean_episode_steps",
+            "mean_reward", "safety_violation_rate",
+        )
+        for field in deterministic_summary_fields:
+            _assert(
+                np.isclose(
+                    getattr(serial_summary, field),
+                    getattr(process_summary, field),
+                    rtol=0.0,
+                    atol=1e-12,
+                ),
+                f"serial and process evaluation differ in {field}",
+            )
+
+    oracle_runtime = replace(runtime, phase=1)
+    serial_oracle = generate_oracle_data_with_backend(
+        oracle_runtime,
+        serial_settings,
+        iface,
+        32,
+        seed_base=37,
+        max_resets=16,
+    )
+    process_oracle = generate_oracle_data_with_backend(
+        oracle_runtime,
+        process_settings,
+        iface,
+        32,
+        seed_base=37,
+        max_resets=16,
+    )
+    _assert(np.array_equal(serial_oracle[0], process_oracle[0]),
+            "serial and process oracle observations differ")
+    _assert(np.array_equal(serial_oracle[1], process_oracle[1]),
+            "serial and process oracle actions differ")
+    _assert(serial_oracle[2:] == process_oracle[2:],
+            "serial and process oracle metadata differ")
+
+    return {
+        "model": model_key,
+        "episodes": len(jobs),
+        "oracle_samples": int(len(serial_oracle[1])),
+        "workers": process_settings.workers,
+    }
+
+
 def check_certificate_gate(model_key: str = "mixing") -> dict:
     cert = build_certificate_for_path(
         str(MODELS[model_key]), max_obs=2, max_act=6, horizon=14, dt=0.1)
@@ -299,12 +470,19 @@ def check_reduced_mdp_spec_contract(out_dir: Path, model_key: str = "mixing") ->
     _assert(check_reduced_mdp_spec(bad),
             "mutated shield type was not rejected")
 
+    bad = copy.deepcopy(loaded)
+    bad["feedforward_architecture"]["hidden_dim"] += 1
+    bad["self_sha256"] = spec_hash(bad)
+    _assert(check_reduced_mdp_spec(bad),
+            "mutated feedforward hidden size was not rejected")
+
     return {
         "model": model_key,
         "spec": str(spec_path),
         "buffer": loaded["certified_buffer"],
         "input_dim": loaded["policy_input"]["input_dim"],
         "n_actions": loaded["action_space"]["n_actions"],
+        "feedforward_architecture": loaded["feedforward_architecture"],
         "self_sha256": loaded["self_sha256"],
     }
 
@@ -367,7 +545,6 @@ def check_smoke_training(out_dir: Path) -> dict:
         str(MODELS["mixing"]),
         seed=0,
         out_dir=run_dir,
-        hidden_dim=4,
         ensure_class_coverage=4,
         config={
             "oracle_samples": 64,
@@ -397,9 +574,10 @@ def check_smoke_training(out_dir: Path) -> dict:
         str(MODELS["mixing"]),
         seed=1,
         out_dir=spec_run_dir,
-        hidden_dim=4,
         ensure_class_coverage=4,
         reduced_mdp_spec_path=result["reduced_mdp_spec_path"],
+        collection_backend="process",
+        collection_workers=2,
         config={
             "oracle_samples": 64,
             "oracle_epochs": 2,
@@ -420,6 +598,10 @@ def check_smoke_training(out_dir: Path) -> dict:
             "spec smoke run changed the policy input dimension")
     _assert(spec_result["shield_type"] == "program_ast_spec_shield",
             "spec smoke run did not use exact program shield")
+    _assert(spec_result["collection"]["backend"] == "process",
+            "spec smoke run did not use process episode collection")
+    _assert(spec_result["hidden_dim_source"] == "sysml_comparison_output_width_v1",
+            "spec smoke run did not use the derived feedforward architecture")
     _assert(spec_result["test"]["safety_violation_rate"] == 0.0,
             "spec smoke run had safety violations")
     return {
@@ -450,6 +632,10 @@ def main() -> int:
         ("checkpoint_roundtrip", lambda: check_checkpoint_roundtrip()),
         ("program_shield_composite", lambda: check_composite_uses_program_shield()),
         ("buffered_env", lambda: check_buffered_env()),
+        ("derived_feedforward_architectures",
+         lambda: check_derived_feedforward_architectures()),
+        ("parallel_collection_equivalence",
+         lambda: check_parallel_collection_equivalence()),
         ("certificate_gate", lambda: check_certificate_gate()),
         ("reduced_mdp_spec_contract", lambda: check_reduced_mdp_spec_contract(out_dir)),
         ("continuous_reduced_mdp_spec_contract",

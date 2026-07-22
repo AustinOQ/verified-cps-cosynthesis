@@ -15,11 +15,8 @@ import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "sysml-models"))
 
-from sysml_parser import SysMLParser, BinaryExpr, RefExpr, LiteralExpr
+from sysml_parser import SysMLParser, BinaryExpr, RefExpr, LiteralExpr, UnaryExpr
 from simulator_adapter import SimulatorTwin
-
-_SAFETY_KINDS = {"Prohibition", "Obligation", None}
-
 
 class SysMLEnv:
     """RL environment derived from any SysML model with a #Neural action.
@@ -41,25 +38,42 @@ class SysMLEnv:
         parser = self._twin._parser
 
         # Find #Neural action def and extract in/out params
-        self._out_params = []
-        self._obs_keys = []
+        neural_defs = []
         for pdef in parser.part_defs.values():
             for ad in pdef.action_defs:
                 if "Neural" in ad.metadata:
-                    self._obs_keys = [p.name for p in ad.in_params]
-                    self._out_params = [(p.name, p.type_name) for p in ad.out_params]
-                    break
-            if self._out_params:
-                break
+                    neural_defs.append(ad)
+        if len(neural_defs) != 1:
+            raise ValueError(
+                f"expected exactly one #Neural action, found {len(neural_defs)}"
+            )
+        neural = neural_defs[0]
+        completion = [
+            p.name for p in neural.in_params if "Completion" in p.metadata
+        ]
+        if len(completion) != 1:
+            raise ValueError("#Neural action must mark exactly one input #Completion")
+        self._completion_key = completion[0]
+        self._obs_keys = [
+            p.name for p in neural.in_params if "Completion" not in p.metadata
+        ]
+        self._out_params = [(p.name, p.type_name) for p in neural.out_params]
 
-        # Build action map: 2^N for N boolean outputs
+        # Build the output representation from the types declared in SysML.
         n_out = len(self._out_params)
         self._action_map = {}
-        for action_id in range(2 ** n_out):
-            actuators = {}
-            for bit, (name, _) in enumerate(self._out_params):
-                actuators[name] = bool(action_id & (1 << bit))
-            self._action_map[action_id] = actuators
+        output_types = {(type_name or "").lower() for _name, type_name in self._out_params}
+        if output_types <= {"bool", "boolean"}:
+            self._initial_action = {name: False for name, _type in self._out_params}
+            for action_id in range(2 ** n_out):
+                actuators = {}
+                for bit, (name, _) in enumerate(self._out_params):
+                    actuators[name] = bool(action_id & (1 << bit))
+                self._action_map[action_id] = actuators
+        elif output_types <= {"real", "float", "double", "integer", "int"}:
+            self._initial_action = {name: 0.0 for name, _type in self._out_params}
+        else:
+            raise ValueError(f"unsupported or mixed #Neural output types: {output_types}")
 
         self.obs_dim = len(self._obs_keys)
         self.n_actions = len(self._action_map)
@@ -67,19 +81,26 @@ class SysMLEnv:
         # Extract scenario inputs with bounds from ScenarioConstraint
         self._scenario_inputs = _extract_scenario_bounds(parser)
 
-        # Extract cross-parameter constraints (e.g. originalLevel >= transferTarget)
+        # Extract relations among scenario inputs and initialized model state.
         self._cross_constraints = _extract_cross_constraints(parser)
+        self._scenario_state_bindings = _extract_scenario_state_bindings(parser)
 
         # Compute global normalization scale from initial obs
         self._obs_scale = self._compute_obs_scale()
 
+    @staticmethod
+    def _state_value(state: dict, key: str):
+        if key not in state:
+            raise KeyError(f"SysML simulation did not produce neural input {key}")
+        return state[key]
+
     def _compute_obs_scale(self):
         """Run one init step and use max absolute obs value as global scale."""
         self._twin()  # reset
-        state = self._twin(self._action_map[0])  # step with no-op
+        state = self._twin(self._initial_action)
         scale = 1.0
         for key in self._obs_keys:
-            val = state.get(key, 0.0)
+            val = self._state_value(state, key)
             if isinstance(val, (int, float)) and not isinstance(val, bool):
                 scale = max(scale, abs(val))
         return scale
@@ -95,31 +116,20 @@ class SysMLEnv:
                 eng.state[qname] = float(self._rng.integers(lo, hi + 1))
             else:
                 eng.state[qname] = self._rng.uniform(lo, hi)
-        # Enforce cross-parameter constraints by clamping.
-        # For each (greater, lesser) pair: if greater < lesser, clamp
-        # lesser down to greater's value.
+        # Enforce relations among sampled inputs exactly as written in SysML.
         for greater_qname, lesser_qname in self._cross_constraints:
-            g = eng.state.get(greater_qname, 0)
-            l = eng.state.get(lesser_qname, 0)
-            if g < l + 5:
-               eng.state[lesser_qname] = max(g - 5, self._scenario_inputs[lesser_qname]["lower"])
-        # Sync physical state to match randomized scenario inputs
-        for qname, info in self._scenario_inputs.items():
-            if "OriginalLevel" in qname:
-                # Find the matching physical tank state key
-                for key in eng.state:
-                    if "currentLevelMl" in key:
-                        # Match by tank number
-                        for digit in "0123456789":
-                            if digit in qname and digit in key:
-                                eng.state[key] = eng.state[qname]
-                                break
+            g = self._state_value(eng.state, greater_qname)
+            l = self._state_value(eng.state, lesser_qname)
+            if g < l:
+                eng.state[lesser_qname] = g
+        for state_qname, input_qname in self._scenario_state_bindings:
+            eng.state[state_qname] = self._state_value(eng.state, input_qname)
 
     def _state_to_obs(self, state: dict) -> np.ndarray:
         """Convert twin state dict to normalized observation vector."""
         obs = []
         for key in self._obs_keys:
-            val = state.get(key, 0.0)
+            val = self._state_value(state, key)
             if isinstance(val, bool):
                 obs.append(float(val))
             else:
@@ -136,20 +146,22 @@ class SysMLEnv:
 
         if self.phase == 2:
             for entry in statuses.values():
-                if entry["kind"] in _SAFETY_KINDS and not entry["status"]:
+                if not entry["status"]:
                     return -1.0, True
 
-        if state.get("done"):
+        if bool(self._state_value(state, self._completion_key)):
             return 1.0, True
 
         return -0.01, False
 
-    def reset(self) -> np.ndarray:
+    def reset(self, seed: int | None = None) -> np.ndarray:
+        if seed is not None:
+            self._rng = np.random.default_rng(seed)
         self._twin()
         self._randomize_scenario()
         self._step_count = 0
-        self._twin(self._action_map[0])  # sensor sends, controller hasn't read yet
-        state = self._twin(self._action_map[0])  # controller reads sensor, done correct
+        self._twin(self._initial_action)
+        state = self._twin(self._initial_action)
         self._step_count = 0
         return self._state_to_obs(state)
 
@@ -184,13 +196,12 @@ class SysMLEnv:
 def _extract_scenario_bounds(parser: SysMLParser) -> dict:
     """Extract per-ScenarioInput bounds from #ScenarioConstraint expressions.
 
-    Returns dict mapping qualified_name -> {default, lower, upper}.
+    Returns dict mapping qualified_name -> {lower, upper}.
     """
     inputs = {}
     for p in parser.parameters:
         if "ScenarioInput" in p.metadata:
             inputs[p.qualified_name] = {
-                "default": p.value,
                 "lower": None,
                 "upper": None,
             }
@@ -200,12 +211,13 @@ def _extract_scenario_bounds(parser: SysMLParser) -> dict:
         if 'ScenarioConstraint' in getattr(constraint, 'metadata', []):
             _walk_bounds(constraint.expression, inputs, parser.system_part)
 
-    # Fill missing bounds with sensible defaults
+    # Every randomized input must have complete bounds in its SysML file.
     for qname, info in inputs.items():
-        if info["lower"] is None:
-            info["lower"] = 0.0
-        if info["upper"] is None:
-            info["upper"] = info["default"]
+        if info["lower"] is None or info["upper"] is None:
+            raise ValueError(
+                f"#ScenarioInput {qname} needs lower and upper bounds in "
+                "a #ScenarioConstraint"
+            )
 
     return inputs
 
@@ -231,6 +243,39 @@ def _extract_cross_constraints(parser: SysMLParser) -> list:
                 constraint.expression, input_qnames, system, constraints)
 
     return constraints
+
+
+def _extract_scenario_state_bindings(parser: SysMLParser) -> list[tuple[str, str]]:
+    """Read state == ScenarioInput relations used during scenario setup."""
+    input_qnames = {
+        parameter.qualified_name
+        for parameter in parser.parameters
+        if "ScenarioInput" in parameter.metadata
+    }
+    bindings: list[tuple[str, str]] = []
+
+    def walk(expr) -> None:
+        if not isinstance(expr, BinaryExpr):
+            return
+        if expr.op == "and":
+            walk(expr.left)
+            walk(expr.right)
+            return
+        if expr.op != "==" or not (
+            isinstance(expr.left, RefExpr) and isinstance(expr.right, RefExpr)
+        ):
+            return
+        left = parser.system_part + "::" + "::".join(expr.left.path)
+        right = parser.system_part + "::" + "::".join(expr.right.path)
+        if left in input_qnames and right not in input_qnames:
+            bindings.append((right, left))
+        elif right in input_qnames and left not in input_qnames:
+            bindings.append((left, right))
+
+    for constraint in parser.parsed_constraints:
+        if "ScenarioConstraint" in getattr(constraint, "metadata", []):
+            walk(constraint.expression)
+    return bindings
 
 
 def _walk_cross_constraints(expr, input_qnames, system, out):
@@ -266,11 +311,13 @@ def _walk_bounds(expr, inputs: dict, system: str):
     # var <= const  →  upper bound
     # var == const  →  fixed (lower = upper = const)
     if expr.op in ('>=', '<=', '=='):
-        ref, lit = None, None
-        if isinstance(expr.left, RefExpr) and isinstance(expr.right, LiteralExpr):
-            ref, lit, op = expr.left, expr.right, expr.op
-        elif isinstance(expr.left, LiteralExpr) and isinstance(expr.right, RefExpr):
-            ref, lit = expr.right, expr.left
+        ref, value = None, None
+        right_value = _numeric_literal(expr.right)
+        left_value = _numeric_literal(expr.left)
+        if isinstance(expr.left, RefExpr) and right_value is not None:
+            ref, value, op = expr.left, right_value, expr.op
+        elif left_value is not None and isinstance(expr.right, RefExpr):
+            ref, value = expr.right, left_value
             op = {'>=': '<=', '<=': '>=', '==': '=='}[expr.op]
         else:
             return
@@ -280,8 +327,19 @@ def _walk_bounds(expr, inputs: dict, system: str):
             return
 
         if op == '==' or op == '>=':
+            current = inputs[qname]["lower"]
             inputs[qname]["lower"] = max(
-                inputs[qname]["lower"] or float('-inf'), lit.value)
+                float('-inf') if current is None else current, value)
         if op == '==' or op == '<=':
             cur = inputs[qname]["upper"]
-            inputs[qname]["upper"] = lit.value if cur is None else min(cur, lit.value)
+            inputs[qname]["upper"] = value if cur is None else min(cur, value)
+
+
+def _numeric_literal(expr):
+    """Return a numeric constant, including a signed SysML literal."""
+    if isinstance(expr, LiteralExpr) and isinstance(expr.value, (int, float)):
+        return expr.value
+    if isinstance(expr, UnaryExpr) and expr.op == '-':
+        value = _numeric_literal(expr.operand)
+        return None if value is None else -value
+    return None

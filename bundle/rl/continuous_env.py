@@ -29,7 +29,7 @@ class SysMLContinuousEnv(SysMLEnv):
                          phase=phase, rng_seed=rng_seed)
         self._out_names = [name for name, _type in self._out_params]
         self.act_dim = len(self._out_names)
-        self._noop = {name: 0.0 for name in self._out_names}
+        self._noop = dict(self._initial_action)
 
     def _act_to_dict(self, action) -> dict:
         if self.act_dim == 1:

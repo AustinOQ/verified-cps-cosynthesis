@@ -1,5 +1,5 @@
 """
-GRU-free memoryless policy + observation/action buffer for continuous cruise.
+Non-recurrent policy plus an observation/action buffer for real-valued actions.
 
 Motivation: the reconstructibility closure (reconstruct_closure.py) proves that
 (current obs + last 2 actions + 1 past obs) is a sufficient statistic for the

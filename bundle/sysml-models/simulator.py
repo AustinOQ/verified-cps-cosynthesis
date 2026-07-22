@@ -665,7 +665,7 @@ class SimulationEngine:
                         outputs = self.model(inputs)
                     else:
                         outputs = {}
-                    # Store outputs in state so policyCall.X references resolve
+                    # Store outputs so references to the current neural action resolve.
                     for key, value in outputs.items():
                         self.state[f"{context}::{stmt.name}::{key}"] = value
 
@@ -739,18 +739,10 @@ class SimulationEngine:
                     display_name = parts[-1]
                 state_vars[display_name] = self.state[key]
 
-        # Find flow rate from any port
-        flow_rate = 0.0
-        for key, val in self.state.items():
-            if '::flowRate' in key and val:
-                flow_rate = val
-                break
-
         return {
             "time": self.time,
             "state": sm_state,
             "state_vars": state_vars,
-            "flow_rate": flow_rate,
         }
 
     def requirement_statuses(self) -> dict[str, dict]:
@@ -797,8 +789,8 @@ def build_argument_parser(parser: SysMLParser) -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
-    argparser.add_argument("-m", "--model-file", default="model.sysml",
-                          help="Path to SysML model file (default: model.sysml)")
+    argparser.add_argument("-m", "--model-file", required=True,
+                          help="Path to SysML model file")
     argparser.add_argument("-c", "--config", type=Path,
                           help="Path to YAML configuration file")
     argparser.add_argument("-t", "--timestep", type=float, default=0.1,
@@ -846,8 +838,7 @@ def run_simulation(engine: SimulationEngine, parser: SysMLParser,
                 print(
                     f"t={status['time']:6.1f}s | "
                     f"state={status['state']:8s} | "
-                    f"{vars_str} | "
-                    f"flow={status['flow_rate']:5.1f}"
+                    f"{vars_str}"
                 )
 
         if step < steps:
@@ -865,12 +856,7 @@ def main() -> int:
 
     model_path = pre_args.model_file
     if model_path is None:
-        for arg in remaining:
-            if not arg.startswith('-') and (arg.endswith('.sysml') or Path(arg).exists()):
-                model_path = arg
-                break
-        if model_path is None:
-            model_path = "model.sysml"
+        pre_parser.error("-m/--model-file is required")
 
     if not Path(model_path).exists():
         print(f"Error: Model file not found: {model_path}", file=sys.stderr)

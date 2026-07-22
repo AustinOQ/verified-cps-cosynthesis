@@ -12,7 +12,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from .analyze import MODELS
+from sysml_inputs import discover_sysml
 from .certificate import (
     PROFILE_OBLIGATIONS_DISCHARGED,
     build_certificate_for_path,
@@ -24,6 +24,20 @@ from .equations import Op, Var
 from .relevance import compute_transition_closed_relevance, equation_refs
 from .strict_extract import extract_equation_model
 from reconstruct_closure import get_strict_model, reconstruct
+
+
+_DISCOVERED = {
+    item.key: item.path
+    for item in discover_sysml(
+        [], models_root=Path(__file__).resolve().parents[2] / "sysml-models"
+    )
+}
+MODELS = {
+    "mixing": _DISCOVERED["tank-filling-system"],
+    "thermostat": _DISCOVERED["thermostat"],
+    "cruise-continuous": _DISCOVERED["cruise-control-continuous"],
+    "cruise-discrete": _DISCOVERED["cruise-control"],
+}
 
 
 BLOCKED_DIAGNOSTICS = {
@@ -64,9 +78,10 @@ def _failures_for_model(name: str) -> list[str]:
     relevance = compute_transition_closed_relevance(model)
     failures: list[str] = []
 
-    terminal = model.terminals.get("env.done")
+    terminals = list(model.terminals.values())
+    terminal = terminals[0] if len(terminals) == 1 else None
     if terminal is None:
-        failures.append(f"{name}: missing env.done terminal equation")
+        failures.append(f"{name}: expected exactly one #Completion equation")
     else:
         terminal_refs = equation_refs(model, terminal)
         unresolved = sorted(
@@ -77,7 +92,7 @@ def _failures_for_model(name: str) -> list[str]:
         )
         if unresolved:
             failures.append(
-                f"{name}: env.done terminal equation has unresolved refs {unresolved}"
+                f"{name}: #Completion equation has unresolved refs {unresolved}"
             )
 
     for diag in model.diagnostics:

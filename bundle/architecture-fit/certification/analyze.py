@@ -4,34 +4,22 @@
 from __future__ import annotations
 
 import argparse
-import os
-
 from .relevance import compute_transition_closed_relevance
 from .strict_extract import extract_equation_model
 
 
-_SM = os.path.join(os.path.dirname(__file__), "..", "..", "sysml-models")
-MODELS = {
-    "thermostat": os.path.join(_SM, "thermostat", "model.sysml"),
-    "cruise-continuous": os.path.join(_SM, "cruise-continuous-model", "model.sysml"),
-    "cruise-discrete": os.path.join(_SM, "cruise-controller-model", "model.sysml"),
-    "mixing": os.path.join(_SM, "mixing-sysml-model", "model.sysml"),
-}
-
-
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("model", nargs="+", help="model key or path")
+    ap.add_argument("model", nargs="+", help="SysML file path")
     ap.add_argument("--show-equations", action="store_true")
     args = ap.parse_args()
 
     for item in args.model:
-        path = MODELS.get(item, item)
-        model = extract_equation_model(path)
+        model = extract_equation_model(item)
         relevance = compute_transition_closed_relevance(model)
 
         print("=" * 78)
-        print(f"MODEL: {path}")
+        print(f"MODEL: {item}")
         print(f"state={len(model.state)} actions={len(model.actions)} "
               f"def_eq={len(model.definitions)} "
               f"obs_eq={len(model.observations)} transition_eq={len(model.transitions)} "

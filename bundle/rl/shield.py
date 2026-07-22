@@ -46,12 +46,14 @@ def _evaluate(expr, values: dict, subject_var: str = ""):
         right = _evaluate(expr.right, values, subject_var)
         ops = {
             "+": lambda a, b: a + b, "-": lambda a, b: a - b,
-            "*": lambda a, b: a * b, "/": lambda a, b: a / b if b else 0,
+            "*": lambda a, b: a * b, "/": lambda a, b: a / b,
             "==": lambda a, b: a == b, ">=": lambda a, b: a >= b,
             "<=": lambda a, b: a <= b, ">": lambda a, b: a > b,
             "<": lambda a, b: a < b,
             "and": lambda a, b: a and b, "or": lambda a, b: a or b,
         }
+        if expr.op not in ops:
+            raise ValueError(f"unsupported expression operator: {expr.op}")
         return ops[expr.op](left, right)
     if isinstance(expr, UnaryExpr):
         val = _evaluate(expr.operand, values, subject_var)
@@ -63,7 +65,7 @@ def _evaluate(expr, values: dict, subject_var: str = ""):
         cond = _evaluate(expr.condition, values, subject_var)
         return _evaluate(expr.true_expr if cond else expr.false_expr,
                          values, subject_var)
-    return 0
+    raise TypeError(f"unsupported expression node: {type(expr).__name__}")
 
 
 # ---------------------------------------------------------------------------
@@ -247,27 +249,40 @@ class SpecShield:
         parser.parse()
 
         ctrl_fqn = parser.controller_part
+        if ctrl_fqn is None:
+            raise ValueError(
+                "SysML model must contain exactly one part instance that owns a #Neural action"
+            )
         ctrl_inst = parser.part_instances[ctrl_fqn]
         ctrl_def = parser.part_defs[ctrl_inst.part_type]
 
-        neural_def = None
-        for ad in ctrl_def.action_defs:
-            if "Neural" in ad.metadata:
-                neural_def = ad
-                break
+        neural_defs = [
+            action for action in ctrl_def.action_defs if "Neural" in action.metadata
+        ]
+        if len(neural_defs) != 1:
+            raise ValueError(
+                f"expected exactly one #Neural action, found {len(neural_defs)}"
+            )
+        neural_def = neural_defs[0]
 
         self.in_params = [p.name for p in neural_def.in_params]
         self.out_params = [p.name for p in neural_def.out_params]
+        self.output_types = [p.type_name for p in neural_def.out_params]
         in_set = set(self.in_params)
         out_set = set(self.out_params)
 
-        self.req_ast = None
-        self.subject_var = ""
-        for req_name, sv, _st, req_expr, req_meta in ctrl_def.requirements:
-            if "NeuralRequirement" in req_meta:
-                self.req_ast = ExpressionParser(req_expr).parse()
-                self.subject_var = sv
-                break
+        neural_requirements = [
+            (sv, req_expr)
+            for _req_name, sv, _st, req_expr, req_meta in ctrl_def.requirements
+            if "NeuralRequirement" in req_meta
+        ]
+        if len(neural_requirements) != 1:
+            raise ValueError(
+                "expected exactly one #NeuralRequirement, found "
+                f"{len(neural_requirements)}"
+            )
+        self.subject_var, requirement_text = neural_requirements[0]
+        self.req_ast = ExpressionParser(requirement_text).parse()
 
         ctrl_prefix = ctrl_fqn + "::"
         neural_names = in_set | out_set
@@ -295,16 +310,23 @@ class SpecShield:
                             self.unchanging[name] = val
                             missing.discard(name)
                 if missing:
-                    print(f"  [SpecShield] WARNING: unresolved refs "
-                          f"in requirement: {missing}")
+                    raise ValueError(
+                        "#NeuralRequirement contains unresolved references: "
+                        + ", ".join(sorted(missing))
+                    )
 
+        boolean_outputs = all(
+            (type_name or "").lower() in {"bool", "boolean"}
+            for type_name in self.output_types
+        )
         n_out = len(self.out_params)
         self.action_map = {}
-        for action_id in range(2 ** n_out):
-            actuators = {}
-            for bit, name in enumerate(self.out_params):
-                actuators[name] = bool(action_id & (1 << bit))
-            self.action_map[action_id] = actuators
+        if boolean_outputs:
+            for action_id in range(2 ** n_out):
+                actuators = {}
+                for bit, name in enumerate(self.out_params):
+                    actuators[name] = bool(action_id & (1 << bit))
+                self.action_map[action_id] = actuators
 
         # Fix operator precedence issues (== binding tighter than and/or)
         if self.req_ast:
@@ -330,28 +352,43 @@ class SpecShield:
                     if not _evaluate(clause, values, self.subject_var):
                         self.dead_actions.add(action_id)
                         break
-                except Exception:
-                    pass
+                except Exception as exc:
+                    raise ValueError(
+                        f"could not evaluate output-only #NeuralRequirement clause: {exc}"
+                    ) from exc
 
         print(f"  [SpecShield] Loaded from {model_path}")
-        print(f"  [SpecShield] dead_actions={sorted(self.dead_actions)}, "
-              f"n_valid={2**n_out - len(self.dead_actions)}")
+        if self.action_map:
+            print(f"  [SpecShield] dead_actions={sorted(self.dead_actions)}, "
+                  f"n_valid={len(self.action_map) - len(self.dead_actions)}")
 
-    def _requirement_action(self, obs_dict: dict) -> int:
-        if self.req_ast is None:
-            return 0
-        priority = sorted(self.action_map.keys(), key=lambda a: bin(a).count('1'))
-        for action_id in priority:
+    def requirement_actions(self, obs_dict: dict) -> list[int]:
+        """Return every Boolean action allowed by the current requirement."""
+        if not self.action_map:
+            raise ValueError("#Neural outputs are not Boolean")
+        allowed = []
+        for action_id in sorted(self.action_map):
             if action_id in self.dead_actions:
                 continue
             actuators = self.action_map[action_id]
             values = {**self.unchanging, **obs_dict, **actuators}
             try:
                 if _evaluate(self.req_ast, values, self.subject_var):
-                    return action_id
-            except Exception:
-                continue
-        return 0
+                    allowed.append(action_id)
+            except Exception as exc:
+                raise ValueError(
+                    f"could not evaluate #NeuralRequirement for action {action_id}: {exc}"
+                ) from exc
+        return allowed
+
+    def _requirement_action(self, obs_dict: dict) -> int:
+        allowed = self.requirement_actions(obs_dict)
+        if len(allowed) != 1:
+            raise ValueError(
+                "#NeuralRequirement must determine exactly one Boolean action; "
+                f"it determined {len(allowed)} actions: {allowed}"
+            )
+        return allowed[0]
 
     def __call__(self, proposed_action: int, obs_dict: dict) -> int:
         """Evaluate shield decision via AST. Used only for verification."""
@@ -359,9 +396,6 @@ class SpecShield:
             return self._requirement_action(obs_dict)
         actuators = self.action_map[proposed_action]
         values = {**self.unchanging, **obs_dict, **actuators}
-        try:
-            if not _evaluate(self.req_ast, values, self.subject_var):
-                return self._requirement_action(obs_dict)
-        except Exception:
+        if not _evaluate(self.req_ast, values, self.subject_var):
             return self._requirement_action(obs_dict)
         return proposed_action

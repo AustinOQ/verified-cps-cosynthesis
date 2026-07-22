@@ -20,7 +20,6 @@ from typing import Any
 
 from reconstruct_closure import get_strict_model
 
-from .analyze import MODELS
 from .equations import Const, Diagnostic, Equation, Expr, Ite, Op, RawRef, Var
 from .equation_reconstruct import (
     equation_reconstruction_trace,
@@ -328,6 +327,9 @@ def _neural_interface_summary(model_path: str, actions: set[str]) -> dict[str, A
     input_param_types = {} if neural_def is None else {
         p.name: getattr(p, "type_name", "") for p in neural_def.in_params
     }
+    completion_params = [] if neural_def is None else [
+        p.name for p in neural_def.in_params if "Completion" in p.metadata
+    ]
     output_param_types = {} if neural_def is None else {
         p.name: getattr(p, "type_name", "") for p in neural_def.out_params
     }
@@ -361,6 +363,7 @@ def _neural_interface_summary(model_path: str, actions: set[str]) -> dict[str, A
         "controller_part": ctrl_fqn,
         "input_params": input_params,
         "input_param_types": input_param_types,
+        "completion_params": completion_params,
         "output_params": output_params,
         "output_param_types": output_param_types,
         "output_action_matches": output_matches,
@@ -379,7 +382,12 @@ def _shield_semantics_summary(
     observation_by_param = {
         item["target"].split(".", 1)[-1]: item for item in observations
     }
-    terminal_by_param = {"done": item for item in terminals if item["target"] == "env.done"}
+    terminal_by_param = {
+        item["target"].split(".")[-1]: item
+        for item in terminals
+        if item["target"].startswith("env.completion.")
+    }
+    completion_params = set(neural.get("completion_params", []))
 
     try:
         from shield import SpecShield, _collect_refs, _flatten_and  # type: ignore
@@ -413,8 +421,8 @@ def _shield_semantics_summary(
             continuous_details = {
                 "runtime_class": "ContinuousShield",
                 "projection": (
-                    "safe_force = clamp(proposed_force, safe_interval(obs_dict)); "
-                    "if interval is infeasible, use static lower range bound"
+                    "safe output = clamp(proposed output, interval read from the "
+                    "current SysML requirement); an empty interval is an error"
                 ),
                 "static_range": [
                     continuous_shield.act_low,
@@ -434,8 +442,8 @@ def _shield_semantics_summary(
     input_coverages = []
     missing_inputs = []
     for param in spec.in_params:
-        if param.lower() == "done":
-            source = terminal_by_param.get("done")
+        if param in completion_params:
+            source = terminal_by_param.get(param)
             source_kind = "terminal_state"
         else:
             source = observation_by_param.get(param)
@@ -594,7 +602,7 @@ def _rl_obligations(eq_model, relevance, model_path: str) -> dict[str, Any]:
                 if terminals
                 else "absent_from_simulator_state"
             ),
-            "runtime_source": "SysMLEnv._compute_reward reads state.get('done')",
+            "runtime_source": "SysMLEnv reads the current #Completion input",
             "equations": terminals,
         },
         "truncation": {
@@ -613,7 +621,7 @@ def _rl_obligations(eq_model, relevance, model_path: str) -> dict[str, Any]:
             ),
             "environment_formula": (
                 "phase 2: if any safety requirement status is false, reward=-1 and done=True; "
-                "else if simulator state['done'] is true, reward=1 and done=True; "
+                "else if the current #Completion input is true, reward=1 and done=True; "
                 "else reward=-0.01 and done=False; max-step truncation overrides reward to 0."
             ),
             "covered_terms": {
@@ -624,7 +632,7 @@ def _rl_obligations(eq_model, relevance, model_path: str) -> dict[str, Any]:
                 "finite_horizon_truncation_covered": truncation_discharged,
             },
             "modeled_external_terms": [
-                "simulator state.get('done') flag via terminal_state equation",
+                "current #Completion input via terminal_state equation",
                 "environment step_count >= max_steps via augmented finite-horizon state",
             ] if reward_done_discharged else [],
             "external_terms_not_yet_in_q": [] if reward_done_discharged else [
@@ -639,7 +647,7 @@ def _rl_obligations(eq_model, relevance, model_path: str) -> dict[str, Any]:
             ),
             "depends_on": [
                 "safety requirement violation",
-                "simulator state.get('done') flag",
+                "current #Completion input",
                 "environment step_count >= max_steps",
             ],
             "covered": reward_done_discharged,
@@ -689,9 +697,7 @@ def reconstruction_trace(
     if target is None:
         target = state
 
-    time_vars = {
-        v for v in state if "currenttime" in v.lower() or "timeseconds" in v.lower()
-    }
+    time_vars = set(model.get("known_schedule_state", []))
     taus = range(-horizon, 1)
     facts: dict[str, dict[str, Any]] = {}
 
@@ -997,11 +1003,12 @@ def build_certificate_for_path(
             "state": sorted(eq_model.state),
             "actions": sorted(eq_model.actions),
             "constants": sorted(eq_model.constants),
+            "initial_values": {
+                key: eq_model.initial_values[key]
+                for key in sorted(eq_model.initial_values)
+            },
             "observed_state_vars": sorted(strict_model["OBS"]),
-            "time_vars": sorted(
-                v for v in eq_model.state
-                if "currenttime" in v.lower() or "timeseconds" in v.lower()
-            ),
+            "time_vars": sorted(strict_model.get("known_schedule_state", [])),
             "q": sorted(relevance.q),
             "q_seeds": sorted(relevance.seeds),
             "action_deps": sorted(relevance.action_deps),
@@ -1286,6 +1293,13 @@ def check_certificate(certificate: dict[str, Any], *, check_hash: bool = True) -
     actions = set(sets.get("actions", []))
     obs = set(sets.get("observed_state_vars", []))
     time_vars = set(sets.get("time_vars", []))
+    initial_values = sets.get("initial_values", {})
+    if not isinstance(initial_values, dict):
+        errors.append("sets.initial_values is not an object")
+        initial_values = {}
+    for var in sorted(time_vars):
+        if var not in initial_values:
+            errors.append(f"known schedule state lacks a SysML initial value: {var}")
     nsupp = {k: set(v) for k, v in deps.get("nsupp", {}).items()}
     copies = set(deps.get("copies", []))
     sampled_memories = {
@@ -1512,7 +1526,7 @@ def check_certificate(certificate: dict[str, Any], *, check_hash: bool = True) -
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("model", nargs="+", help="model key or path")
+    ap.add_argument("model", nargs="+", help="SysML file path")
     ap.add_argument("--out-dir", default=None)
     ap.add_argument("--out", default=None, help="single output file; only valid for one model")
     ap.add_argument("--max-obs", type=int, default=2)
@@ -1529,7 +1543,7 @@ def main() -> int:
     out_dir = Path(args.out_dir or "certificates")
     status = 0
     for item in args.model:
-        path = MODELS.get(item, item)
+        path = item
         cert = build_certificate_for_path(
             path,
             max_obs=args.max_obs,

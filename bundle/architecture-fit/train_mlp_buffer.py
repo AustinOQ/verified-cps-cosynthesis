@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Train the GRU-free MLP + (obs,action) buffer policy on continuous cruise.
+Train a non-recurrent MLP with the observation/action buffer read from a spec.
 
 Reuses the existing continuous PPO machinery verbatim (ppo_update,
 collect_episode, evaluate, ContinuousEpisodeBuffer, the shield, the
@@ -30,9 +30,7 @@ from certification.reduced_mdp_spec import (
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("model", nargs="?",
-                    default=os.path.join(_RL, "..", "sysml-models",
-                                         "cruise-continuous-model", "model.sysml"))
+    ap.add_argument("model")
     ap.add_argument("--episodes", type=int, default=2000)
     ap.add_argument("--episodes-per-update", type=int, default=20)
     ap.add_argument("--eval-interval", type=int, default=200)
@@ -42,40 +40,48 @@ def main():
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--lr", type=float, default=3e-4)
     ap.add_argument("--anneal-lr", action="store_true")
-    ap.add_argument("--hidden-dim", type=int, default=64)
+    ap.add_argument("--hidden-dim", type=int, default=None)
     ap.add_argument("--init-log-std", type=float, default=-0.7)
-    ap.add_argument("--action-scale", type=float, default=100.0)
+    ap.add_argument("--action-scale", type=float, default=None)
     ap.add_argument("--override-penalty", type=float, default=0.2)
     ap.add_argument("--target-kl", type=float, default=0.03)
     ap.add_argument("--entropy-coeff", type=float, default=0.01)
-    ap.add_argument("--n-act", type=int, default=2)   # buffer: last k actions
-    ap.add_argument("--n-obs", type=int, default=1)   # buffer: last k observations
     ap.add_argument("--save-dir", default=None)
     ap.add_argument("--summary-json", default=None)
     ap.add_argument(
         "--reduced-mdp-spec",
-        default=None,
+        required=True,
         help="Use a reduced-MDP architecture spec generated earlier in this run.",
     )
     args = ap.parse_args()
 
-    reduced_spec = None
-    if args.reduced_mdp_spec:
-        reduced_spec = load_reduced_mdp_spec(args.reduced_mdp_spec)
-        spec_errors = check_reduced_mdp_spec(reduced_spec)
-        if spec_errors:
-            raise RuntimeError(
-                "reduced-MDP spec checker failed:\n"
-                + "\n".join(f"  - {err}" for err in spec_errors)
-            )
-        if os.path.abspath(reduced_spec["model"]["path"]) != os.path.abspath(args.model):
-            raise RuntimeError("reduced-MDP spec is for a different model")
-        action_space = reduced_spec["action_space"]
-        if action_space["type"] != "continuous_single_real_output":
-            raise RuntimeError("continuous trainer received a non-continuous reduced-MDP spec")
-        args.n_act = int(reduced_spec["certified_buffer"]["b_act"])
-        args.n_obs = int(reduced_spec["certified_buffer"]["b_obs"])
-        args.action_scale = float(action_space["action_scale"])
+    reduced_spec = load_reduced_mdp_spec(args.reduced_mdp_spec)
+    spec_errors = check_reduced_mdp_spec(reduced_spec)
+    if spec_errors:
+        raise RuntimeError(
+            "reduced-MDP spec checker failed:\n"
+            + "\n".join(f"  - {err}" for err in spec_errors)
+        )
+    if os.path.abspath(reduced_spec["model"]["path"]) != os.path.abspath(args.model):
+        raise RuntimeError("reduced-MDP spec is for a different model")
+    action_space = reduced_spec["action_space"]
+    if action_space["type"] != "continuous_single_real_output":
+        raise RuntimeError("continuous trainer received a non-continuous reduced-MDP spec")
+    args.n_act = int(reduced_spec["certified_buffer"]["b_act"])
+    args.n_obs = int(reduced_spec["certified_buffer"]["b_obs"])
+    derived_architecture = reduced_spec.get("feedforward_architecture")
+    if not isinstance(derived_architecture, dict):
+        raise RuntimeError("reduced-MDP spec has no feedforward architecture")
+    derived_hidden_dim = int(derived_architecture["hidden_dim"])
+    if args.hidden_dim is not None and args.hidden_dim != derived_hidden_dim:
+        raise RuntimeError(
+            "hidden size does not match the architecture extracted from SysML"
+        )
+    args.hidden_dim = derived_hidden_dim
+    extracted_action_scale = float(action_space["action_scale"])
+    if args.action_scale is not None and args.action_scale != extracted_action_scale:
+        raise RuntimeError("action scale does not match the reduced-MDP spec")
+    args.action_scale = extracted_action_scale
 
     random.seed(args.seed); np.random.seed(args.seed)
     torch.manual_seed(args.seed); torch.cuda.manual_seed_all(args.seed)
@@ -88,7 +94,7 @@ def main():
                                      n_obs=args.n_obs, action_scale=args.action_scale)
 
     print("=" * 66)
-    print("GRU-FREE MLP + buffer  (continuous cruise)")
+    print("NON-RECURRENT MLP + BUFFER")
     print("=" * 66)
     env = make_env(args.seed + 2)
     obs_dim, act_dim = env.obs_dim, env.act_dim
@@ -112,6 +118,10 @@ def main():
     composite = build_continuous_composite(args.model, policy,
                                            action_scale=args.action_scale)
     npar = sum(p.numel() for p in policy.parameters())
+    if npar != int(derived_architecture["parameter_count"]):
+        raise RuntimeError(
+            "derived feedforward parameter count does not match runtime policy"
+        )
     print(f"  Policy params: {npar:,}  (GRU baseline was 29,571)")
     print("=" * 66)
 

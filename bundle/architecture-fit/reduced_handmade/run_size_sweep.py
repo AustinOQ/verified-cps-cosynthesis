@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
-"""One-seed handmade reduced-MDP size/RSS sweep.
+"""Run one SysML-derived handmade reduced-MDP architecture per model.
 
 Each run is a separate process so ``ru_maxrss`` in its summary is meaningful.
-The defaults mirror the reduced PyTorch size sweep dimensions but use one seed
-per model/dimension.
 """
 
 from __future__ import annotations
@@ -24,12 +22,10 @@ ROOT = Path(__file__).resolve().parent
 ARCH = ROOT.parent
 REPO = ARCH.parent
 PY = Path(sys.executable)
+if str(ARCH) not in sys.path:
+    sys.path.insert(0, str(ARCH))
 
-MODELS = {
-    "cruise": REPO / "sysml-models" / "cruise-controller-model" / "model.sysml",
-    "mixing": REPO / "sysml-models" / "mixing-sysml-model" / "model.sysml",
-    "thermostat": REPO / "sysml-models" / "thermostat" / "model.sysml",
-}
+from sysml_inputs import inspect_sysml
 
 FIELDNAMES = [
     "run_id",
@@ -55,14 +51,14 @@ FIELDNAMES = [
 @dataclass(frozen=True)
 class Job:
     model: str
-    hidden_dim: int
+    model_path: Path
     seed: int
     out_dir: Path
     overrides: list[str]
 
     @property
     def run_id(self) -> str:
-        return f"{self.model}_h{self.hidden_dim}_seed{self.seed}"
+        return f"{self.model}_seed{self.seed}"
 
 
 def _env() -> dict[str, str]:
@@ -81,20 +77,18 @@ def _env() -> dict[str, str]:
 
 
 def _run_job(job: Job) -> dict[str, str]:
-    run_dir = job.out_dir / "runs" / job.model / f"h{job.hidden_dim}" / f"seed_{job.seed}"
+    run_dir = job.out_dir / "runs" / job.model / f"seed_{job.seed}"
     run_dir.mkdir(parents=True, exist_ok=True)
     log_path = run_dir / "train.log"
     cmd = [
         str(PY),
         "-m",
         "reduced_handmade.train_one_seed",
-        str(MODELS[job.model]),
+        str(job.model_path),
         "--out-dir",
         str(run_dir),
         "--seed",
         str(job.seed),
-        "--hidden-dim",
-        str(job.hidden_dim),
         *job.overrides,
     ]
     start = time.time()
@@ -114,7 +108,6 @@ def _run_job(job: Job) -> dict[str, str]:
     row.update(
         run_id=job.run_id,
         model=job.model,
-        hidden_dim=str(job.hidden_dim),
         seed=str(job.seed),
         returncode=str(proc.returncode),
         seconds=f"{seconds:.3f}",
@@ -126,6 +119,7 @@ def _run_job(job: Job) -> dict[str, str]:
         data = json.loads(summary_path.read_text(encoding="utf-8"))
         row.update(
             status="ok",
+            hidden_dim=str(data.get("hidden_dim", "")),
             params=str(data.get("parameter_count", "")),
             peak_rss_mb=f"{float(data.get('peak_rss_mb', 0.0)):.3f}",
             b_obs=str(data.get("certified_buffer", {}).get("b_obs", "")),
@@ -151,19 +145,21 @@ def _write_csv(path: Path, rows: list[dict[str, str]]) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
+    ap.add_argument("model", nargs="+", help="SysML file path")
     ap.add_argument("--out-dir", default=None)
-    ap.add_argument("--models", nargs="+", default=list(MODELS))
-    ap.add_argument("--hidden-dims", nargs="+", type=int,
-                    default=[2, 4, 8, 16, 32, 64])
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--jobs", type=int, default=1)
     ap.add_argument("--smoke", action="store_true",
                     help="use tiny training settings for validation")
     args = ap.parse_args()
 
-    unknown = [m for m in args.models if m not in MODELS]
-    if unknown:
-        raise SystemExit(f"unknown models: {unknown}; valid={sorted(MODELS)}")
+    models = [inspect_sysml(path) for path in args.model]
+    non_discrete = [model.path for model in models if model.action_kind != "discrete"]
+    if non_discrete:
+        raise SystemExit(f"Boolean #Neural outputs required: {non_discrete}")
+    keys = [model.key for model in models]
+    if len(set(keys)) != len(keys):
+        raise SystemExit("SysML package names must be unique")
 
     out_dir = Path(args.out_dir or (
         ARCH / "results" / f"handmade_reduced_size_sweep_{time.strftime('%Y%m%d-%H%M%S')}"
@@ -185,8 +181,7 @@ def main() -> int:
         ]
 
     manifest = {
-        "models": args.models,
-        "hidden_dims": args.hidden_dims,
+        "models": [model.to_dict() for model in models],
         "seed": args.seed,
         "jobs": args.jobs,
         "smoke": args.smoke,
@@ -201,9 +196,8 @@ def main() -> int:
     )
 
     jobs = [
-        Job(model, hidden_dim, args.seed, out_dir, overrides)
-        for model in args.models
-        for hidden_dim in args.hidden_dims
+        Job(model.key, model.path, args.seed, out_dir, overrides)
+        for model in models
     ]
     rows: list[dict[str, str]] = []
     with ThreadPoolExecutor(max_workers=max(1, args.jobs)) as pool:

@@ -344,7 +344,7 @@ package TankFillingSystem {
             in tank2TargetTransferMl : Integer;
             in tank1OriginalMl : Integer;
             in tank2OriginalMl : Integer;
-            in done : Boolean;
+            #Completion in done : Boolean;
 
             out shouldOpenValve1 : Boolean;
             out shouldOpenValve2 : Boolean;
@@ -482,10 +482,14 @@ package TankFillingSystem {
         }
 
         #ScenarioConstraint constraint scenarioConstraints {
-            controller.tank1TransferMl >= 0 and controller.tank2TransferMl >= 0 and
-            controller.tank1OriginalLevelMl >= 0 and controller.tank2OriginalLevelMl >= 0 and
+            controller.tank1TransferMl >= 0 and controller.tank1TransferMl <= 50 and
+            controller.tank2TransferMl >= 0 and controller.tank2TransferMl <= 100 and
+            controller.tank1OriginalLevelMl >= 0 and controller.tank1OriginalLevelMl <= 150 and
+            controller.tank2OriginalLevelMl >= 0 and controller.tank2OriginalLevelMl <= 150 and
             controller.tank1OriginalLevelMl >= controller.tank1TransferMl and 
-            controller.tank2OriginalLevelMl >= controller.tank2TransferMl
+            controller.tank2OriginalLevelMl >= controller.tank2TransferMl and
+            feederTank1.currentLevelMl == controller.tank1OriginalLevelMl and
+            feederTank2.currentLevelMl == controller.tank2OriginalLevelMl
         }
 
         // Flows - feeder path 1
@@ -510,6 +514,18 @@ package TankFillingSystem {
         connect controller.volumeSensor2Port to volumeSensor2.modbusPort;
 
         // System-level dynamics: tank levels change based on flow
+        constraint feeder1NoInletFlow {
+            feederTank1.inlet.flowRateMl == 0
+        }
+
+        constraint feeder2NoInletFlow {
+            feederTank2.inlet.flowRateMl == 0
+        }
+
+        constraint fillingNoOutletFlow {
+            fillingTank.outlet.flowRateMl == 0
+        }
+
         constraint feeder1DrainRate {
             feederTank1.outlet.flowRateMl == valve1.outlet.flowRateMl
         }

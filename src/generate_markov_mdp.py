@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -33,14 +34,7 @@ from certification.reduced_mdp_spec import (  # noqa: E402
     build_reduced_mdp_spec,
     write_reduced_mdp_spec,
 )
-
-
-MODEL_PATHS = {
-    "thermostat": REPO / "sysml-models" / "thermostat" / "model.sysml",
-    "cruise-discrete": REPO / "sysml-models" / "cruise-controller-model" / "model.sysml",
-    "cruise-continuous": REPO / "sysml-models" / "cruise-continuous-model" / "model.sysml",
-    "mixing": REPO / "sysml-models" / "mixing-sysml-model" / "model.sysml",
-}
+from sysml_inputs import discover_sysml  # noqa: E402
 
 
 def summarize_certificate(
@@ -216,11 +210,11 @@ def write_solver_artifacts(
 
 def main() -> int:
     parser = argparse.ArgumentParser()
+    parser.add_argument("models", nargs="*", help="SysML file paths")
     parser.add_argument(
-        "models",
-        nargs="*",
-        default=list(MODEL_PATHS),
-        choices=sorted(MODEL_PATHS),
+        "--models-root",
+        default=str(REPO / "sysml-models"),
+        help="directory searched recursively when no file paths are supplied",
     )
     parser.add_argument("--out-json", required=True)
     parser.add_argument("--artifact-dir", default=None)
@@ -230,6 +224,7 @@ def main() -> int:
     parser.add_argument("--dt", type=float, default=0.1)
     parser.add_argument("--max-steps", type=int, default=5000)
     args = parser.parse_args()
+    models = discover_sysml(args.models, models_root=args.models_root)
 
     rows: list[dict[str, Any]] = []
     failures = 0
@@ -242,8 +237,12 @@ def main() -> int:
     certificate_dir = artifact_dir / "certificates"
     spec_dir = artifact_dir / "reduced_mdp_specs"
     z3_dir = artifact_dir / "z3"
-    for name in args.models:
-        model_path = MODEL_PATHS[name]
+    for generated_dir in (certificate_dir, spec_dir, z3_dir):
+        if generated_dir.exists():
+            shutil.rmtree(generated_dir)
+    for model in models:
+        name = model.key
+        model_path = model.path
         cert = build_certificate_for_path(
             str(model_path),
             max_obs=args.max_obs,
@@ -282,6 +281,10 @@ def main() -> int:
             status_path=status_path,
             out_root=artifact_dir,
         )
+        row["model_name"] = model.name
+        row["model_path"] = str(model.path)
+        row["model_sha256"] = model.sha256
+        row["action_kind"] = model.action_kind
         rows.append(row)
         if errors:
             failures += 1
@@ -296,7 +299,7 @@ def main() -> int:
     summary = {
         "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "architecture_fit_root": str(ARCH),
-        "models": list(args.models),
+        "models": [model.to_dict() for model in models],
         "settings": {
             "max_obs": args.max_obs,
             "max_act": args.max_act,
@@ -306,7 +309,7 @@ def main() -> int:
         "certificate_policy": (
             "Every run rebuilds and overwrites certificates, reduced-MDP specs, "
             "SMT-LIB queries, and proof/counterexample transcripts from the "
-            "bundled SysML files. No previous-run artifacts are reused."
+            "SysML files supplied to that run. No previous-run artifacts are reused."
         ),
         "artifact_dirs": {
             "certificates": str(certificate_dir),

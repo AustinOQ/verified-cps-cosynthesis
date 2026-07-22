@@ -22,7 +22,7 @@ import random
 import resource
 import sys
 import time
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 
 import numpy as np
@@ -57,11 +57,16 @@ from handmade.train_oracle import train_oracle
 from oracle import extract_interface
 
 from reduced_handmade.buffered_env import BufferedDiscreteEnv
+from reduced_handmade.collection import (
+    CollectionSettings,
+    DiscreteRuntime,
+    build_episode_collector,
+    generate_oracle_data_with_backend,
+    make_episode_jobs,
+)
 from reduced_handmade.composite import ProgramShieldComposite
-from reduced_handmade.episode import collect_episode, evaluate
 from reduced_handmade.oracle_data import (
     balance_classes,
-    generate_oracle_data,
 )
 from reduced_handmade.policy import MLPActorCritic
 
@@ -122,33 +127,21 @@ def certify_minimal_buffer(model_path: str, *, dt: float, max_obs: int,
     )
 
 
-def _make_env_factory(model_path: str, *, dt: float, max_steps: int,
-                      n_obs: int, n_act: int, seed_base: int, phase: int):
-    def make_env(seed_offset: int = 0):
-        return BufferedDiscreteEnv(
-            model_path,
-            dt=dt,
-            max_steps=max_steps,
-            phase=phase,
-            rng_seed=seed_base + seed_offset,
-            n_obs=n_obs,
-            n_act=n_act,
-        )
-    return make_env
-
-
 def train_one_seed(model_path: str, seed: int, out_dir: str | Path,
                    *, dt: float = 0.1, max_steps: int = 5000,
                    max_obs: int = 2, max_act: int = 6, horizon: int = 14,
-                   hidden_dim: int = 64, ensure_class_coverage: int = 200,
+                   hidden_dim: int | None = None,
+                   ensure_class_coverage: int = 200,
                    balance_oracle_classes: bool = False,
                    reduced_mdp_spec_path: str | Path | None = None,
                    reduced_mdp_spec_out: str | Path | None = None,
+                   collection_backend: str = "serial",
+                   collection_workers: int = 1,
+                   collection_start_method: str = "spawn",
                    config: dict | None = None) -> dict:
     cfg = dict(DEFAULT_CONFIG)
     if config:
         cfg.update(config)
-    cfg["hidden_dim"] = hidden_dim
     out_path = Path(out_dir)
     out_path.mkdir(parents=True, exist_ok=True)
     _seed_everything(seed)
@@ -211,6 +204,22 @@ def train_one_seed(model_path: str, seed: int, out_dir: str | Path,
         )
         write_reduced_mdp_spec(reduced_spec, reduced_spec_path_for_result)
 
+    feedforward_architecture = reduced_spec.get("feedforward_architecture")
+    if not isinstance(feedforward_architecture, dict):
+        raise RuntimeError(
+            "reduced-MDP spec does not contain a derived feedforward architecture"
+        )
+    derived_hidden_dim = int(feedforward_architecture["hidden_dim"])
+    if hidden_dim is None:
+        hidden_dim = derived_hidden_dim
+        hidden_dim_source = feedforward_architecture["method"]
+    else:
+        hidden_dim = int(hidden_dim)
+        if hidden_dim <= 0:
+            raise ValueError("hidden_dim must be positive")
+        hidden_dim_source = "explicit_override"
+    cfg["hidden_dim"] = hidden_dim
+
     # Keep this equal to the certified action buffer for all current models.
     # If a future model certifies b_act=0, using zero is the more literal MDP
     # representation and avoids giving the learner extra non-certified inputs.
@@ -253,6 +262,12 @@ def train_one_seed(model_path: str, seed: int, out_dir: str | Path,
     composite = ProgramShieldComposite(
         policy, iface["spec_shield"], iface["obs_names"])
     n_params = int(sum(arr.size for arr in policy.parameters().values()))
+    if hidden_dim == derived_hidden_dim and (
+        n_params != int(feedforward_architecture["parameter_count"])
+    ):
+        raise RuntimeError(
+            "derived feedforward parameter count does not match runtime policy"
+        )
 
     print("=" * 72)
     print("HANDMADE REDUCED-MDP TRAINING")
@@ -260,32 +275,44 @@ def train_one_seed(model_path: str, seed: int, out_dir: str | Path,
     print(f"model: {model_path}")
     print(f"seed: {seed}")
     print(f"architecture_source: {architecture_source}")
+    print(f"hidden_dim_source: {hidden_dim_source}")
     print(f"certificate: {cert_path}")
     print(f"reduced_mdp_spec: {reduced_spec_path_for_result}")
     print(f"certified buffer: b_obs={b_obs}, b_act={b_act}")
     print(f"shield_type: {composite.shield_type}")
     print(f"policy: handmade numpy MLP, hidden_dim={hidden_dim}, params={n_params}")
     print(f"obs_dim={obs_dim}, n_actions={n_actions}, buffer={buffer_spec}")
-
-    oracle_env = BufferedDiscreteEnv(
-        model_path,
+    collection_settings = CollectionSettings(
+        backend=collection_backend,
+        workers=collection_workers,
+        start_method=collection_start_method,
+    ).resolved()
+    runtime = DiscreteRuntime(
+        model_path=os.path.abspath(model_path),
         dt=dt,
         max_steps=max_steps,
-        phase=1,
-        rng_seed=seed,
+        phase=2,
         n_obs=policy_n_obs,
         n_act=policy_n_act,
+        obs_dim=obs_dim,
+        n_actions=n_actions,
+        hidden_dim=hidden_dim,
     )
-    try:
-        obs_data, act_data, class_counts, resets = generate_oracle_data(
-            iface,
-            oracle_env,
-            cfg["oracle_samples"],
-            min_class_count=ensure_class_coverage,
-            max_steps=max_steps,
-        )
-    finally:
-        oracle_env.close()
+    print(
+        "collection: "
+        f"backend={collection_settings.backend}, "
+        f"workers={collection_settings.workers}, "
+        f"start_method={collection_settings.start_method}"
+    )
+
+    obs_data, act_data, class_counts, resets = generate_oracle_data_with_backend(
+        replace(runtime, phase=1),
+        collection_settings,
+        iface,
+        cfg["oracle_samples"],
+        min_class_count=ensure_class_coverage,
+        seed_base=seed,
+    )
     print(
         "oracle data: "
         f"{len(act_data)} samples, class_counts={class_counts}, resets={resets}"
@@ -316,27 +343,34 @@ def train_one_seed(model_path: str, seed: int, out_dir: str | Path,
         f"elapsed={oracle_history[-1]['elapsed_seconds']:.1f}s"
     )
 
-    train_env = BufferedDiscreteEnv(
-        model_path,
-        dt=dt,
-        max_steps=max_steps,
-        phase=2,
-        rng_seed=seed + 2,
-        n_obs=policy_n_obs,
-        n_act=policy_n_act,
-    )
     ppo_opt = Adam(policy.parameters(), lr=cfg["ppo_lr"])
-    rng_train = np.random.default_rng(seed + 2)
+    rng_update = np.random.default_rng(seed + 2)
     buffer = []
     checkpoints = []
     train_eval_history = []
-    updates_total = max(cfg["ppo_episodes"] // cfg["episodes_per_update"], 1)
     t_train = time.time()
-    try:
-        for ep_i in range(1, cfg["ppo_episodes"] + 1):
-            ep = collect_episode(train_env, composite, rng=rng_train,
-                                 greedy=False)
-            buffer.append(ep)
+    with build_episode_collector(
+        collection_settings, runtime, composite
+    ) as collector:
+        ep_i = 0
+        while ep_i < cfg["ppo_episodes"]:
+            next_update = (
+                (ep_i // cfg["episodes_per_update"] + 1)
+                * cfg["episodes_per_update"]
+            )
+            next_eval = (
+                (ep_i // cfg["eval_interval"] + 1)
+                * cfg["eval_interval"]
+            )
+            chunk_end = min(cfg["ppo_episodes"], next_update, next_eval)
+            jobs = make_episode_jobs(
+                chunk_end - ep_i,
+                seed_base=seed + 2,
+                start_index=ep_i,
+            )
+            buffer.extend(collector.collect(policy, jobs, greedy=False))
+            ep_i = chunk_end
+
             if ep_i % cfg["episodes_per_update"] == 0:
                 progress = (ep_i - cfg["episodes_per_update"]) / max(
                     cfg["ppo_episodes"] - cfg["episodes_per_update"], 1)
@@ -359,7 +393,7 @@ def train_one_seed(model_path: str, seed: int, out_dir: str | Path,
                     n_epochs=cfg["n_ppo_epochs"],
                     minibatch_size=cfg["minibatch_size"],
                     max_grad_norm=cfg["max_grad_norm"],
-                    rng=rng_train,
+                    rng=rng_update,
                 )
                 buffer = []
                 print(
@@ -372,20 +406,10 @@ def train_one_seed(model_path: str, seed: int, out_dir: str | Path,
 
             if ep_i % cfg["eval_interval"] == 0:
                 eval_seed = seed * 100000 + ep_i
-                summary = evaluate(
-                    env_factory=_make_env_factory(
-                        model_path,
-                        dt=dt,
-                        max_steps=max_steps,
-                        n_obs=policy_n_obs,
-                        n_act=policy_n_act,
-                        seed_base=eval_seed,
-                        phase=2,
-                    ),
-                    composite=composite,
-                    n_episodes=cfg["eval_episodes"],
-                    rng=np.random.default_rng(eval_seed),
-                    greedy=True,
+                summary = collector.evaluate(
+                    policy,
+                    make_episode_jobs(
+                        cfg["eval_episodes"], seed_base=eval_seed),
                 )
                 params = {k: v.copy() for k, v in policy.parameters().items()}
                 checkpoint = {
@@ -407,59 +431,40 @@ def train_one_seed(model_path: str, seed: int, out_dir: str | Path,
                     f"override={summary.pooled_override_rate:.4f} "
                     f"steps={summary.mean_episode_steps:.1f}"
                 )
-    finally:
-        train_env.close()
 
-    safe = [c for c in checkpoints if c["safety_violation_rate"] == 0.0]
-    if not safe:
-        raise RuntimeError("no safe checkpoint; refusing to select a model")
-    best = sorted(
-        safe,
-        key=lambda c: (-c["success_rate"], c["override_rate"], c["episode"]),
-    )[0]
-    for key, val in best["params"].items():
-        policy.parameters()[key][...] = val
-    save_policy(policy, out_path / "best.npz")
+        safe = [c for c in checkpoints if c["safety_violation_rate"] == 0.0]
+        if not safe:
+            raise RuntimeError("no safe checkpoint; refusing to select a model")
+        best = sorted(
+            safe,
+            key=lambda c: (-c["success_rate"], c["override_rate"], c["episode"]),
+        )[0]
+        for key, val in best["params"].items():
+            policy.parameters()[key][...] = val
+        save_policy(policy, out_path / "best.npz")
 
-    eval_summary = evaluate(
-        env_factory=_make_env_factory(
-            model_path,
-            dt=dt,
-            max_steps=max_steps,
-            n_obs=policy_n_obs,
-            n_act=policy_n_act,
-            seed_base=10_000 + seed,
-            phase=2,
-        ),
-        composite=composite,
-        n_episodes=cfg["eval_episodes"],
-        rng=np.random.default_rng(10_000 + seed),
-        greedy=True,
-    )
-    test_summary = evaluate(
-        env_factory=_make_env_factory(
-            model_path,
-            dt=dt,
-            max_steps=max_steps,
-            n_obs=policy_n_obs,
-            n_act=policy_n_act,
-            seed_base=20_000 + seed,
-            phase=2,
-        ),
-        composite=composite,
-        n_episodes=cfg["test_episodes"],
-        rng=np.random.default_rng(20_000 + seed),
-        greedy=True,
-    )
+        eval_summary = collector.evaluate(
+            policy,
+            make_episode_jobs(
+                cfg["eval_episodes"], seed_base=10_000 + seed),
+        )
+        test_summary = collector.evaluate(
+            policy,
+            make_episode_jobs(
+                cfg["test_episodes"], seed_base=20_000 + seed),
+        )
     train_seconds = time.time() - t0
     result = {
         "model_path": model_path,
         "seed": seed,
         "training_stack": "handmade_numpy_reduced_mdp",
         "device": "cpu",
+        "collection": collection_settings.to_dict(),
         "shield_type": composite.shield_type,
         "policy_type": "memoryless_mlp",
         "architecture_source": architecture_source,
+        "hidden_dim_source": hidden_dim_source,
+        "feedforward_architecture": feedforward_architecture,
         "hidden_dim": hidden_dim,
         "parameter_count": n_params,
         "certificate_path": str(cert_path),
@@ -535,7 +540,12 @@ def main() -> int:
     ap.add_argument("model")
     ap.add_argument("--out-dir", required=True)
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--hidden-dim", type=int, default=64)
+    ap.add_argument(
+        "--hidden-dim",
+        type=int,
+        default=None,
+        help="override the SysML-derived hidden size",
+    )
     ap.add_argument("--dt", type=float, default=0.1)
     ap.add_argument("--max-steps", type=int, default=5000)
     ap.add_argument("--max-obs", type=int, default=2)
@@ -563,6 +573,23 @@ def main() -> int:
     ap.add_argument("--test-episodes", type=int)
     ap.add_argument("--n-ppo-epochs", type=int)
     ap.add_argument("--minibatch-size", type=int)
+    ap.add_argument(
+        "--collection-backend",
+        choices=("serial", "process", "auto"),
+        default="serial",
+        help="episode collection backend",
+    )
+    ap.add_argument(
+        "--collection-workers",
+        type=int,
+        default=1,
+        help="independent simulator processes used for episode collection",
+    )
+    ap.add_argument(
+        "--collection-start-method",
+        default="spawn",
+        help="multiprocessing start method; spawn is safe with device runtimes",
+    )
     args = ap.parse_args()
     train_one_seed(
         args.model,
@@ -578,6 +605,9 @@ def main() -> int:
         balance_oracle_classes=args.balance_oracle_classes,
         reduced_mdp_spec_path=args.reduced_mdp_spec,
         reduced_mdp_spec_out=args.reduced_mdp_spec_out,
+        collection_backend=args.collection_backend,
+        collection_workers=args.collection_workers,
+        collection_start_method=args.collection_start_method,
         config=_config_overrides(args),
     )
     return 0

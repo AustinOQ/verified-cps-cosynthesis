@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import sys
 from pathlib import Path
@@ -44,6 +45,12 @@ from .certificate import (
     load_certificate,
     model_hash,
 )
+from .feedforward_architecture import (
+    check_continuous_feedforward_architecture,
+    check_feedforward_architecture,
+    derive_continuous_feedforward_architecture,
+    derive_feedforward_architecture,
+)
 
 
 SCHEMA_VERSION = 1
@@ -52,7 +59,6 @@ DISCRETE_SHIELD_TYPE = "program_ast_spec_shield"
 CONTINUOUS_SHIELD_TYPE = "program_ast_continuous_interval_shield"
 SHIELD_TYPE = DISCRETE_SHIELD_TYPE
 RUNTIME_SHIELD_CLASS = "SpecShield"
-ACTION_SCALE_DEFAULT = 100.0
 
 
 def canonical_json_bytes(obj: Any) -> bytes:
@@ -138,7 +144,7 @@ def _layout_from_buffer(
     action_width: int,
     b_obs: int,
     b_act: int,
-    action_scale: float = ACTION_SCALE_DEFAULT,
+    action_scale: float = 1.0,
 ) -> list[dict[str, Any]]:
     layout: list[dict[str, Any]] = []
     index = 0
@@ -209,7 +215,6 @@ def build_reduced_mdp_spec(
     certificate_path: str | Path | None = None,
     dt: float | None = None,
     max_steps: int = 5000,
-    action_scale: float = ACTION_SCALE_DEFAULT,
 ) -> dict[str, Any]:
     """Build a training/eval architecture contract from a checked certificate."""
     model_abs = os.path.abspath(model_path)
@@ -273,6 +278,7 @@ def build_reduced_mdp_spec(
             "action_map": env_info["action_map"],
         }
         layout_version = "current_obs_then_past_obs_then_past_executed_actions_v1"
+        action_scale = 1.0
     else:
         shield = ContinuousShield(model_abs)
         action_width = int(env_info["act_dim"])
@@ -280,6 +286,11 @@ def build_reduced_mdp_spec(
             raise ValueError(
                 "continuous reduced-MDP specs currently support exactly one real output; "
                 f"observed act_dim={action_width}"
+            )
+        action_scale = max(abs(float(shield.act_low)), abs(float(shield.act_high)))
+        if not math.isfinite(action_scale) or action_scale <= 0:
+            raise ValueError(
+                "continuous #NeuralRequirement must provide a finite nonzero action range"
             )
         shield_info = {
             "type": CONTINUOUS_SHIELD_TYPE,
@@ -321,6 +332,19 @@ def build_reduced_mdp_spec(
         action_scale=action_scale,
     )
     input_dim = len(layout)
+    feedforward_architecture = None
+    if action_kind == "discrete":
+        feedforward_architecture = derive_feedforward_architecture(
+            shield,
+            input_dim=input_dim,
+            action_count=action_width,
+        )
+    else:
+        feedforward_architecture = derive_continuous_feedforward_architecture(
+            shield,
+            input_dim=input_dim,
+            action_dim=action_width,
+        )
 
     one_step = (
         certificate.get("solver_advisory", {})
@@ -360,6 +384,7 @@ def build_reduced_mdp_spec(
         },
         "action_space": action_space,
         "shield": shield_info,
+        "feedforward_architecture": feedforward_architecture,
         "proof_summary": {
             "claim_level": certificate.get("claim", {}).get("level"),
             "solver_backed_mdp_theorem": certificate.get("claim", {}).get(
@@ -514,6 +539,35 @@ def check_reduced_mdp_spec(
             errors.append("discrete shield history semantics are not exact executed-action semantics")
         if shield.get("action_map") != action_space.get("action_map"):
             errors.append("shield action map does not match action space action map")
+        architecture = spec.get("feedforward_architecture")
+        if not isinstance(architecture, dict):
+            errors.append("discrete spec lacks a derived feedforward architecture")
+        elif isinstance(input_dim, int) and isinstance(action_width, int):
+            errors.extend(check_feedforward_architecture(
+                architecture,
+                input_dim=input_dim,
+                action_count=action_width,
+            ))
+            if check_files and model_path and os.path.exists(model_path):
+                try:
+                    observed_interface = extract_interface(
+                        model_path,
+                        dt=float(model_info.get("dt", 0.1)),
+                    )
+                    observed_architecture = derive_feedforward_architecture(
+                        observed_interface["spec_shield"],
+                        input_dim=input_dim,
+                        action_count=action_width,
+                    )
+                    if architecture != observed_architecture:
+                        errors.append(
+                            "feedforward architecture does not match the SysML requirement"
+                        )
+                except Exception as exc:
+                    errors.append(
+                        "could not recompute feedforward architecture from SysML: "
+                        f"{exc}"
+                    )
     elif action_type == "continuous_single_real_output":
         if shield.get("type") != CONTINUOUS_SHIELD_TYPE:
             errors.append(f"unsupported continuous shield type={shield.get('type')}")
@@ -528,6 +582,33 @@ def check_reduced_mdp_spec(
             errors.append("continuous shield static interval lacks numeric low")
         if not isinstance(interval.get("high"), (int, float)):
             errors.append("continuous shield static interval lacks numeric high")
+        architecture = spec.get("feedforward_architecture")
+        if not isinstance(architecture, dict):
+            errors.append("continuous spec lacks a derived feedforward architecture")
+        elif isinstance(input_dim, int) and isinstance(action_width, int):
+            errors.extend(check_continuous_feedforward_architecture(
+                architecture,
+                input_dim=input_dim,
+                action_dim=action_width,
+            ))
+            if check_files and model_path and os.path.exists(model_path):
+                try:
+                    observed_shield = ContinuousShield(model_path)
+                    observed_architecture = derive_continuous_feedforward_architecture(
+                        observed_shield,
+                        input_dim=input_dim,
+                        action_dim=action_width,
+                    )
+                    if architecture != observed_architecture:
+                        errors.append(
+                            "continuous feedforward architecture does not match "
+                            "the SysML requirement"
+                        )
+                except Exception as exc:
+                    errors.append(
+                        "could not recompute continuous feedforward architecture "
+                        f"from SysML: {exc}"
+                    )
 
     contract = spec.get("training_contract", {})
     if contract.get("policy_class") != "memoryless":

@@ -29,10 +29,10 @@ outputs/latest/logs/
 
 | stage | what it checks | example result |
 |---|---|---|
-| Affine/rule fit | Whether a NeuralRequirement already gives a direct non-recurrent rule controller. | `cruise-discrete`: `0` learned params, safety `0`, pointwise agreement `1`. |
-| Memoryless controller check | Whether a finite buffer is enough for the current controller decision. | `cruise-discrete`: `b_obs=1`, `b_act=1`. |
-| Provable Markov/MDP check | Whether a finite buffer is enough to prove the next modeled step is determined. | `cruise-discrete`: `b_obs=1`, `b_act=2`, checker `passed`. |
-| Reduced feedforward training | Whether the run-local certified specs can drive small non-recurrent policies. | `cruise-discrete`: handmade NumPy MLP trained with exact program shield. |
+| Affine/rule fit | Whether a NeuralRequirement already gives a direct non-recurrent rule controller. | `cruise-control`: `0` learned params, safety `0`, pointwise agreement `1`. |
+| Memoryless controller check | Whether the current controller inputs alone are enough for the current decision. | `cruise-control`: `b_obs=0`, `b_act=0`. |
+| Provable Markov/MDP check | Whether a finite buffer is enough to prove the next modeled step is determined. | `cruise-control`: `b_obs=1`, `b_act=2`, checker `passed`. |
+| Reduced feedforward training | Whether the run-local certified specs can drive small non-recurrent policies. | `cruise-control`: NumPy MLP trained while checking the current SysML requirement. |
 
 ## Cruise Example
 
@@ -41,9 +41,9 @@ The discrete cruise model is a useful small example.
 - Affine/rule fit. Throttle when target speed is above current speed beyond
   tolerance and the gap is safe. Brake when current speed is above target beyond
   tolerance. Brake when the following gap is unsafe. Otherwise coast.
-- Memoryless controller check. The current decision target is reconstructible with
-  current observation, `1` past observation, and `1` previous action.
+- Memoryless controller check. The current decision target is determined by the
+  current controller inputs without past observations or previous actions.
 - Provable Markov/MDP check. The modeled next step is certified with
   current observation, `1` past observation, and `2` previous actions.
 - Reduced feedforward training. A small MLP consumes the certified buffer.
-  The exact shield still enforces the requirement during training and eval.
+  The requirement read from the current SysML file is checked during training and evaluation.

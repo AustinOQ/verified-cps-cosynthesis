@@ -7,6 +7,51 @@ from collections import Counter
 import numpy as np
 
 
+def collect_oracle_episode(iface, env, *, max_steps: int = 5000,
+                           reset_seed: int | None = None,
+                           sample_limit: int | None = None,
+                           include_terminal: bool = False
+                           ) -> tuple[np.ndarray, np.ndarray]:
+    """Collect one full rule-labeled episode from a seeded environment."""
+    from oracle import spec_oracle
+
+    spec_shield = iface["spec_shield"]
+    obs_names = iface["obs_names"]
+
+    def oracle_action() -> int:
+        raw_obs = env._twin._model_inputs
+        missing = [name for name in obs_names if name not in raw_obs]
+        if missing:
+            raise KeyError(f"SysML simulation omitted neural inputs: {missing}")
+        obs_dict = {name: float(raw_obs[name]) for name in obs_names}
+        return int(spec_oracle(spec_shield, obs_dict))
+
+    obs_all = []
+    act_all = []
+    obs = env.reset(seed=reset_seed)
+    done = False
+    steps = 0
+    while not done and steps < max_steps:
+        if sample_limit is not None and len(obs_all) >= sample_limit:
+            break
+        action = oracle_action()
+        obs_all.append(np.asarray(obs, dtype=np.float32).copy())
+        act_all.append(action)
+        obs, _, done, _ = env.step(action)
+        steps += 1
+
+    if include_terminal and (
+        sample_limit is None or len(obs_all) < sample_limit
+    ):
+        obs_all.append(np.asarray(obs, dtype=np.float32).copy())
+        act_all.append(oracle_action())
+
+    return (
+        np.asarray(obs_all, dtype=np.float32),
+        np.asarray(act_all, dtype=np.int64),
+    )
+
+
 def generate_oracle_data(iface, env, n_samples: int,
                          min_class_count: int = 0,
                          max_steps: int = 5000,
@@ -17,18 +62,9 @@ def generate_oracle_data(iface, env, n_samples: int,
     the coverage-oriented behavior used by the reduced PyTorch runner. Coverage
     is over observed oracle classes; structurally dead actions are not forced.
     """
-    from oracle import spec_oracle
-
-    spec_shield = iface["spec_shield"]
-    obs_names = iface["obs_names"]
     obs_all: list[np.ndarray] = []
     act_all: list[int] = []
     by_class: Counter[int] = Counter()
-
-    def oracle_action() -> int:
-        raw_obs = env._twin._model_inputs
-        obs_dict = {name: float(raw_obs.get(name, 0.0)) for name in obs_names}
-        return int(spec_oracle(spec_shield, obs_dict))
 
     def need_more() -> bool:
         if len(obs_all) < n_samples:
@@ -39,22 +75,18 @@ def generate_oracle_data(iface, env, n_samples: int,
 
     resets = 0
     while need_more() and resets < max_resets:
-        obs = env.reset()
+        remaining = None if min_class_count > 0 else n_samples - len(obs_all)
+        obs_ep, act_ep = collect_oracle_episode(
+            iface,
+            env,
+            max_steps=max_steps,
+            sample_limit=remaining,
+            include_terminal=min_class_count > 0,
+        )
         resets += 1
-        done = False
-        steps = 0
-        while not done and steps < max_steps:
-            action = oracle_action()
-            obs_all.append(np.asarray(obs, dtype=np.float32).copy())
-            act_all.append(action)
-            by_class[action] += 1
-            obs, _, done, _ = env.step(action)
-            steps += 1
-            if not need_more() and min_class_count <= 0:
-                break
-        if min_class_count > 0:
-            action = oracle_action()
-            obs_all.append(np.asarray(obs, dtype=np.float32).copy())
+        for obs, action in zip(obs_ep, act_ep):
+            obs_all.append(obs)
+            action = int(action)
             act_all.append(action)
             by_class[action] += 1
 
@@ -92,4 +124,3 @@ def balance_classes(obs: np.ndarray, acts: np.ndarray, seed: int = 0):
     out_acts = np.concatenate(act_chunks, axis=0)
     perm = rng.permutation(len(out_acts))
     return out_obs[perm], out_acts[perm]
-

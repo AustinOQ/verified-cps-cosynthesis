@@ -21,7 +21,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
-from .analyze import MODELS
+from sysml_inputs import discover_sysml
 from .certificate import (
     PROFILE_OBLIGATIONS_DISCHARGED,
     build_certificate_for_path,
@@ -35,6 +35,20 @@ from .relevance import compute_transition_closed_relevance, equation_refs
 from .solver import MAX_SOLVER_POLYNOMIAL_DEGREE, one_step_transition_closure
 from .strict_extract import extract_equation_model
 from reconstruct_closure import get_strict_model, reconstruct
+
+
+_DISCOVERED = {
+    item.key: item.path
+    for item in discover_sysml(
+        [], models_root=Path(__file__).resolve().parents[2] / "sysml-models"
+    )
+}
+MODELS = {
+    "mixing": _DISCOVERED["tank-filling-system"],
+    "thermostat": _DISCOVERED["thermostat"],
+    "cruise-continuous": _DISCOVERED["cruise-control-continuous"],
+    "cruise-discrete": _DISCOVERED["cruise-control"],
+}
 
 
 EXPECTED = {
@@ -140,7 +154,8 @@ def _assert_positive_model(battery: Battery, name: str, cert_dir: Path) -> dict[
     expected = EXPECTED[name]
     model = extract_equation_model(MODELS[name])
     relevance = compute_transition_closed_relevance(model)
-    terminal = model.terminals.get("env.done")
+    terminals = list(model.terminals.values())
+    terminal = terminals[0] if len(terminals) == 1 else None
     terminal_refs = set()
     if terminal is not None:
         terminal_refs = {

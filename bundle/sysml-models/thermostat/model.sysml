@@ -126,7 +126,7 @@ package Thermostat {
         #Neural action def Policy {
             in setPoint : Real;
             in temperatureCelcius : Real;
-            in done : Boolean;
+            #Completion in done : Boolean;
 
             out heaterState : Boolean;
             out acState : Boolean;
