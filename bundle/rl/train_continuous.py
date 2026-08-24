@@ -28,11 +28,13 @@ from torch.distributions import Normal
 
 sys.stdout.reconfigure(line_buffering=True)
 sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "sysml-models"))
 
 from ppo import compute_gae
 from continuous_env import SysMLContinuousEnv
 from continuous_model import (GaussianRecurrentActorCritic,
                               build_continuous_composite)
+from runtime_settings import DEFAULT_DT, validate_dt
 
 
 # =====================================================================
@@ -262,7 +264,7 @@ def main():
     ap.add_argument("--eval-interval", type=int, default=200)   # = checkpoint interval
     ap.add_argument("--eval-episodes", type=int, default=100)
     ap.add_argument("--max-steps", type=int, default=1200)
-    ap.add_argument("--dt", type=float, default=0.1)
+    ap.add_argument("--dt", type=validate_dt, default=DEFAULT_DT)
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--lr", type=float, default=3e-4)
     ap.add_argument("--anneal-lr", action="store_true",

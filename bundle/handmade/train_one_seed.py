@@ -26,8 +26,12 @@ import numpy as np
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _REPO_ROOT = os.path.dirname(_HERE)
 _RL_DIR = os.path.join(_REPO_ROOT, "rl")
-if _RL_DIR not in sys.path:
-    sys.path.insert(0, _RL_DIR)
+_MODELS_DIR = os.path.join(_REPO_ROOT, "sysml-models")
+for _path in (_RL_DIR, _MODELS_DIR):
+    if _path not in sys.path:
+        sys.path.insert(0, _path)
+
+from runtime_settings import validate_dt
 
 from .composite import Composite
 from .episode import collect_episode, evaluate
@@ -94,12 +98,13 @@ def _restore_params(policy, params: dict):
 
 
 def train_one_seed(model_path: str, seed: int, seed_dir: str,
-                   dt: float = 0.1, max_steps: int = 5000,
+                   dt: float, max_steps: int = 5000,
                    ensure_class_coverage: int = 0,
                    balance_oracle_classes: bool = False,
                    eval_episodes: int = 100,
                    test_episodes: int = 200,
                    config: dict | None = None):
+    dt = validate_dt(dt)
     cfg = dict(DEFAULT_CONFIG)
     if config:
         cfg.update(config)
@@ -115,7 +120,7 @@ def train_one_seed(model_path: str, seed: int, seed_dir: str,
                      rng_seed=seed)
     obs_dim, n_actions = probe.obs_dim, probe.n_actions
     probe.close()
-    iface = extract_interface(model_path, dt=dt)
+    iface = extract_interface(model_path)
 
     # ---- build policy + composite ----
     policy = RecurrentActorCritic(obs_dim, n_actions, cfg["hidden_dim"],
@@ -349,6 +354,7 @@ def train_one_seed(model_path: str, seed: int, seed_dir: str,
     summary = {
         "seed": seed,
         "model_path": model_path,
+        "dt": dt,
         "obs_dim": obs_dim,
         "n_actions": n_actions,
         "train_seconds": train_seconds,

@@ -30,6 +30,7 @@ from .relevance import compute_transition_closed_relevance, equation_refs
 from .solver import MAX_SOLVER_POLYNOMIAL_DEGREE, one_step_transition_closure
 from .strict_extract import extract_equation_model
 from sysml_parser import BinaryExpr, LiteralExpr, RefExpr, SysMLParser, TernaryExpr, UnaryExpr
+from runtime_settings import DEFAULT_DT, validate_dt
 
 
 SCHEMA_VERSION = 2
@@ -389,6 +390,15 @@ def _shield_semantics_summary(
     }
     completion_params = set(neural.get("completion_params", []))
 
+    if neural.get("neural_requirement") is None:
+        return {
+            "status": "not_discharged",
+            "semantic_status": "missing_neural_requirement_ast",
+            "runtime_class": "SpecShield",
+            "unknown_requirement_refs": [],
+            "interface": neural,
+        }
+
     try:
         from shield import SpecShield, _collect_refs, _flatten_and  # type: ignore
     except Exception as exc:  # pragma: no cover - environment/configuration failure
@@ -402,10 +412,26 @@ def _shield_semantics_summary(
         with contextlib.redirect_stdout(io.StringIO()):
             spec = SpecShield(model_path)
     except Exception as exc:
+        message = str(exc)
+        unresolved_marker = "#NeuralRequirement contains unresolved references:"
+        if unresolved_marker in message:
+            unknown_refs = [
+                item.strip()
+                for item in message.split(unresolved_marker, 1)[1].split(",")
+                if item.strip()
+            ]
+            return {
+                "status": "not_discharged",
+                "semantic_status": "unknown_requirement_refs",
+                "runtime_class": "SpecShield",
+                "unknown_requirement_refs": sorted(unknown_refs),
+                "interface": neural,
+                "error": message,
+            }
         return {
             "status": "not_discharged",
             "semantic_status": "spec_shield_construction_failed",
-            "error": str(exc),
+            "error": message,
         }
 
     output_types = neural.get("output_param_types", {})
@@ -824,10 +850,11 @@ def build_certificate_for_path(
     max_obs: int = 2,
     max_act: int = 4,
     horizon: int = 14,
-    dt: float = 0.1,
+    dt: float,
     enable_sampled_memory: bool = True,
     include_solver_artifacts: bool = False,
 ) -> dict[str, Any]:
+    dt = validate_dt(dt)
     eq_model = extract_equation_model(model_path)
     relevance = compute_transition_closed_relevance(eq_model)
     strict_model = get_strict_model(
@@ -1279,6 +1306,10 @@ def check_certificate(certificate: dict[str, Any], *, check_hash: bool = True) -
         errors.append("proof section does not pass")
 
     settings = certificate.get("settings", {})
+    try:
+        validate_dt(settings.get("dt"))
+    except (TypeError, ValueError):
+        errors.append(f"invalid certificate dt={settings.get('dt')}")
     buffer = certificate.get("buffer") or {}
     sets = certificate.get("sets", {})
     deps = certificate.get("dependency_model", {})
@@ -1532,7 +1563,7 @@ def main() -> int:
     ap.add_argument("--max-obs", type=int, default=2)
     ap.add_argument("--max-act", type=int, default=4)
     ap.add_argument("--horizon", type=int, default=14)
-    ap.add_argument("--dt", type=float, default=0.1)
+    ap.add_argument("--dt", type=validate_dt, default=DEFAULT_DT)
     ap.add_argument("--no-sampled-memory", action="store_true")
     ap.add_argument("--check", action="store_true", help="run the independent checker")
     args = ap.parse_args()

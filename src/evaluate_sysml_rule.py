@@ -22,6 +22,7 @@ for path in (ARCH, REPO / "rl", REPO / "sysml-models"):
 
 from env import SysMLEnv  # noqa: E402
 from oracle import extract_interface, spec_oracle  # noqa: E402
+from runtime_settings import DEFAULT_DT, validate_dt  # noqa: E402
 from sysml_inputs import inspect_sysml  # noqa: E402
 
 
@@ -34,6 +35,7 @@ def _observation(raw: dict[str, Any], names: list[str]) -> dict[str, float | boo
 
 def evaluate(model_path: Path, episodes: int, seed: int, dt: float,
              max_steps: int) -> dict[str, Any]:
+    dt = validate_dt(dt)
     model = inspect_sysml(model_path)
     base = {
         "model": model.key,
@@ -41,6 +43,7 @@ def evaluate(model_path: Path, episodes: int, seed: int, dt: float,
         "model_path": str(model.path),
         "model_sha256": model.sha256,
         "action_kind": model.action_kind,
+        "dt": dt,
         "method": "action extracted from #NeuralRequirement",
         "learned_params": 0,
         "recurrent_state": False,
@@ -53,7 +56,7 @@ def evaluate(model_path: Path, episodes: int, seed: int, dt: float,
         }
 
     started = time.time()
-    interface = extract_interface(str(model.path), dt=dt)
+    interface = extract_interface(str(model.path))
     shield = interface["spec_shield"]
     observation_names = list(interface["obs_names"])
     env = SysMLEnv(
@@ -122,7 +125,7 @@ def main() -> int:
     parser.add_argument("model")
     parser.add_argument("--episodes", type=int, default=20)
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--dt", type=float, default=0.1)
+    parser.add_argument("--dt", type=validate_dt, default=DEFAULT_DT)
     parser.add_argument("--max-steps", type=int, default=5000)
     parser.add_argument("--out-json", required=True)
     args = parser.parse_args()

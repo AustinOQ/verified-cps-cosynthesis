@@ -59,7 +59,7 @@ package CruiseControl {
             in dt : Real;
             // Net force = engine + brake - aerodynamic drag - grade resistance.
             // Brake force is negative when braking.
-            assign speedMps :=
+            #ContinuousRate assign speedMps :=
                 speedMps +
                 ((enginePort.drive.forceNewtons + brakePort.drive.forceNewtons
                   - dragCoefficient * speedMps * speedMps
@@ -67,7 +67,7 @@ package CruiseControl {
                  * dt) / massKg;
 
             // Gap to lead vehicle: closes when ego is faster, opens when slower.
-            assign gapMeters := gapMeters + (leadSpeedMps - speedMps) * dt;
+            #ContinuousRate assign gapMeters := gapMeters + (leadSpeedMps - speedMps) * dt;
         }
 
         bind speedSensorPort.reading.speedMps = speedMps;
@@ -210,7 +210,7 @@ package CruiseControl {
 
         action step {
             in dt : Real;
-            assign currentTime := currentTime + dt;
+            #ContinuousRate assign currentTime := currentTime + dt;
         }
 
         #Prohibition

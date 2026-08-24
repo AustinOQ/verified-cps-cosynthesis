@@ -16,6 +16,7 @@ import threading
 from typing import Any, Optional
 
 from sysml_parser import SysMLParser
+from runtime_settings import validate_dt
 from simulator import SimulationEngine
 
 
@@ -27,9 +28,9 @@ class SimulatorTwin:
     twin(action) resumes the simulator by making model() return action.
     """
 
-    def __init__(self, model_path: str, dt: float = 0.1):
+    def __init__(self, model_path: str, dt: float):
         self._model_path = model_path
-        self._dt = dt
+        self._dt = validate_dt(dt)
         self._parser = SysMLParser(model_path)
         self._parser.parse()
 

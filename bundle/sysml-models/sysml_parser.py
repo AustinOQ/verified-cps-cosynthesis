@@ -91,6 +91,7 @@ class AssignStmt(ActionStmt):
     """assign target := expr;"""
     target: list[str]
     expr: Expr
+    metadata: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -382,6 +383,7 @@ class StepAction:
     expression: Expr        # RHS expression
     context: str            # Part instance FQN
     condition: Optional[Expr] = None  # Enclosing if-condition, if any
+    metadata: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -637,7 +639,7 @@ class SysMLParser:
         simple_patterns = [
             ('in_param',       r'\bin\s+(\w+)\s*:\s*(\w+)\s*;'),
             ('item_decl',      r'\bitem\s+(\w+)\s*:\s*(\w+)\s*;'),
-            ('assign',         r'\bassign\s+([\w.]+)\s*:=\s*([^;]+?)\s*;'),
+            ('assign',         r'(?:#(\w+)\s+)?\bassign\s+([\w.]+)\s*:=\s*([^;]+?)\s*;'),
             ('send',           r'\bsend\s+(\w+)\s+via\s+([\w.]+)\s*;'),
             ('accept_named',   r'\baccept\s+(\w+)\s*:\s*(\w+)\s+via\s+([\w.]+)\s*;'),
             ('accept_unnamed', r'\baccept\s+(\w+)\s+via\s+([\w.]+)\s*;'),
@@ -683,10 +685,15 @@ class SysMLParser:
             elif kind == 'item_decl':
                 stmts.append(ItemDeclStmt(name=data.group(1), type_name=data.group(2)))
             elif kind == 'assign':
-                target = data.group(1).split('.')
+                target = data.group(2).split('.')
                 try:
-                    expr = ExpressionParser(data.group(2).strip()).parse()
-                    stmts.append(AssignStmt(target=target, expr=expr))
+                    expr = ExpressionParser(data.group(3).strip()).parse()
+                    metadata = [data.group(1)] if data.group(1) else []
+                    stmts.append(AssignStmt(
+                        target=target,
+                        expr=expr,
+                        metadata=metadata,
+                    ))
                 except Exception:
                     pass
             elif kind == 'send':
@@ -1214,6 +1221,7 @@ class SysMLParser:
                             expression=stmt.expr,
                             context=fqn,
                             condition=cond,
+                            metadata=list(stmt.metadata),
                         ))
 
             # Register bind statements as key-to-key attribute bindings
@@ -1272,6 +1280,7 @@ class SysMLParser:
                                     expression=stmt.expr,
                                     context=fqn,
                                     condition=cond,
+                                    metadata=list(stmt.metadata),
                                 ))
                                 if len(stmt.target) == 1:
                                     sys_assign_targets.add(stmt.target[0])

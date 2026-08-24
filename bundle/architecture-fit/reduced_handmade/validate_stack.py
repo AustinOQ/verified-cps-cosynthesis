@@ -42,6 +42,7 @@ from handmade.io import load_policy, save_policy
 from handmade.losses import ppo_update_grads
 from mlp_buffer import BufferedContinuousEnv
 from oracle import extract_interface
+from runtime_settings import DEFAULT_DT
 
 from reduced_handmade.buffered_env import BufferedDiscreteEnv
 from reduced_handmade.collection import (
@@ -67,6 +68,8 @@ MODELS = {
     "mixing": _DISCOVERED["tank-filling-system"],
     "thermostat": _DISCOVERED["thermostat"],
 }
+TEST_DT = DEFAULT_DT
+NONDEFAULT_TEST_DT = DEFAULT_DT / 2.0
 
 
 def _assert(condition: bool, message: str) -> None:
@@ -218,7 +221,7 @@ def check_composite_uses_program_shield(seed: int = 3) -> dict:
 def check_buffered_env(model_key: str = "mixing") -> dict:
     model_path = str(MODELS[model_key])
     env = BufferedDiscreteEnv(
-        model_path, dt=0.1, max_steps=20, phase=1,
+        model_path, dt=TEST_DT, max_steps=20, phase=1,
         rng_seed=11, n_obs=2, n_act=1)
     try:
         base = env._base_obs_dim
@@ -253,7 +256,7 @@ def check_derived_feedforward_architectures() -> dict:
         model_path = str(MODELS[model_key])
         env = BufferedDiscreteEnv(
             model_path,
-            dt=0.1,
+            dt=TEST_DT,
             max_steps=20,
             phase=1,
             rng_seed=41,
@@ -265,7 +268,7 @@ def check_derived_feedforward_architectures() -> dict:
             action_count = env.n_actions
         finally:
             env.close()
-        iface = extract_interface(model_path, dt=0.1)
+        iface = extract_interface(model_path)
         architecture = derive_feedforward_architecture(
             iface["spec_shield"],
             input_dim=input_dim,
@@ -289,7 +292,7 @@ def check_parallel_collection_equivalence(model_key: str = "cruise") -> dict:
     n_obs = 1
     n_act = 1
     probe = BufferedDiscreteEnv(
-        model_path, dt=0.1, max_steps=20, phase=2,
+        model_path, dt=TEST_DT, max_steps=20, phase=2,
         rng_seed=19, n_obs=n_obs, n_act=n_act)
     try:
         obs_dim = probe.obs_dim
@@ -297,13 +300,13 @@ def check_parallel_collection_equivalence(model_key: str = "cruise") -> dict:
     finally:
         probe.close()
 
-    iface = extract_interface(model_path, dt=0.1)
+    iface = extract_interface(model_path)
     policy = MLPActorCritic(obs_dim, n_actions, hidden_dim=2, seed=23)
     composite = ProgramShieldComposite(
         policy, iface["spec_shield"], iface["obs_names"])
     runtime = DiscreteRuntime(
         model_path=model_path,
-        dt=0.1,
+        dt=TEST_DT,
         max_steps=20,
         phase=2,
         n_obs=n_obs,
@@ -400,7 +403,7 @@ def check_parallel_collection_equivalence(model_key: str = "cruise") -> dict:
 
 def check_certificate_gate(model_key: str = "mixing") -> dict:
     cert = build_certificate_for_path(
-        str(MODELS[model_key]), max_obs=2, max_act=6, horizon=14, dt=0.1)
+        str(MODELS[model_key]), max_obs=2, max_act=6, horizon=14, dt=TEST_DT)
     errors = check_certificate(cert)
     _assert(not errors, f"fresh certificate failed checker: {errors}")
 
@@ -423,14 +426,14 @@ def check_reduced_mdp_spec_contract(out_dir: Path, model_key: str = "mixing") ->
     spec_dir.mkdir(parents=True, exist_ok=True)
     model_path = str(MODELS[model_key])
     cert = build_certificate_for_path(
-        model_path, max_obs=2, max_act=6, horizon=14, dt=0.1)
+        model_path, max_obs=2, max_act=6, horizon=14, dt=TEST_DT)
     cert_path = spec_dir / "certificate.json"
     write_certificate(cert, cert_path)
     spec = build_reduced_mdp_spec(
         model_path,
         certificate=cert,
         certificate_path=cert_path,
-        dt=0.1,
+        dt=TEST_DT,
         max_steps=20,
     )
     spec_path = spec_dir / "reduced_mdp_spec.json"
@@ -440,7 +443,7 @@ def check_reduced_mdp_spec_contract(out_dir: Path, model_key: str = "mixing") ->
     _assert(not errors, f"fresh reduced-MDP spec failed checker: {errors}")
 
     env = BufferedDiscreteEnv(
-        model_path, dt=0.1, max_steps=20, phase=1, rng_seed=13,
+        model_path, dt=TEST_DT, max_steps=20, phase=1, rng_seed=13,
         n_obs=loaded["certified_buffer"]["b_obs"],
         n_act=loaded["certified_buffer"]["b_act"],
     )
@@ -492,14 +495,14 @@ def check_continuous_reduced_mdp_spec_contract(out_dir: Path) -> dict:
     spec_dir.mkdir(parents=True, exist_ok=True)
     model_path = str(MODELS["cruise-continuous"])
     cert = build_certificate_for_path(
-        model_path, max_obs=2, max_act=6, horizon=14, dt=0.1)
+        model_path, max_obs=2, max_act=6, horizon=14, dt=TEST_DT)
     cert_path = spec_dir / "certificate.json"
     write_certificate(cert, cert_path)
     spec = build_reduced_mdp_spec(
         model_path,
         certificate=cert,
         certificate_path=cert_path,
-        dt=0.1,
+        dt=TEST_DT,
         max_steps=20,
     )
     spec_path = spec_dir / "reduced_mdp_spec.json"
@@ -511,7 +514,7 @@ def check_continuous_reduced_mdp_spec_contract(out_dir: Path) -> dict:
             "continuous spec did not record continuous action space")
 
     env = BufferedContinuousEnv(
-        model_path, dt=0.1, max_steps=20, phase=1, rng_seed=17,
+        model_path, dt=TEST_DT, max_steps=20, phase=1, rng_seed=17,
         n_obs=loaded["certified_buffer"]["b_obs"],
         n_act=loaded["certified_buffer"]["b_act"],
     )
@@ -539,12 +542,112 @@ def check_continuous_reduced_mdp_spec_contract(out_dir: Path) -> dict:
     }
 
 
+def check_dt_propagation_and_mismatches(out_dir: Path) -> dict:
+    case_dir = out_dir / "dt_propagation"
+    case_dir.mkdir(parents=True, exist_ok=True)
+    model_path = str(MODELS["thermostat"])
+    cert = build_certificate_for_path(
+        model_path,
+        max_obs=2,
+        max_act=6,
+        horizon=14,
+        dt=NONDEFAULT_TEST_DT,
+    )
+    _assert(
+        cert["settings"]["dt"] == NONDEFAULT_TEST_DT,
+        "certificate did not record the supplied nondefault dt",
+    )
+    cert_path = case_dir / "certificate.json"
+    write_certificate(cert, cert_path)
+    spec = build_reduced_mdp_spec(
+        model_path,
+        certificate=cert,
+        certificate_path=cert_path,
+        dt=NONDEFAULT_TEST_DT,
+        max_steps=20,
+    )
+    spec_path = case_dir / "reduced_mdp_spec.json"
+    write_reduced_mdp_spec(spec, spec_path)
+    _assert(
+        spec["model"]["dt"] == NONDEFAULT_TEST_DT,
+        "reduced-MDP spec did not record the certificate dt",
+    )
+    _assert(
+        not check_reduced_mdp_spec(load_reduced_mdp_spec(spec_path)),
+        "nondefault-dt reduced-MDP spec failed its checker",
+    )
+
+    env = BufferedDiscreteEnv(
+        model_path,
+        dt=NONDEFAULT_TEST_DT,
+        max_steps=20,
+        phase=1,
+        rng_seed=53,
+        n_obs=spec["certified_buffer"]["b_obs"],
+        n_act=spec["certified_buffer"]["b_act"],
+    )
+    try:
+        _assert(
+            env._twin._dt == NONDEFAULT_TEST_DT,
+            "simulator did not receive the supplied nondefault dt",
+        )
+    finally:
+        env.close()
+
+    try:
+        build_reduced_mdp_spec(
+            model_path,
+            certificate=cert,
+            certificate_path=cert_path,
+            dt=TEST_DT,
+            max_steps=20,
+        )
+    except ValueError as exc:
+        _assert("certificate dt does not match" in str(exc),
+                "certificate/spec dt mismatch raised the wrong error")
+    else:
+        raise AssertionError("certificate/spec dt mismatch was accepted")
+
+    bad_spec = copy.deepcopy(spec)
+    bad_spec["model"]["dt"] = TEST_DT
+    bad_spec["self_sha256"] = spec_hash(bad_spec)
+    mismatch_errors = check_reduced_mdp_spec(bad_spec)
+    _assert(
+        "loaded certificate dt does not match spec" in mismatch_errors,
+        "reduced-MDP checker accepted a certificate/spec dt mismatch",
+    )
+
+    try:
+        train_one_seed(
+            model_path,
+            seed=0,
+            out_dir=case_dir / "trainer_mismatch",
+            dt=TEST_DT,
+            reduced_mdp_spec_path=spec_path,
+        )
+    except RuntimeError as exc:
+        _assert("training dt does not match" in str(exc),
+                "trainer dt mismatch raised the wrong error")
+    else:
+        raise AssertionError("trainer accepted a reduced-MDP spec with another dt")
+
+    bad_cert = copy.deepcopy(cert)
+    bad_cert["settings"]["dt"] = 0.0
+    _assert(check_certificate(bad_cert), "certificate checker accepted an invalid dt")
+    return {
+        "dt": NONDEFAULT_TEST_DT,
+        "certificate": str(cert_path),
+        "spec": str(spec_path),
+    }
+
+
 def check_smoke_training(out_dir: Path) -> dict:
     run_dir = out_dir / "smoke_mixing_h4"
     result = train_one_seed(
         str(MODELS["mixing"]),
         seed=0,
         out_dir=run_dir,
+        dt=TEST_DT,
         ensure_class_coverage=4,
         config={
             "oracle_samples": 64,
@@ -574,6 +677,7 @@ def check_smoke_training(out_dir: Path) -> dict:
         str(MODELS["mixing"]),
         seed=1,
         out_dir=spec_run_dir,
+        dt=TEST_DT,
         ensure_class_coverage=4,
         reduced_mdp_spec_path=result["reduced_mdp_spec_path"],
         collection_backend="process",
@@ -640,6 +744,8 @@ def main() -> int:
         ("reduced_mdp_spec_contract", lambda: check_reduced_mdp_spec_contract(out_dir)),
         ("continuous_reduced_mdp_spec_contract",
          lambda: check_continuous_reduced_mdp_spec_contract(out_dir)),
+        ("dt_propagation_and_mismatches",
+         lambda: check_dt_propagation_and_mismatches(out_dir)),
     ]
     if not args.skip_smoke:
         checks.append(("end_to_end_smoke_training", lambda: check_smoke_training(out_dir)))

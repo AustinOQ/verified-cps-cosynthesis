@@ -13,6 +13,7 @@ from typing import Any
 
 from .equations import Const, Equation, EquationModel, Expr, Ite, Op, Var
 from .relevance import equation_refs
+from runtime_settings import validate_dt
 
 
 def fact_key(var: str, tau: int) -> str:
@@ -224,12 +225,14 @@ def equation_reconstruction_trace(
     b_obs: int,
     b_act: int,
     *,
+    dt: float,
     horizon: int = 14,
     target: set[str] | None = None,
-    dt: float | None = 0.1,
     enable_sampled_memory: bool = True,
 ) -> dict[str, Any]:
     """Replay equation-IR reconstructibility and record every derived fact."""
+
+    dt = validate_dt(dt)
 
     state = set(model.state)
     actions = set(model.actions)
@@ -403,13 +406,14 @@ def equation_reconstruction_trace(
 def equation_search(
     model: EquationModel,
     *,
+    dt: float,
     max_obs: int,
     max_act: int,
     horizon: int,
     target: set[str],
-    dt: float | None = 0.1,
     enable_sampled_memory: bool = True,
 ) -> tuple[tuple[int, int] | None, list[dict[str, Any]]]:
+    dt = validate_dt(dt)
     attempts: list[dict[str, Any]] = []
     selected: tuple[int, int] | None = None
     for b_obs in range(max_obs + 1):

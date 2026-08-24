@@ -1,0 +1,4661 @@
+{
+  "assumptions": [
+    "deterministic_schedule_known: verifier treats these state values as known schedule counters because their equations depend only on themselves: ['controller_currentTimeSeconds', 'controller_lastScanTimeSeconds']",
+    "sampled_memory_bound: controller_lastScanTimeSeconds equals a controller_currentTimeSeconds sample no older than 2 step(s), derived from scan guard under dt=0.1; certificate state is after the environment's reset/warmup scan opportunities",
+    "sampled_memory_bound: controller_observedLevel1 equals a feederTank1_currentLevelMl sample no older than 2 step(s), derived from scan guard under dt=0.1; certificate state is after the environment's reset/warmup scan opportunities",
+    "sampled_memory_bound: controller_observedLevel2 equals a feederTank2_currentLevelMl sample no older than 2 step(s), derived from scan guard under dt=0.1; certificate state is after the environment's reset/warmup scan opportunities"
+  ],
+  "buffer": {
+    "b_act": 1,
+    "b_obs": 2
+  },
+  "claim": {
+    "description": "Proof that the selected finite buffer reconstructs the transition-closed relevant state q under the extracted equation/dependency semantics, and that Z3 discharges the one-step self-composed uniqueness obligation over q, executed actions, observations, terminal equations, and requirement status equations. Reward and done obligations are discharged over the finite-horizon augmented state when mdp_obligations says so. Shield obligations are discharged as deterministic exact-shield semantics when mdp_obligations says so.",
+    "level": "strict_q_solver_backed_mdp_v1",
+    "mdp_theorem": "discharged",
+    "profile_mdp_theorem": "discharged",
+    "solver_backed_mdp_theorem": "discharged"
+  },
+  "dependency_model": {
+    "copies": [],
+    "nsupp": {
+      "controller_currentTimeSeconds": [
+        "controller_currentTimeSeconds"
+      ],
+      "controller_lastScanTimeSeconds": [
+        "controller_currentTimeSeconds",
+        "controller_lastScanTimeSeconds"
+      ],
+      "controller_observedLevel1": [
+        "controller_currentTimeSeconds",
+        "controller_lastScanTimeSeconds",
+        "controller_observedLevel1",
+        "feederTank1_currentLevelMl"
+      ],
+      "controller_observedLevel2": [
+        "controller_currentTimeSeconds",
+        "controller_lastScanTimeSeconds",
+        "controller_observedLevel2",
+        "feederTank2_currentLevelMl"
+      ],
+      "feederTank1_currentLevelMl": [
+        "feederTank1_currentLevelMl",
+        "pump1_isRunning",
+        "valve1_isOpen"
+      ],
+      "feederTank2_currentLevelMl": [
+        "feederTank2_currentLevelMl",
+        "pump2_isRunning",
+        "valve2_isOpen"
+      ],
+      "fillingTank_currentLevelMl": [
+        "fillingTank_currentLevelMl",
+        "pump1_isRunning",
+        "pump2_isRunning",
+        "valve1_isOpen",
+        "valve2_isOpen"
+      ],
+      "pump1_isRunning": [
+        "controller_policyCall_shouldTurnOnPump1"
+      ],
+      "pump2_isRunning": [
+        "controller_policyCall_shouldTurnOnPump2"
+      ],
+      "valve1_isOpen": [
+        "controller_policyCall_shouldOpenValve1"
+      ],
+      "valve2_isOpen": [
+        "controller_policyCall_shouldOpenValve2"
+      ]
+    },
+    "sampled_memories": [
+      {
+        "equation_pretty": "[transition] controller_lastScanTimeSeconds' = ite(((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz)), controller_currentTimeSeconds, controller_lastScanTimeSeconds)    # step:step",
+        "equation_source": "step:step",
+        "max_delay": 2,
+        "schedule_state": "controller_currentTimeSeconds",
+        "source": "controller_currentTimeSeconds",
+        "target": "controller_lastScanTimeSeconds"
+      },
+      {
+        "equation_pretty": "[performed_transition] controller_observedLevel1' = ite(((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz)), feederTank1_currentLevelMl, controller_observedLevel1)    # flattened performed action inside step",
+        "equation_source": "flattened performed action inside step",
+        "max_delay": 2,
+        "schedule_state": "controller_currentTimeSeconds",
+        "source": "feederTank1_currentLevelMl",
+        "target": "controller_observedLevel1"
+      },
+      {
+        "equation_pretty": "[performed_transition] controller_observedLevel2' = ite(((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz)), feederTank2_currentLevelMl, controller_observedLevel2)    # flattened performed action inside step",
+        "equation_source": "flattened performed action inside step",
+        "max_delay": 2,
+        "schedule_state": "controller_currentTimeSeconds",
+        "source": "feederTank2_currentLevelMl",
+        "target": "controller_observedLevel2"
+      }
+    ]
+  },
+  "diagnostics": {
+    "all": [
+      {
+        "code": "guarded_step_assignment",
+        "message": "guarded step assignment encoded as ite(cond, rhs, old_value)",
+        "pretty": "INFO guarded_step_assignment (controller_lastScanTimeSeconds): guarded step assignment encoded as ite(cond, rhs, old_value)",
+        "severity": "info",
+        "subject": "controller_lastScanTimeSeconds"
+      },
+      {
+        "code": "performed_guarded_assignment",
+        "message": "performed-action assignment encoded as ite(cond, rhs, old_value)",
+        "pretty": "INFO performed_guarded_assignment (controller_observedLevel1): performed-action assignment encoded as ite(cond, rhs, old_value)",
+        "severity": "info",
+        "subject": "controller_observedLevel1"
+      },
+      {
+        "code": "performed_guarded_assignment",
+        "message": "performed-action assignment encoded as ite(cond, rhs, old_value)",
+        "pretty": "INFO performed_guarded_assignment (controller_observedLevel2): performed-action assignment encoded as ite(cond, rhs, old_value)",
+        "severity": "info",
+        "subject": "controller_observedLevel2"
+      },
+      {
+        "code": "coil_latch_equation",
+        "message": "coil-write actuator latch coupled to controller policy output",
+        "pretty": "INFO coil_latch_equation (pump1_isRunning): coil-write actuator latch coupled to controller policy output",
+        "severity": "info",
+        "subject": "pump1_isRunning"
+      },
+      {
+        "code": "coil_latch_equation",
+        "message": "coil-write actuator latch coupled to controller policy output",
+        "pretty": "INFO coil_latch_equation (valve1_isOpen): coil-write actuator latch coupled to controller policy output",
+        "severity": "info",
+        "subject": "valve1_isOpen"
+      },
+      {
+        "code": "coil_latch_equation",
+        "message": "coil-write actuator latch coupled to controller policy output",
+        "pretty": "INFO coil_latch_equation (pump2_isRunning): coil-write actuator latch coupled to controller policy output",
+        "severity": "info",
+        "subject": "pump2_isRunning"
+      },
+      {
+        "code": "coil_latch_equation",
+        "message": "coil-write actuator latch coupled to controller policy output",
+        "pretty": "INFO coil_latch_equation (valve2_isOpen): coil-write actuator latch coupled to controller policy output",
+        "severity": "info",
+        "subject": "valve2_isOpen"
+      }
+    ],
+    "blocking": [],
+    "legacy_dependency_fallback_transitions": []
+  },
+  "equation_proof": {
+    "b_act": 1,
+    "b_obs": 2,
+    "blocked_unsafe_inversions": [
+      {
+        "equation_kind": "transition",
+        "equation_pretty": "[transition] controller_lastScanTimeSeconds' = ite(((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz)), controller_currentTimeSeconds, controller_lastScanTimeSeconds)    # step:step",
+        "equation_source": "step:step",
+        "equation_target": "controller_lastScanTimeSeconds",
+        "guard_pretty": "((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz))",
+        "guard_status": "not_proven_true",
+        "known_transition_tau": -13,
+        "reason": "guarded copy inversion is unsupported unless the guard is reconstructed and proven true",
+        "source": "controller_currentTimeSeconds",
+        "target": "controller_lastScanTimeSeconds",
+        "tau": -14
+      },
+      {
+        "equation_kind": "transition",
+        "equation_pretty": "[transition] controller_lastScanTimeSeconds' = ite(((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz)), controller_currentTimeSeconds, controller_lastScanTimeSeconds)    # step:step",
+        "equation_source": "step:step",
+        "equation_target": "controller_lastScanTimeSeconds",
+        "guard_pretty": "((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz))",
+        "guard_status": "not_proven_true",
+        "known_transition_tau": -12,
+        "reason": "guarded copy inversion is unsupported unless the guard is reconstructed and proven true",
+        "source": "controller_currentTimeSeconds",
+        "target": "controller_lastScanTimeSeconds",
+        "tau": -13
+      },
+      {
+        "equation_kind": "transition",
+        "equation_pretty": "[transition] controller_lastScanTimeSeconds' = ite(((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz)), controller_currentTimeSeconds, controller_lastScanTimeSeconds)    # step:step",
+        "equation_source": "step:step",
+        "equation_target": "controller_lastScanTimeSeconds",
+        "guard_pretty": "((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz))",
+        "guard_status": "not_proven_true",
+        "known_transition_tau": -11,
+        "reason": "guarded copy inversion is unsupported unless the guard is reconstructed and proven true",
+        "source": "controller_currentTimeSeconds",
+        "target": "controller_lastScanTimeSeconds",
+        "tau": -12
+      },
+      {
+        "equation_kind": "transition",
+        "equation_pretty": "[transition] controller_lastScanTimeSeconds' = ite(((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz)), controller_currentTimeSeconds, controller_lastScanTimeSeconds)    # step:step",
+        "equation_source": "step:step",
+        "equation_target": "controller_lastScanTimeSeconds",
+        "guard_pretty": "((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz))",
+        "guard_status": "not_proven_true",
+        "known_transition_tau": -10,
+        "reason": "guarded copy inversion is unsupported unless the guard is reconstructed and proven true",
+        "source": "controller_currentTimeSeconds",
+        "target": "controller_lastScanTimeSeconds",
+        "tau": -11
+      },
+      {
+        "equation_kind": "transition",
+        "equation_pretty": "[transition] controller_lastScanTimeSeconds' = ite(((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz)), controller_currentTimeSeconds, controller_lastScanTimeSeconds)    # step:step",
+        "equation_source": "step:step",
+        "equation_target": "controller_lastScanTimeSeconds",
+        "guard_pretty": "((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz))",
+        "guard_status": "not_proven_true",
+        "known_transition_tau": -9,
+        "reason": "guarded copy inversion is unsupported unless the guard is reconstructed and proven true",
+        "source": "controller_currentTimeSeconds",
+        "target": "controller_lastScanTimeSeconds",
+        "tau": -10
+      },
+      {
+        "equation_kind": "transition",
+        "equation_pretty": "[transition] controller_lastScanTimeSeconds' = ite(((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz)), controller_currentTimeSeconds, controller_lastScanTimeSeconds)    # step:step",
+        "equation_source": "step:step",
+        "equation_target": "controller_lastScanTimeSeconds",
+        "guard_pretty": "((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz))",
+        "guard_status": "not_proven_true",
+        "known_transition_tau": -8,
+        "reason": "guarded copy inversion is unsupported unless the guard is reconstructed and proven true",
+        "source": "controller_currentTimeSeconds",
+        "target": "controller_lastScanTimeSeconds",
+        "tau": -9
+      },
+      {
+        "equation_kind": "transition",
+        "equation_pretty": "[transition] controller_lastScanTimeSeconds' = ite(((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz)), controller_currentTimeSeconds, controller_lastScanTimeSeconds)    # step:step",
+        "equation_source": "step:step",
+        "equation_target": "controller_lastScanTimeSeconds",
+        "guard_pretty": "((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz))",
+        "guard_status": "not_proven_true",
+        "known_transition_tau": -7,
+        "reason": "guarded copy inversion is unsupported unless the guard is reconstructed and proven true",
+        "source": "controller_currentTimeSeconds",
+        "target": "controller_lastScanTimeSeconds",
+        "tau": -8
+      },
+      {
+        "equation_kind": "transition",
+        "equation_pretty": "[transition] controller_lastScanTimeSeconds' = ite(((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz)), controller_currentTimeSeconds, controller_lastScanTimeSeconds)    # step:step",
+        "equation_source": "step:step",
+        "equation_target": "controller_lastScanTimeSeconds",
+        "guard_pretty": "((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz))",
+        "guard_status": "not_proven_true",
+        "known_transition_tau": -6,
+        "reason": "guarded copy inversion is unsupported unless the guard is reconstructed and proven true",
+        "source": "controller_currentTimeSeconds",
+        "target": "controller_lastScanTimeSeconds",
+        "tau": -7
+      },
+      {
+        "equation_kind": "transition",
+        "equation_pretty": "[transition] controller_lastScanTimeSeconds' = ite(((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz)), controller_currentTimeSeconds, controller_lastScanTimeSeconds)    # step:step",
+        "equation_source": "step:step",
+        "equation_target": "controller_lastScanTimeSeconds",
+        "guard_pretty": "((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz))",
+        "guard_status": "not_proven_true",
+        "known_transition_tau": -5,
+        "reason": "guarded copy inversion is unsupported unless the guard is reconstructed and proven true",
+        "source": "controller_currentTimeSeconds",
+        "target": "controller_lastScanTimeSeconds",
+        "tau": -6
+      },
+      {
+        "equation_kind": "transition",
+        "equation_pretty": "[transition] controller_lastScanTimeSeconds' = ite(((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz)), controller_currentTimeSeconds, controller_lastScanTimeSeconds)    # step:step",
+        "equation_source": "step:step",
+        "equation_target": "controller_lastScanTimeSeconds",
+        "guard_pretty": "((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz))",
+        "guard_status": "not_proven_true",
+        "known_transition_tau": -4,
+        "reason": "guarded copy inversion is unsupported unless the guard is reconstructed and proven true",
+        "source": "controller_currentTimeSeconds",
+        "target": "controller_lastScanTimeSeconds",
+        "tau": -5
+      },
+      {
+        "equation_kind": "transition",
+        "equation_pretty": "[transition] controller_lastScanTimeSeconds' = ite(((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz)), controller_currentTimeSeconds, controller_lastScanTimeSeconds)    # step:step",
+        "equation_source": "step:step",
+        "equation_target": "controller_lastScanTimeSeconds",
+        "guard_pretty": "((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz))",
+        "guard_status": "not_proven_true",
+        "known_transition_tau": -3,
+        "reason": "guarded copy inversion is unsupported unless the guard is reconstructed and proven true",
+        "source": "controller_currentTimeSeconds",
+        "target": "controller_lastScanTimeSeconds",
+        "tau": -4
+      },
+      {
+        "equation_kind": "transition",
+        "equation_pretty": "[transition] controller_lastScanTimeSeconds' = ite(((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz)), controller_currentTimeSeconds, controller_lastScanTimeSeconds)    # step:step",
+        "equation_source": "step:step",
+        "equation_target": "controller_lastScanTimeSeconds",
+        "guard_pretty": "((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz))",
+        "guard_status": "not_proven_true",
+        "known_transition_tau": -2,
+        "reason": "guarded copy inversion is unsupported unless the guard is reconstructed and proven true",
+        "source": "controller_currentTimeSeconds",
+        "target": "controller_lastScanTimeSeconds",
+        "tau": -3
+      },
+      {
+        "equation_kind": "transition",
+        "equation_pretty": "[transition] controller_lastScanTimeSeconds' = ite(((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz)), controller_currentTimeSeconds, controller_lastScanTimeSeconds)    # step:step",
+        "equation_source": "step:step",
+        "equation_target": "controller_lastScanTimeSeconds",
+        "guard_pretty": "((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz))",
+        "guard_status": "not_proven_true",
+        "known_transition_tau": -1,
+        "reason": "guarded copy inversion is unsupported unless the guard is reconstructed and proven true",
+        "source": "controller_currentTimeSeconds",
+        "target": "controller_lastScanTimeSeconds",
+        "tau": -2
+      },
+      {
+        "equation_kind": "transition",
+        "equation_pretty": "[transition] controller_lastScanTimeSeconds' = ite(((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz)), controller_currentTimeSeconds, controller_lastScanTimeSeconds)    # step:step",
+        "equation_source": "step:step",
+        "equation_target": "controller_lastScanTimeSeconds",
+        "guard_pretty": "((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz))",
+        "guard_status": "not_proven_true",
+        "known_transition_tau": 0,
+        "reason": "guarded copy inversion is unsupported unless the guard is reconstructed and proven true",
+        "source": "controller_currentTimeSeconds",
+        "target": "controller_lastScanTimeSeconds",
+        "tau": -1
+      },
+      {
+        "equation_kind": "performed_transition",
+        "equation_pretty": "[performed_transition] controller_observedLevel1' = ite(((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz)), feederTank1_currentLevelMl, controller_observedLevel1)    # flattened performed action inside step",
+        "equation_source": "flattened performed action inside step",
+        "equation_target": "controller_observedLevel1",
+        "guard_pretty": "((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz))",
+        "guard_status": "not_proven_true",
+        "known_transition_tau": 0,
+        "reason": "guarded copy inversion is unsupported unless the guard is reconstructed and proven true",
+        "source": "feederTank1_currentLevelMl",
+        "target": "controller_observedLevel1",
+        "tau": -1
+      },
+      {
+        "equation_kind": "performed_transition",
+        "equation_pretty": "[performed_transition] controller_observedLevel2' = ite(((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz)), feederTank2_currentLevelMl, controller_observedLevel2)    # flattened performed action inside step",
+        "equation_source": "flattened performed action inside step",
+        "equation_target": "controller_observedLevel2",
+        "guard_pretty": "((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz))",
+        "guard_status": "not_proven_true",
+        "known_transition_tau": 0,
+        "reason": "guarded copy inversion is unsupported unless the guard is reconstructed and proven true",
+        "source": "feederTank2_currentLevelMl",
+        "target": "controller_observedLevel2",
+        "tau": -1
+      }
+    ],
+    "facts": [
+      {
+        "detail": {},
+        "key": "controller_currentTimeSeconds@-14",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -14,
+        "var": "controller_currentTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_lastScanTimeSeconds@-14",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -14,
+        "var": "controller_lastScanTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_currentTimeSeconds@-13",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -13,
+        "var": "controller_currentTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_lastScanTimeSeconds@-13",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -13,
+        "var": "controller_lastScanTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_currentTimeSeconds@-12",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -12,
+        "var": "controller_currentTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_lastScanTimeSeconds@-12",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -12,
+        "var": "controller_lastScanTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_currentTimeSeconds@-11",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -11,
+        "var": "controller_currentTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_lastScanTimeSeconds@-11",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -11,
+        "var": "controller_lastScanTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_currentTimeSeconds@-10",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -10,
+        "var": "controller_currentTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_lastScanTimeSeconds@-10",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -10,
+        "var": "controller_lastScanTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_currentTimeSeconds@-9",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -9,
+        "var": "controller_currentTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_lastScanTimeSeconds@-9",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -9,
+        "var": "controller_lastScanTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_currentTimeSeconds@-8",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -8,
+        "var": "controller_currentTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_lastScanTimeSeconds@-8",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -8,
+        "var": "controller_lastScanTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_currentTimeSeconds@-7",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -7,
+        "var": "controller_currentTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_lastScanTimeSeconds@-7",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -7,
+        "var": "controller_lastScanTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_currentTimeSeconds@-6",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -6,
+        "var": "controller_currentTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_lastScanTimeSeconds@-6",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -6,
+        "var": "controller_lastScanTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_currentTimeSeconds@-5",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -5,
+        "var": "controller_currentTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_lastScanTimeSeconds@-5",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -5,
+        "var": "controller_lastScanTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_currentTimeSeconds@-4",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -4,
+        "var": "controller_currentTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_lastScanTimeSeconds@-4",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -4,
+        "var": "controller_lastScanTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_currentTimeSeconds@-3",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -3,
+        "var": "controller_currentTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_lastScanTimeSeconds@-3",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -3,
+        "var": "controller_lastScanTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_currentTimeSeconds@-2",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -2,
+        "var": "controller_currentTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_lastScanTimeSeconds@-2",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -2,
+        "var": "controller_lastScanTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_currentTimeSeconds@-1",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -1,
+        "var": "controller_currentTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_lastScanTimeSeconds@-1",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -1,
+        "var": "controller_lastScanTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_currentTimeSeconds@0",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": 0,
+        "var": "controller_currentTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_lastScanTimeSeconds@0",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": 0,
+        "var": "controller_lastScanTimeSeconds"
+      },
+      {
+        "detail": {
+          "equation_kind": "observation",
+          "equation_pretty": "[observation] obs.tank1VolumeMl = feederTank1_currentLevelMl    # Neural input binding",
+          "equation_source": "Neural input binding",
+          "equation_target": "obs.tank1VolumeMl",
+          "observation": "tank1VolumeMl",
+          "source": "feederTank1_currentLevelMl"
+        },
+        "key": "feederTank1_currentLevelMl@-2",
+        "premises": [],
+        "rule": "equation_observation_direct_copy",
+        "tau": -2,
+        "var": "feederTank1_currentLevelMl"
+      },
+      {
+        "detail": {
+          "equation_kind": "observation",
+          "equation_pretty": "[observation] obs.tank1VolumeMl = feederTank1_currentLevelMl    # Neural input binding",
+          "equation_source": "Neural input binding",
+          "equation_target": "obs.tank1VolumeMl",
+          "observation": "tank1VolumeMl",
+          "source": "feederTank1_currentLevelMl"
+        },
+        "key": "feederTank1_currentLevelMl@-1",
+        "premises": [],
+        "rule": "equation_observation_direct_copy",
+        "tau": -1,
+        "var": "feederTank1_currentLevelMl"
+      },
+      {
+        "detail": {
+          "equation_kind": "observation",
+          "equation_pretty": "[observation] obs.tank1VolumeMl = feederTank1_currentLevelMl    # Neural input binding",
+          "equation_source": "Neural input binding",
+          "equation_target": "obs.tank1VolumeMl",
+          "observation": "tank1VolumeMl",
+          "source": "feederTank1_currentLevelMl"
+        },
+        "key": "feederTank1_currentLevelMl@0",
+        "premises": [],
+        "rule": "equation_observation_direct_copy",
+        "tau": 0,
+        "var": "feederTank1_currentLevelMl"
+      },
+      {
+        "detail": {
+          "equation_kind": "observation",
+          "equation_pretty": "[observation] obs.tank2VolumeMl = feederTank2_currentLevelMl    # Neural input binding",
+          "equation_source": "Neural input binding",
+          "equation_target": "obs.tank2VolumeMl",
+          "observation": "tank2VolumeMl",
+          "source": "feederTank2_currentLevelMl"
+        },
+        "key": "feederTank2_currentLevelMl@-2",
+        "premises": [],
+        "rule": "equation_observation_direct_copy",
+        "tau": -2,
+        "var": "feederTank2_currentLevelMl"
+      },
+      {
+        "detail": {
+          "equation_kind": "observation",
+          "equation_pretty": "[observation] obs.tank2VolumeMl = feederTank2_currentLevelMl    # Neural input binding",
+          "equation_source": "Neural input binding",
+          "equation_target": "obs.tank2VolumeMl",
+          "observation": "tank2VolumeMl",
+          "source": "feederTank2_currentLevelMl"
+        },
+        "key": "feederTank2_currentLevelMl@-1",
+        "premises": [],
+        "rule": "equation_observation_direct_copy",
+        "tau": -1,
+        "var": "feederTank2_currentLevelMl"
+      },
+      {
+        "detail": {
+          "equation_kind": "observation",
+          "equation_pretty": "[observation] obs.tank2VolumeMl = feederTank2_currentLevelMl    # Neural input binding",
+          "equation_source": "Neural input binding",
+          "equation_target": "obs.tank2VolumeMl",
+          "observation": "tank2VolumeMl",
+          "source": "feederTank2_currentLevelMl"
+        },
+        "key": "feederTank2_currentLevelMl@0",
+        "premises": [],
+        "rule": "equation_observation_direct_copy",
+        "tau": 0,
+        "var": "feederTank2_currentLevelMl"
+      },
+      {
+        "detail": {},
+        "key": "controller_policyCall_shouldOpenValve1@-1",
+        "premises": [],
+        "rule": "executed_action_history",
+        "tau": -1,
+        "var": "controller_policyCall_shouldOpenValve1"
+      },
+      {
+        "detail": {},
+        "key": "controller_policyCall_shouldOpenValve2@-1",
+        "premises": [],
+        "rule": "executed_action_history",
+        "tau": -1,
+        "var": "controller_policyCall_shouldOpenValve2"
+      },
+      {
+        "detail": {},
+        "key": "controller_policyCall_shouldTurnOnPump1@-1",
+        "premises": [],
+        "rule": "executed_action_history",
+        "tau": -1,
+        "var": "controller_policyCall_shouldTurnOnPump1"
+      },
+      {
+        "detail": {},
+        "key": "controller_policyCall_shouldTurnOnPump2@-1",
+        "premises": [],
+        "rule": "executed_action_history",
+        "tau": -1,
+        "var": "controller_policyCall_shouldTurnOnPump2"
+      },
+      {
+        "detail": {
+          "equation_kind": "state_machine_transition",
+          "equation_pretty": "[state_machine_transition] pump1_isRunning' = controller_policyCall_shouldTurnOnPump1    # pump1.waiting_to_waiting: coil-write latch",
+          "equation_source": "pump1.waiting_to_waiting: coil-write latch",
+          "equation_target": "pump1_isRunning",
+          "from_tau": -1,
+          "support": [
+            "controller_policyCall_shouldTurnOnPump1"
+          ],
+          "unknown_refs": []
+        },
+        "key": "pump1_isRunning@0",
+        "premises": [
+          "controller_policyCall_shouldTurnOnPump1@-1"
+        ],
+        "rule": "equation_forward_transition",
+        "tau": 0,
+        "var": "pump1_isRunning"
+      },
+      {
+        "detail": {
+          "equation_kind": "state_machine_transition",
+          "equation_pretty": "[state_machine_transition] pump2_isRunning' = controller_policyCall_shouldTurnOnPump2    # pump2.waiting_to_waiting: coil-write latch",
+          "equation_source": "pump2.waiting_to_waiting: coil-write latch",
+          "equation_target": "pump2_isRunning",
+          "from_tau": -1,
+          "support": [
+            "controller_policyCall_shouldTurnOnPump2"
+          ],
+          "unknown_refs": []
+        },
+        "key": "pump2_isRunning@0",
+        "premises": [
+          "controller_policyCall_shouldTurnOnPump2@-1"
+        ],
+        "rule": "equation_forward_transition",
+        "tau": 0,
+        "var": "pump2_isRunning"
+      },
+      {
+        "detail": {
+          "equation_kind": "state_machine_transition",
+          "equation_pretty": "[state_machine_transition] valve1_isOpen' = controller_policyCall_shouldOpenValve1    # valve1.waiting_to_waiting: coil-write latch",
+          "equation_source": "valve1.waiting_to_waiting: coil-write latch",
+          "equation_target": "valve1_isOpen",
+          "from_tau": -1,
+          "support": [
+            "controller_policyCall_shouldOpenValve1"
+          ],
+          "unknown_refs": []
+        },
+        "key": "valve1_isOpen@0",
+        "premises": [
+          "controller_policyCall_shouldOpenValve1@-1"
+        ],
+        "rule": "equation_forward_transition",
+        "tau": 0,
+        "var": "valve1_isOpen"
+      },
+      {
+        "detail": {
+          "equation_kind": "state_machine_transition",
+          "equation_pretty": "[state_machine_transition] valve2_isOpen' = controller_policyCall_shouldOpenValve2    # valve2.waiting_to_waiting: coil-write latch",
+          "equation_source": "valve2.waiting_to_waiting: coil-write latch",
+          "equation_target": "valve2_isOpen",
+          "from_tau": -1,
+          "support": [
+            "controller_policyCall_shouldOpenValve2"
+          ],
+          "unknown_refs": []
+        },
+        "key": "valve2_isOpen@0",
+        "premises": [
+          "controller_policyCall_shouldOpenValve2@-1"
+        ],
+        "rule": "equation_forward_transition",
+        "tau": 0,
+        "var": "valve2_isOpen"
+      },
+      {
+        "detail": {
+          "equation_pretty": "[performed_transition] controller_observedLevel1' = ite(((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz)), feederTank1_currentLevelMl, controller_observedLevel1)    # flattened performed action inside step",
+          "equation_source": "flattened performed action inside step",
+          "max_delay": 2,
+          "source": "feederTank1_currentLevelMl",
+          "target": "controller_observedLevel1",
+          "tau": 0
+        },
+        "key": "controller_observedLevel1@0",
+        "premises": [
+          "feederTank1_currentLevelMl@-2",
+          "feederTank1_currentLevelMl@-1"
+        ],
+        "rule": "sampled_memory_bound",
+        "tau": 0,
+        "var": "controller_observedLevel1"
+      },
+      {
+        "detail": {
+          "equation_pretty": "[performed_transition] controller_observedLevel2' = ite(((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz)), feederTank2_currentLevelMl, controller_observedLevel2)    # flattened performed action inside step",
+          "equation_source": "flattened performed action inside step",
+          "max_delay": 2,
+          "source": "feederTank2_currentLevelMl",
+          "target": "controller_observedLevel2",
+          "tau": 0
+        },
+        "key": "controller_observedLevel2@0",
+        "premises": [
+          "feederTank2_currentLevelMl@-2",
+          "feederTank2_currentLevelMl@-1"
+        ],
+        "rule": "sampled_memory_bound",
+        "tau": 0,
+        "var": "controller_observedLevel2"
+      }
+    ],
+    "horizon": 14,
+    "missing_target_facts": [],
+    "observation_sources": {
+      "tank1VolumeMl": "feederTank1_currentLevelMl",
+      "tank2VolumeMl": "feederTank2_currentLevelMl"
+    },
+    "passes": true,
+    "proof_engine": "equation_ir_syntactic_v1",
+    "sampled_memory_assumptions": [
+      "sampled_memory_bound: controller_lastScanTimeSeconds equals a controller_currentTimeSeconds sample no older than 2 step(s), derived from scan guard under dt=0.1; certificate state is after the environment's reset/warmup scan opportunities",
+      "sampled_memory_bound: controller_observedLevel1 equals a feederTank1_currentLevelMl sample no older than 2 step(s), derived from scan guard under dt=0.1; certificate state is after the environment's reset/warmup scan opportunities",
+      "sampled_memory_bound: controller_observedLevel2 equals a feederTank2_currentLevelMl sample no older than 2 step(s), derived from scan guard under dt=0.1; certificate state is after the environment's reset/warmup scan opportunities"
+    ],
+    "target_facts": [
+      "controller_currentTimeSeconds@0",
+      "controller_lastScanTimeSeconds@0",
+      "controller_observedLevel1@0",
+      "controller_observedLevel2@0",
+      "feederTank1_currentLevelMl@0",
+      "feederTank2_currentLevelMl@0",
+      "pump1_isRunning@0",
+      "pump2_isRunning@0",
+      "valve1_isOpen@0",
+      "valve2_isOpen@0"
+    ]
+  },
+  "equations": {
+    "definitions": [
+      {
+        "constant_refs": [],
+        "expr": {
+          "pretty": "10",
+          "type": "const",
+          "value": 10
+        },
+        "kind": "definition",
+        "pretty": "[definition] controller_scanCycleFrequencyHz = 10    # derived attribute",
+        "raw_refs": [],
+        "refs": [],
+        "source": "derived attribute",
+        "target": "controller_scanCycleFrequencyHz",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "pretty": "2",
+          "type": "const",
+          "value": 2
+        },
+        "kind": "definition",
+        "pretty": "[definition] controller_toleranceMl = 2    # derived attribute",
+        "raw_refs": [],
+        "refs": [],
+        "source": "derived attribute",
+        "target": "controller_toleranceMl",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "pretty": "0",
+          "type": "const",
+          "value": 0
+        },
+        "kind": "definition",
+        "pretty": "[definition] feederTank1_inlet_flowRateMl = 0    # constraint:feeder1NoInletFlow",
+        "raw_refs": [],
+        "refs": [],
+        "source": "constraint:feeder1NoInletFlow",
+        "target": "feederTank1_inlet_flowRateMl",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "args": [
+            {
+              "name": "feederTank1_currentLevelMl",
+              "pretty": "feederTank1_currentLevelMl",
+              "type": "var"
+            },
+            {
+              "pretty": "0",
+              "type": "const",
+              "value": 0
+            }
+          ],
+          "op": "<=",
+          "pretty": "(feederTank1_currentLevelMl <= 0)",
+          "type": "op"
+        },
+        "kind": "definition",
+        "pretty": "[definition] feederTank1_isEmpty = (feederTank1_currentLevelMl <= 0)    # derived attribute",
+        "raw_refs": [],
+        "refs": [
+          "feederTank1_currentLevelMl"
+        ],
+        "source": "derived attribute",
+        "target": "feederTank1_isEmpty",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [
+          "feederTank1_capacityMl"
+        ],
+        "expr": {
+          "args": [
+            {
+              "name": "feederTank1_currentLevelMl",
+              "pretty": "feederTank1_currentLevelMl",
+              "type": "var"
+            },
+            {
+              "path": "feederTank1_capacityMl",
+              "pretty": "feederTank1_capacityMl",
+              "type": "raw_ref"
+            }
+          ],
+          "op": ">=",
+          "pretty": "(feederTank1_currentLevelMl >= feederTank1_capacityMl)",
+          "type": "op"
+        },
+        "kind": "definition",
+        "pretty": "[definition] feederTank1_isFull = (feederTank1_currentLevelMl >= feederTank1_capacityMl)    # derived attribute",
+        "raw_refs": [
+          "feederTank1_capacityMl"
+        ],
+        "refs": [
+          "feederTank1_currentLevelMl"
+        ],
+        "source": "derived attribute",
+        "target": "feederTank1_isFull",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "valve1_outlet_flowRateMl",
+          "pretty": "valve1_outlet_flowRateMl",
+          "type": "var"
+        },
+        "kind": "definition",
+        "pretty": "[definition] feederTank1_outlet_flowRateMl = valve1_outlet_flowRateMl    # constraint:feeder1DrainRate",
+        "raw_refs": [],
+        "refs": [
+          "valve1_outlet_flowRateMl"
+        ],
+        "source": "constraint:feeder1DrainRate",
+        "target": "feederTank1_outlet_flowRateMl",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "feederTank1_currentLevelMl",
+          "pretty": "feederTank1_currentLevelMl",
+          "type": "var"
+        },
+        "kind": "definition",
+        "pretty": "[definition] feederTank1_volumeSensorPort_reading_volumeMl = feederTank1_currentLevelMl    # bind",
+        "raw_refs": [],
+        "refs": [
+          "feederTank1_currentLevelMl"
+        ],
+        "source": "bind",
+        "target": "feederTank1_volumeSensorPort_reading_volumeMl",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "pretty": "0",
+          "type": "const",
+          "value": 0
+        },
+        "kind": "definition",
+        "pretty": "[definition] feederTank2_inlet_flowRateMl = 0    # constraint:feeder2NoInletFlow",
+        "raw_refs": [],
+        "refs": [],
+        "source": "constraint:feeder2NoInletFlow",
+        "target": "feederTank2_inlet_flowRateMl",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "args": [
+            {
+              "name": "feederTank2_currentLevelMl",
+              "pretty": "feederTank2_currentLevelMl",
+              "type": "var"
+            },
+            {
+              "pretty": "0",
+              "type": "const",
+              "value": 0
+            }
+          ],
+          "op": "<=",
+          "pretty": "(feederTank2_currentLevelMl <= 0)",
+          "type": "op"
+        },
+        "kind": "definition",
+        "pretty": "[definition] feederTank2_isEmpty = (feederTank2_currentLevelMl <= 0)    # derived attribute",
+        "raw_refs": [],
+        "refs": [
+          "feederTank2_currentLevelMl"
+        ],
+        "source": "derived attribute",
+        "target": "feederTank2_isEmpty",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [
+          "feederTank2_capacityMl"
+        ],
+        "expr": {
+          "args": [
+            {
+              "name": "feederTank2_currentLevelMl",
+              "pretty": "feederTank2_currentLevelMl",
+              "type": "var"
+            },
+            {
+              "path": "feederTank2_capacityMl",
+              "pretty": "feederTank2_capacityMl",
+              "type": "raw_ref"
+            }
+          ],
+          "op": ">=",
+          "pretty": "(feederTank2_currentLevelMl >= feederTank2_capacityMl)",
+          "type": "op"
+        },
+        "kind": "definition",
+        "pretty": "[definition] feederTank2_isFull = (feederTank2_currentLevelMl >= feederTank2_capacityMl)    # derived attribute",
+        "raw_refs": [
+          "feederTank2_capacityMl"
+        ],
+        "refs": [
+          "feederTank2_currentLevelMl"
+        ],
+        "source": "derived attribute",
+        "target": "feederTank2_isFull",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "valve2_outlet_flowRateMl",
+          "pretty": "valve2_outlet_flowRateMl",
+          "type": "var"
+        },
+        "kind": "definition",
+        "pretty": "[definition] feederTank2_outlet_flowRateMl = valve2_outlet_flowRateMl    # constraint:feeder2DrainRate",
+        "raw_refs": [],
+        "refs": [
+          "valve2_outlet_flowRateMl"
+        ],
+        "source": "constraint:feeder2DrainRate",
+        "target": "feederTank2_outlet_flowRateMl",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "feederTank2_currentLevelMl",
+          "pretty": "feederTank2_currentLevelMl",
+          "type": "var"
+        },
+        "kind": "definition",
+        "pretty": "[definition] feederTank2_volumeSensorPort_reading_volumeMl = feederTank2_currentLevelMl    # bind",
+        "raw_refs": [],
+        "refs": [
+          "feederTank2_currentLevelMl"
+        ],
+        "source": "bind",
+        "target": "feederTank2_volumeSensorPort_reading_volumeMl",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "args": [
+            {
+              "name": "valve1_outlet_flowRateMl",
+              "pretty": "valve1_outlet_flowRateMl",
+              "type": "var"
+            },
+            {
+              "name": "valve2_outlet_flowRateMl",
+              "pretty": "valve2_outlet_flowRateMl",
+              "type": "var"
+            }
+          ],
+          "op": "+",
+          "pretty": "(valve1_outlet_flowRateMl + valve2_outlet_flowRateMl)",
+          "type": "op"
+        },
+        "kind": "definition",
+        "pretty": "[definition] fillingTank_inlet_flowRateMl = (valve1_outlet_flowRateMl + valve2_outlet_flowRateMl)    # constraint:fillingFillRate",
+        "raw_refs": [],
+        "refs": [
+          "valve1_outlet_flowRateMl",
+          "valve2_outlet_flowRateMl"
+        ],
+        "source": "constraint:fillingFillRate",
+        "target": "fillingTank_inlet_flowRateMl",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "args": [
+            {
+              "name": "fillingTank_currentLevelMl",
+              "pretty": "fillingTank_currentLevelMl",
+              "type": "var"
+            },
+            {
+              "pretty": "0",
+              "type": "const",
+              "value": 0
+            }
+          ],
+          "op": "<=",
+          "pretty": "(fillingTank_currentLevelMl <= 0)",
+          "type": "op"
+        },
+        "kind": "definition",
+        "pretty": "[definition] fillingTank_isEmpty = (fillingTank_currentLevelMl <= 0)    # derived attribute",
+        "raw_refs": [],
+        "refs": [
+          "fillingTank_currentLevelMl"
+        ],
+        "source": "derived attribute",
+        "target": "fillingTank_isEmpty",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [
+          "fillingTank_capacityMl"
+        ],
+        "expr": {
+          "args": [
+            {
+              "name": "fillingTank_currentLevelMl",
+              "pretty": "fillingTank_currentLevelMl",
+              "type": "var"
+            },
+            {
+              "path": "fillingTank_capacityMl",
+              "pretty": "fillingTank_capacityMl",
+              "type": "raw_ref"
+            }
+          ],
+          "op": ">=",
+          "pretty": "(fillingTank_currentLevelMl >= fillingTank_capacityMl)",
+          "type": "op"
+        },
+        "kind": "definition",
+        "pretty": "[definition] fillingTank_isFull = (fillingTank_currentLevelMl >= fillingTank_capacityMl)    # derived attribute",
+        "raw_refs": [
+          "fillingTank_capacityMl"
+        ],
+        "refs": [
+          "fillingTank_currentLevelMl"
+        ],
+        "source": "derived attribute",
+        "target": "fillingTank_isFull",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "pretty": "0",
+          "type": "const",
+          "value": 0
+        },
+        "kind": "definition",
+        "pretty": "[definition] fillingTank_outlet_flowRateMl = 0    # constraint:fillingNoOutletFlow",
+        "raw_refs": [],
+        "refs": [],
+        "source": "constraint:fillingNoOutletFlow",
+        "target": "fillingTank_outlet_flowRateMl",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "fillingTank_currentLevelMl",
+          "pretty": "fillingTank_currentLevelMl",
+          "type": "var"
+        },
+        "kind": "definition",
+        "pretty": "[definition] fillingTank_volumeSensorPort_reading_volumeMl = fillingTank_currentLevelMl    # bind",
+        "raw_refs": [],
+        "refs": [
+          "fillingTank_currentLevelMl"
+        ],
+        "source": "bind",
+        "target": "fillingTank_volumeSensorPort_reading_volumeMl",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "feederTank1_outlet_flowRateMl",
+          "pretty": "feederTank1_outlet_flowRateMl",
+          "type": "var"
+        },
+        "kind": "definition",
+        "pretty": "[definition] pump1_inlet_flowRateMl = feederTank1_outlet_flowRateMl    # flow copy",
+        "raw_refs": [],
+        "refs": [
+          "feederTank1_outlet_flowRateMl"
+        ],
+        "source": "flow copy",
+        "target": "pump1_inlet_flowRateMl",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [
+          "pump1_maxFlowRateMl"
+        ],
+        "expr": {
+          "cond": {
+            "name": "pump1_isRunning",
+            "pretty": "pump1_isRunning",
+            "type": "var"
+          },
+          "else": {
+            "pretty": "0",
+            "type": "const",
+            "value": 0
+          },
+          "pretty": "ite(pump1_isRunning, pump1_maxFlowRateMl, 0)",
+          "then": {
+            "path": "pump1_maxFlowRateMl",
+            "pretty": "pump1_maxFlowRateMl",
+            "type": "raw_ref"
+          },
+          "type": "ite"
+        },
+        "kind": "definition",
+        "pretty": "[definition] pump1_outlet_flowRateMl = ite(pump1_isRunning, pump1_maxFlowRateMl, 0)    # constraint:flowConstraint",
+        "raw_refs": [
+          "pump1_maxFlowRateMl"
+        ],
+        "refs": [
+          "pump1_isRunning"
+        ],
+        "source": "constraint:flowConstraint",
+        "target": "pump1_outlet_flowRateMl",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "feederTank2_outlet_flowRateMl",
+          "pretty": "feederTank2_outlet_flowRateMl",
+          "type": "var"
+        },
+        "kind": "definition",
+        "pretty": "[definition] pump2_inlet_flowRateMl = feederTank2_outlet_flowRateMl    # flow copy",
+        "raw_refs": [],
+        "refs": [
+          "feederTank2_outlet_flowRateMl"
+        ],
+        "source": "flow copy",
+        "target": "pump2_inlet_flowRateMl",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [
+          "pump2_maxFlowRateMl"
+        ],
+        "expr": {
+          "cond": {
+            "name": "pump2_isRunning",
+            "pretty": "pump2_isRunning",
+            "type": "var"
+          },
+          "else": {
+            "pretty": "0",
+            "type": "const",
+            "value": 0
+          },
+          "pretty": "ite(pump2_isRunning, pump2_maxFlowRateMl, 0)",
+          "then": {
+            "path": "pump2_maxFlowRateMl",
+            "pretty": "pump2_maxFlowRateMl",
+            "type": "raw_ref"
+          },
+          "type": "ite"
+        },
+        "kind": "definition",
+        "pretty": "[definition] pump2_outlet_flowRateMl = ite(pump2_isRunning, pump2_maxFlowRateMl, 0)    # constraint:flowConstraint",
+        "raw_refs": [
+          "pump2_maxFlowRateMl"
+        ],
+        "refs": [
+          "pump2_isRunning"
+        ],
+        "source": "constraint:flowConstraint",
+        "target": "pump2_outlet_flowRateMl",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "pump1_outlet_flowRateMl",
+          "pretty": "pump1_outlet_flowRateMl",
+          "type": "var"
+        },
+        "kind": "definition",
+        "pretty": "[definition] valve1_inlet_flowRateMl = pump1_outlet_flowRateMl    # flow copy",
+        "raw_refs": [],
+        "refs": [
+          "pump1_outlet_flowRateMl"
+        ],
+        "source": "flow copy",
+        "target": "valve1_inlet_flowRateMl",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "cond": {
+            "name": "valve1_isOpen",
+            "pretty": "valve1_isOpen",
+            "type": "var"
+          },
+          "else": {
+            "pretty": "0",
+            "type": "const",
+            "value": 0
+          },
+          "pretty": "ite(valve1_isOpen, valve1_inlet_flowRateMl, 0)",
+          "then": {
+            "name": "valve1_inlet_flowRateMl",
+            "pretty": "valve1_inlet_flowRateMl",
+            "type": "var"
+          },
+          "type": "ite"
+        },
+        "kind": "definition",
+        "pretty": "[definition] valve1_outlet_flowRateMl = ite(valve1_isOpen, valve1_inlet_flowRateMl, 0)    # constraint:flowConstraint",
+        "raw_refs": [],
+        "refs": [
+          "valve1_inlet_flowRateMl",
+          "valve1_isOpen"
+        ],
+        "source": "constraint:flowConstraint",
+        "target": "valve1_outlet_flowRateMl",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "pump2_outlet_flowRateMl",
+          "pretty": "pump2_outlet_flowRateMl",
+          "type": "var"
+        },
+        "kind": "definition",
+        "pretty": "[definition] valve2_inlet_flowRateMl = pump2_outlet_flowRateMl    # flow copy",
+        "raw_refs": [],
+        "refs": [
+          "pump2_outlet_flowRateMl"
+        ],
+        "source": "flow copy",
+        "target": "valve2_inlet_flowRateMl",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "cond": {
+            "name": "valve2_isOpen",
+            "pretty": "valve2_isOpen",
+            "type": "var"
+          },
+          "else": {
+            "pretty": "0",
+            "type": "const",
+            "value": 0
+          },
+          "pretty": "ite(valve2_isOpen, valve2_inlet_flowRateMl, 0)",
+          "then": {
+            "name": "valve2_inlet_flowRateMl",
+            "pretty": "valve2_inlet_flowRateMl",
+            "type": "var"
+          },
+          "type": "ite"
+        },
+        "kind": "definition",
+        "pretty": "[definition] valve2_outlet_flowRateMl = ite(valve2_isOpen, valve2_inlet_flowRateMl, 0)    # constraint:flowConstraint",
+        "raw_refs": [],
+        "refs": [
+          "valve2_inlet_flowRateMl",
+          "valve2_isOpen"
+        ],
+        "source": "constraint:flowConstraint",
+        "target": "valve2_outlet_flowRateMl",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "feederTank1_volumeSensorPort_reading_volumeMl",
+          "pretty": "feederTank1_volumeSensorPort_reading_volumeMl",
+          "type": "var"
+        },
+        "kind": "definition",
+        "pretty": "[definition] volumeSensor1_tankConnection_reading_volumeMl = feederTank1_volumeSensorPort_reading_volumeMl    # flow copy",
+        "raw_refs": [],
+        "refs": [
+          "feederTank1_volumeSensorPort_reading_volumeMl"
+        ],
+        "source": "flow copy",
+        "target": "volumeSensor1_tankConnection_reading_volumeMl",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "feederTank2_volumeSensorPort_reading_volumeMl",
+          "pretty": "feederTank2_volumeSensorPort_reading_volumeMl",
+          "type": "var"
+        },
+        "kind": "definition",
+        "pretty": "[definition] volumeSensor2_tankConnection_reading_volumeMl = feederTank2_volumeSensorPort_reading_volumeMl    # flow copy",
+        "raw_refs": [],
+        "refs": [
+          "feederTank2_volumeSensorPort_reading_volumeMl"
+        ],
+        "source": "flow copy",
+        "target": "volumeSensor2_tankConnection_reading_volumeMl",
+        "unresolved_raw_refs": []
+      }
+    ],
+    "observations": [
+      {
+        "constant_refs": [
+          "controller_tank1OriginalLevelMl"
+        ],
+        "expr": {
+          "path": "controller_tank1OriginalLevelMl",
+          "pretty": "controller_tank1OriginalLevelMl",
+          "type": "raw_ref"
+        },
+        "kind": "observation",
+        "pretty": "[observation] obs.tank1OriginalMl = controller_tank1OriginalLevelMl    # Neural input binding",
+        "raw_refs": [
+          "controller_tank1OriginalLevelMl"
+        ],
+        "refs": [],
+        "source": "Neural input binding",
+        "target": "obs.tank1OriginalMl",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [
+          "controller_tank1TransferMl"
+        ],
+        "expr": {
+          "path": "controller_tank1TransferMl",
+          "pretty": "controller_tank1TransferMl",
+          "type": "raw_ref"
+        },
+        "kind": "observation",
+        "pretty": "[observation] obs.tank1TargetTransferMl = controller_tank1TransferMl    # Neural input binding",
+        "raw_refs": [
+          "controller_tank1TransferMl"
+        ],
+        "refs": [],
+        "source": "Neural input binding",
+        "target": "obs.tank1TargetTransferMl",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "feederTank1_currentLevelMl",
+          "pretty": "feederTank1_currentLevelMl",
+          "type": "var"
+        },
+        "kind": "observation",
+        "pretty": "[observation] obs.tank1VolumeMl = feederTank1_currentLevelMl    # Neural input binding",
+        "raw_refs": [],
+        "refs": [
+          "feederTank1_currentLevelMl"
+        ],
+        "source": "Neural input binding",
+        "target": "obs.tank1VolumeMl",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [
+          "controller_tank2OriginalLevelMl"
+        ],
+        "expr": {
+          "path": "controller_tank2OriginalLevelMl",
+          "pretty": "controller_tank2OriginalLevelMl",
+          "type": "raw_ref"
+        },
+        "kind": "observation",
+        "pretty": "[observation] obs.tank2OriginalMl = controller_tank2OriginalLevelMl    # Neural input binding",
+        "raw_refs": [
+          "controller_tank2OriginalLevelMl"
+        ],
+        "refs": [],
+        "source": "Neural input binding",
+        "target": "obs.tank2OriginalMl",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [
+          "controller_tank2TransferMl"
+        ],
+        "expr": {
+          "path": "controller_tank2TransferMl",
+          "pretty": "controller_tank2TransferMl",
+          "type": "raw_ref"
+        },
+        "kind": "observation",
+        "pretty": "[observation] obs.tank2TargetTransferMl = controller_tank2TransferMl    # Neural input binding",
+        "raw_refs": [
+          "controller_tank2TransferMl"
+        ],
+        "refs": [],
+        "source": "Neural input binding",
+        "target": "obs.tank2TargetTransferMl",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "feederTank2_currentLevelMl",
+          "pretty": "feederTank2_currentLevelMl",
+          "type": "var"
+        },
+        "kind": "observation",
+        "pretty": "[observation] obs.tank2VolumeMl = feederTank2_currentLevelMl    # Neural input binding",
+        "raw_refs": [],
+        "refs": [
+          "feederTank2_currentLevelMl"
+        ],
+        "source": "Neural input binding",
+        "target": "obs.tank2VolumeMl",
+        "unresolved_raw_refs": []
+      }
+    ],
+    "requirements": [
+      {
+        "constant_refs": [
+          "controller_tank1OriginalLevelMl",
+          "controller_tank1TransferMl",
+          "controller_tank2OriginalLevelMl",
+          "controller_tank2TransferMl"
+        ],
+        "expr": {
+          "args": [
+            {
+              "args": [
+                {
+                  "name": "controller_lastScanTimeSeconds",
+                  "pretty": "controller_lastScanTimeSeconds",
+                  "type": "var"
+                },
+                {
+                  "pretty": "0",
+                  "type": "const",
+                  "value": 0
+                }
+              ],
+              "op": ">",
+              "pretty": "(controller_lastScanTimeSeconds > 0)",
+              "type": "op"
+            },
+            {
+              "args": [
+                {
+                  "args": [
+                    {
+                      "args": [
+                        {
+                          "path": "controller_tank1OriginalLevelMl",
+                          "pretty": "controller_tank1OriginalLevelMl",
+                          "type": "raw_ref"
+                        },
+                        {
+                          "name": "controller_observedLevel1",
+                          "pretty": "controller_observedLevel1",
+                          "type": "var"
+                        }
+                      ],
+                      "op": "-",
+                      "pretty": "(controller_tank1OriginalLevelMl - controller_observedLevel1)",
+                      "type": "op"
+                    },
+                    {
+                      "path": "controller_tank1TransferMl",
+                      "pretty": "controller_tank1TransferMl",
+                      "type": "raw_ref"
+                    }
+                  ],
+                  "op": "<",
+                  "pretty": "((controller_tank1OriginalLevelMl - controller_observedLevel1) < controller_tank1TransferMl)",
+                  "type": "op"
+                },
+                {
+                  "args": [
+                    {
+                      "args": [
+                        {
+                          "args": [
+                            {
+                              "name": "valve1_isOpen",
+                              "pretty": "valve1_isOpen",
+                              "type": "var"
+                            },
+                            {
+                              "name": "pump1_isRunning",
+                              "pretty": "pump1_isRunning",
+                              "type": "var"
+                            }
+                          ],
+                          "op": "and",
+                          "pretty": "(valve1_isOpen and pump1_isRunning)",
+                          "type": "op"
+                        },
+                        {
+                          "args": [
+                            {
+                              "args": [
+                                {
+                                  "path": "controller_tank2OriginalLevelMl",
+                                  "pretty": "controller_tank2OriginalLevelMl",
+                                  "type": "raw_ref"
+                                },
+                                {
+                                  "name": "controller_observedLevel2",
+                                  "pretty": "controller_observedLevel2",
+                                  "type": "var"
+                                }
+                              ],
+                              "op": "-",
+                              "pretty": "(controller_tank2OriginalLevelMl - controller_observedLevel2)",
+                              "type": "op"
+                            },
+                            {
+                              "path": "controller_tank2TransferMl",
+                              "pretty": "controller_tank2TransferMl",
+                              "type": "raw_ref"
+                            }
+                          ],
+                          "op": "<",
+                          "pretty": "((controller_tank2OriginalLevelMl - controller_observedLevel2) < controller_tank2TransferMl)",
+                          "type": "op"
+                        }
+                      ],
+                      "op": "and",
+                      "pretty": "((valve1_isOpen and pump1_isRunning) and ((controller_tank2OriginalLevelMl - controller_observedLevel2) < controller_tank2TransferMl))",
+                      "type": "op"
+                    },
+                    {
+                      "args": [
+                        {
+                          "name": "valve2_isOpen",
+                          "pretty": "valve2_isOpen",
+                          "type": "var"
+                        },
+                        {
+                          "name": "pump2_isRunning",
+                          "pretty": "pump2_isRunning",
+                          "type": "var"
+                        }
+                      ],
+                      "op": "and",
+                      "pretty": "(valve2_isOpen and pump2_isRunning)",
+                      "type": "op"
+                    }
+                  ],
+                  "op": "implies",
+                  "pretty": "(((valve1_isOpen and pump1_isRunning) and ((controller_tank2OriginalLevelMl - controller_observedLevel2) < controller_tank2TransferMl)) implies (valve2_isOpen and pump2_isRunning))",
+                  "type": "op"
+                }
+              ],
+              "op": "implies",
+              "pretty": "(((controller_tank1OriginalLevelMl - controller_observedLevel1) < controller_tank1TransferMl) implies (((valve1_isOpen and pump1_isRunning) and ((controller_tank2OriginalLevelMl - controller_observedLevel2) < controller_tank2TransferMl)) implies (valve2_isOpen and pump2_isRunning)))",
+              "type": "op"
+            }
+          ],
+          "op": "implies",
+          "pretty": "((controller_lastScanTimeSeconds > 0) implies (((controller_tank1OriginalLevelMl - controller_observedLevel1) < controller_tank1TransferMl) implies (((valve1_isOpen and pump1_isRunning) and ((controller_tank2OriginalLevelMl - controller_observedLevel2) < controller_tank2TransferMl)) implies (valve2_isOpen and pump2_isRunning))))",
+          "type": "op"
+        },
+        "kind": "requirement",
+        "pretty": "[requirement] status.Fluid Transfer Liveness = ((controller_lastScanTimeSeconds > 0) implies (((controller_tank1OriginalLevelMl - controller_observedLevel1) < controller_tank1TransferMl) implies (((valve1_isOpen and pump1_isRunning) and ((controller_tank2OriginalLevelMl - controller_observedLevel2) < controller_tank2TransferMl)) implies (valve2_isOpen and pump2_isRunning))))    # Obligation",
+        "raw_refs": [
+          "controller_tank1OriginalLevelMl",
+          "controller_tank1TransferMl",
+          "controller_tank2OriginalLevelMl",
+          "controller_tank2TransferMl"
+        ],
+        "refs": [
+          "controller_lastScanTimeSeconds",
+          "controller_observedLevel1",
+          "controller_observedLevel2",
+          "pump1_isRunning",
+          "pump2_isRunning",
+          "valve1_isOpen",
+          "valve2_isOpen"
+        ],
+        "source": "Obligation",
+        "target": "status.Fluid Transfer Liveness",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [
+          "controller_tank1OriginalLevelMl",
+          "controller_tank1TransferMl",
+          "controller_tank2OriginalLevelMl",
+          "controller_tank2TransferMl"
+        ],
+        "expr": {
+          "args": [
+            {
+              "args": [
+                {
+                  "name": "controller_lastScanTimeSeconds",
+                  "pretty": "controller_lastScanTimeSeconds",
+                  "type": "var"
+                },
+                {
+                  "pretty": "0",
+                  "type": "const",
+                  "value": 0
+                }
+              ],
+              "op": ">",
+              "pretty": "(controller_lastScanTimeSeconds > 0)",
+              "type": "op"
+            },
+            {
+              "args": [
+                {
+                  "args": [
+                    {
+                      "args": [
+                        {
+                          "args": [
+                            {
+                              "path": "controller_tank1OriginalLevelMl",
+                              "pretty": "controller_tank1OriginalLevelMl",
+                              "type": "raw_ref"
+                            },
+                            {
+                              "name": "controller_observedLevel1",
+                              "pretty": "controller_observedLevel1",
+                              "type": "var"
+                            }
+                          ],
+                          "op": "-",
+                          "pretty": "(controller_tank1OriginalLevelMl - controller_observedLevel1)",
+                          "type": "op"
+                        },
+                        {
+                          "args": [
+                            {
+                              "path": "controller_tank1TransferMl",
+                              "pretty": "controller_tank1TransferMl",
+                              "type": "raw_ref"
+                            },
+                            {
+                              "name": "controller_toleranceMl",
+                              "pretty": "controller_toleranceMl",
+                              "type": "var"
+                            }
+                          ],
+                          "op": "+",
+                          "pretty": "(controller_tank1TransferMl + controller_toleranceMl)",
+                          "type": "op"
+                        }
+                      ],
+                      "op": ">=",
+                      "pretty": "((controller_tank1OriginalLevelMl - controller_observedLevel1) >= (controller_tank1TransferMl + controller_toleranceMl))",
+                      "type": "op"
+                    },
+                    {
+                      "args": [
+                        {
+                          "name": "pump1_isRunning",
+                          "pretty": "pump1_isRunning",
+                          "type": "var"
+                        }
+                      ],
+                      "op": "not",
+                      "pretty": "(not pump1_isRunning)",
+                      "type": "op"
+                    }
+                  ],
+                  "op": "implies",
+                  "pretty": "(((controller_tank1OriginalLevelMl - controller_observedLevel1) >= (controller_tank1TransferMl + controller_toleranceMl)) implies (not pump1_isRunning))",
+                  "type": "op"
+                },
+                {
+                  "args": [
+                    {
+                      "args": [
+                        {
+                          "args": [
+                            {
+                              "path": "controller_tank2OriginalLevelMl",
+                              "pretty": "controller_tank2OriginalLevelMl",
+                              "type": "raw_ref"
+                            },
+                            {
+                              "name": "controller_observedLevel2",
+                              "pretty": "controller_observedLevel2",
+                              "type": "var"
+                            }
+                          ],
+                          "op": "-",
+                          "pretty": "(controller_tank2OriginalLevelMl - controller_observedLevel2)",
+                          "type": "op"
+                        },
+                        {
+                          "args": [
+                            {
+                              "path": "controller_tank2TransferMl",
+                              "pretty": "controller_tank2TransferMl",
+                              "type": "raw_ref"
+                            },
+                            {
+                              "name": "controller_toleranceMl",
+                              "pretty": "controller_toleranceMl",
+                              "type": "var"
+                            }
+                          ],
+                          "op": "+",
+                          "pretty": "(controller_tank2TransferMl + controller_toleranceMl)",
+                          "type": "op"
+                        }
+                      ],
+                      "op": ">=",
+                      "pretty": "((controller_tank2OriginalLevelMl - controller_observedLevel2) >= (controller_tank2TransferMl + controller_toleranceMl))",
+                      "type": "op"
+                    },
+                    {
+                      "args": [
+                        {
+                          "name": "pump2_isRunning",
+                          "pretty": "pump2_isRunning",
+                          "type": "var"
+                        }
+                      ],
+                      "op": "not",
+                      "pretty": "(not pump2_isRunning)",
+                      "type": "op"
+                    }
+                  ],
+                  "op": "implies",
+                  "pretty": "(((controller_tank2OriginalLevelMl - controller_observedLevel2) >= (controller_tank2TransferMl + controller_toleranceMl)) implies (not pump2_isRunning))",
+                  "type": "op"
+                }
+              ],
+              "op": "and",
+              "pretty": "((((controller_tank1OriginalLevelMl - controller_observedLevel1) >= (controller_tank1TransferMl + controller_toleranceMl)) implies (not pump1_isRunning)) and (((controller_tank2OriginalLevelMl - controller_observedLevel2) >= (controller_tank2TransferMl + controller_toleranceMl)) implies (not pump2_isRunning)))",
+              "type": "op"
+            }
+          ],
+          "op": "implies",
+          "pretty": "((controller_lastScanTimeSeconds > 0) implies ((((controller_tank1OriginalLevelMl - controller_observedLevel1) >= (controller_tank1TransferMl + controller_toleranceMl)) implies (not pump1_isRunning)) and (((controller_tank2OriginalLevelMl - controller_observedLevel2) >= (controller_tank2TransferMl + controller_toleranceMl)) implies (not pump2_isRunning))))",
+          "type": "op"
+        },
+        "kind": "requirement",
+        "pretty": "[requirement] status.Fluid Transfer Termination Safety = ((controller_lastScanTimeSeconds > 0) implies ((((controller_tank1OriginalLevelMl - controller_observedLevel1) >= (controller_tank1TransferMl + controller_toleranceMl)) implies (not pump1_isRunning)) and (((controller_tank2OriginalLevelMl - controller_observedLevel2) >= (controller_tank2TransferMl + controller_toleranceMl)) implies (not pump2_isRunning))))    # Obligation",
+        "raw_refs": [
+          "controller_tank1OriginalLevelMl",
+          "controller_tank1TransferMl",
+          "controller_tank2OriginalLevelMl",
+          "controller_tank2TransferMl"
+        ],
+        "refs": [
+          "controller_lastScanTimeSeconds",
+          "controller_observedLevel1",
+          "controller_observedLevel2",
+          "controller_toleranceMl",
+          "pump1_isRunning",
+          "pump2_isRunning"
+        ],
+        "source": "Obligation",
+        "target": "status.Fluid Transfer Termination Safety",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "args": [
+            {
+              "args": [
+                {
+                  "args": [
+                    {
+                      "name": "valve1_isOpen",
+                      "pretty": "valve1_isOpen",
+                      "type": "var"
+                    }
+                  ],
+                  "op": "not",
+                  "pretty": "(not valve1_isOpen)",
+                  "type": "op"
+                },
+                {
+                  "args": [
+                    {
+                      "name": "pump1_isRunning",
+                      "pretty": "pump1_isRunning",
+                      "type": "var"
+                    }
+                  ],
+                  "op": "not",
+                  "pretty": "(not pump1_isRunning)",
+                  "type": "op"
+                }
+              ],
+              "op": "implies",
+              "pretty": "((not valve1_isOpen) implies (not pump1_isRunning))",
+              "type": "op"
+            },
+            {
+              "args": [
+                {
+                  "args": [
+                    {
+                      "name": "valve2_isOpen",
+                      "pretty": "valve2_isOpen",
+                      "type": "var"
+                    }
+                  ],
+                  "op": "not",
+                  "pretty": "(not valve2_isOpen)",
+                  "type": "op"
+                },
+                {
+                  "args": [
+                    {
+                      "name": "pump2_isRunning",
+                      "pretty": "pump2_isRunning",
+                      "type": "var"
+                    }
+                  ],
+                  "op": "not",
+                  "pretty": "(not pump2_isRunning)",
+                  "type": "op"
+                }
+              ],
+              "op": "implies",
+              "pretty": "((not valve2_isOpen) implies (not pump2_isRunning))",
+              "type": "op"
+            }
+          ],
+          "op": "and",
+          "pretty": "(((not valve1_isOpen) implies (not pump1_isRunning)) and ((not valve2_isOpen) implies (not pump2_isRunning)))",
+          "type": "op"
+        },
+        "kind": "requirement",
+        "pretty": "[requirement] status.No Dead Heading = (((not valve1_isOpen) implies (not pump1_isRunning)) and ((not valve2_isOpen) implies (not pump2_isRunning)))    # Prohibition",
+        "raw_refs": [],
+        "refs": [
+          "pump1_isRunning",
+          "pump2_isRunning",
+          "valve1_isOpen",
+          "valve2_isOpen"
+        ],
+        "source": "Prohibition",
+        "target": "status.No Dead Heading",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "args": [
+            {
+              "args": [
+                {
+                  "args": [
+                    {
+                      "name": "controller_observedLevel1",
+                      "pretty": "controller_observedLevel1",
+                      "type": "var"
+                    },
+                    {
+                      "pretty": "0",
+                      "type": "const",
+                      "value": 0
+                    }
+                  ],
+                  "op": "<=",
+                  "pretty": "(controller_observedLevel1 <= 0)",
+                  "type": "op"
+                },
+                {
+                  "args": [
+                    {
+                      "name": "pump1_isRunning",
+                      "pretty": "pump1_isRunning",
+                      "type": "var"
+                    }
+                  ],
+                  "op": "not",
+                  "pretty": "(not pump1_isRunning)",
+                  "type": "op"
+                }
+              ],
+              "op": "implies",
+              "pretty": "((controller_observedLevel1 <= 0) implies (not pump1_isRunning))",
+              "type": "op"
+            },
+            {
+              "args": [
+                {
+                  "args": [
+                    {
+                      "name": "controller_observedLevel2",
+                      "pretty": "controller_observedLevel2",
+                      "type": "var"
+                    },
+                    {
+                      "pretty": "0",
+                      "type": "const",
+                      "value": 0
+                    }
+                  ],
+                  "op": "<=",
+                  "pretty": "(controller_observedLevel2 <= 0)",
+                  "type": "op"
+                },
+                {
+                  "args": [
+                    {
+                      "name": "pump2_isRunning",
+                      "pretty": "pump2_isRunning",
+                      "type": "var"
+                    }
+                  ],
+                  "op": "not",
+                  "pretty": "(not pump2_isRunning)",
+                  "type": "op"
+                }
+              ],
+              "op": "implies",
+              "pretty": "((controller_observedLevel2 <= 0) implies (not pump2_isRunning))",
+              "type": "op"
+            }
+          ],
+          "op": "and",
+          "pretty": "(((controller_observedLevel1 <= 0) implies (not pump1_isRunning)) and ((controller_observedLevel2 <= 0) implies (not pump2_isRunning)))",
+          "type": "op"
+        },
+        "kind": "requirement",
+        "pretty": "[requirement] status.No Dry Running = (((controller_observedLevel1 <= 0) implies (not pump1_isRunning)) and ((controller_observedLevel2 <= 0) implies (not pump2_isRunning)))    # Prohibition",
+        "raw_refs": [],
+        "refs": [
+          "controller_observedLevel1",
+          "controller_observedLevel2",
+          "pump1_isRunning",
+          "pump2_isRunning"
+        ],
+        "source": "Prohibition",
+        "target": "status.No Dry Running",
+        "unresolved_raw_refs": []
+      }
+    ],
+    "terminals": [
+      {
+        "constant_refs": [
+          "controller_tank1OriginalLevelMl",
+          "controller_tank1TransferMl",
+          "controller_tank2OriginalLevelMl",
+          "controller_tank2TransferMl"
+        ],
+        "expr": {
+          "args": [
+            {
+              "args": [
+                {
+                  "args": [
+                    {
+                      "path": "controller_tank1OriginalLevelMl",
+                      "pretty": "controller_tank1OriginalLevelMl",
+                      "type": "raw_ref"
+                    },
+                    {
+                      "name": "feederTank1_currentLevelMl",
+                      "pretty": "feederTank1_currentLevelMl",
+                      "type": "var"
+                    }
+                  ],
+                  "op": "-",
+                  "pretty": "(controller_tank1OriginalLevelMl - feederTank1_currentLevelMl)",
+                  "type": "op"
+                },
+                {
+                  "path": "controller_tank1TransferMl",
+                  "pretty": "controller_tank1TransferMl",
+                  "type": "raw_ref"
+                }
+              ],
+              "op": ">=",
+              "pretty": "((controller_tank1OriginalLevelMl - feederTank1_currentLevelMl) >= controller_tank1TransferMl)",
+              "type": "op"
+            },
+            {
+              "args": [
+                {
+                  "args": [
+                    {
+                      "path": "controller_tank2OriginalLevelMl",
+                      "pretty": "controller_tank2OriginalLevelMl",
+                      "type": "raw_ref"
+                    },
+                    {
+                      "name": "feederTank2_currentLevelMl",
+                      "pretty": "feederTank2_currentLevelMl",
+                      "type": "var"
+                    }
+                  ],
+                  "op": "-",
+                  "pretty": "(controller_tank2OriginalLevelMl - feederTank2_currentLevelMl)",
+                  "type": "op"
+                },
+                {
+                  "path": "controller_tank2TransferMl",
+                  "pretty": "controller_tank2TransferMl",
+                  "type": "raw_ref"
+                }
+              ],
+              "op": ">=",
+              "pretty": "((controller_tank2OriginalLevelMl - feederTank2_currentLevelMl) >= controller_tank2TransferMl)",
+              "type": "op"
+            }
+          ],
+          "op": "and",
+          "pretty": "(((controller_tank1OriginalLevelMl - feederTank1_currentLevelMl) >= controller_tank1TransferMl) and ((controller_tank2OriginalLevelMl - feederTank2_currentLevelMl) >= controller_tank2TransferMl))",
+          "type": "op"
+        },
+        "kind": "terminal",
+        "pretty": "[terminal] env.completion.done = (((controller_tank1OriginalLevelMl - feederTank1_currentLevelMl) >= controller_tank1TransferMl) and ((controller_tank2OriginalLevelMl - feederTank2_currentLevelMl) >= controller_tank2TransferMl))    # #Completion input binding in ScanCycle",
+        "raw_refs": [
+          "controller_tank1OriginalLevelMl",
+          "controller_tank1TransferMl",
+          "controller_tank2OriginalLevelMl",
+          "controller_tank2TransferMl"
+        ],
+        "refs": [
+          "feederTank1_currentLevelMl",
+          "feederTank2_currentLevelMl"
+        ],
+        "source": "#Completion input binding in ScanCycle",
+        "target": "env.completion.done",
+        "unresolved_raw_refs": []
+      }
+    ],
+    "transitions": [
+      {
+        "constant_refs": [
+          "controller_dt"
+        ],
+        "expr": {
+          "args": [
+            {
+              "name": "controller_currentTimeSeconds",
+              "pretty": "controller_currentTimeSeconds",
+              "type": "var"
+            },
+            {
+              "path": "controller_dt",
+              "pretty": "controller_dt",
+              "type": "raw_ref"
+            }
+          ],
+          "op": "+",
+          "pretty": "(controller_currentTimeSeconds + controller_dt)",
+          "type": "op"
+        },
+        "kind": "transition",
+        "pretty": "[transition] controller_currentTimeSeconds' = (controller_currentTimeSeconds + controller_dt)    # step:step",
+        "raw_refs": [
+          "controller_dt"
+        ],
+        "refs": [
+          "controller_currentTimeSeconds"
+        ],
+        "source": "step:step",
+        "target": "controller_currentTimeSeconds",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "cond": {
+            "args": [
+              {
+                "args": [
+                  {
+                    "name": "controller_currentTimeSeconds",
+                    "pretty": "controller_currentTimeSeconds",
+                    "type": "var"
+                  },
+                  {
+                    "name": "controller_lastScanTimeSeconds",
+                    "pretty": "controller_lastScanTimeSeconds",
+                    "type": "var"
+                  }
+                ],
+                "op": "-",
+                "pretty": "(controller_currentTimeSeconds - controller_lastScanTimeSeconds)",
+                "type": "op"
+              },
+              {
+                "args": [
+                  {
+                    "pretty": "1.0",
+                    "type": "const",
+                    "value": 1.0
+                  },
+                  {
+                    "name": "controller_scanCycleFrequencyHz",
+                    "pretty": "controller_scanCycleFrequencyHz",
+                    "type": "var"
+                  }
+                ],
+                "op": "/",
+                "pretty": "(1.0 / controller_scanCycleFrequencyHz)",
+                "type": "op"
+              }
+            ],
+            "op": ">=",
+            "pretty": "((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz))",
+            "type": "op"
+          },
+          "else": {
+            "name": "controller_lastScanTimeSeconds",
+            "pretty": "controller_lastScanTimeSeconds",
+            "type": "var"
+          },
+          "pretty": "ite(((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz)), controller_currentTimeSeconds, controller_lastScanTimeSeconds)",
+          "then": {
+            "name": "controller_currentTimeSeconds",
+            "pretty": "controller_currentTimeSeconds",
+            "type": "var"
+          },
+          "type": "ite"
+        },
+        "kind": "transition",
+        "pretty": "[transition] controller_lastScanTimeSeconds' = ite(((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz)), controller_currentTimeSeconds, controller_lastScanTimeSeconds)    # step:step",
+        "raw_refs": [],
+        "refs": [
+          "controller_currentTimeSeconds",
+          "controller_lastScanTimeSeconds",
+          "controller_scanCycleFrequencyHz"
+        ],
+        "source": "step:step",
+        "target": "controller_lastScanTimeSeconds",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "cond": {
+            "args": [
+              {
+                "args": [
+                  {
+                    "name": "controller_currentTimeSeconds",
+                    "pretty": "controller_currentTimeSeconds",
+                    "type": "var"
+                  },
+                  {
+                    "name": "controller_lastScanTimeSeconds",
+                    "pretty": "controller_lastScanTimeSeconds",
+                    "type": "var"
+                  }
+                ],
+                "op": "-",
+                "pretty": "(controller_currentTimeSeconds - controller_lastScanTimeSeconds)",
+                "type": "op"
+              },
+              {
+                "args": [
+                  {
+                    "pretty": "1.0",
+                    "type": "const",
+                    "value": 1.0
+                  },
+                  {
+                    "name": "controller_scanCycleFrequencyHz",
+                    "pretty": "controller_scanCycleFrequencyHz",
+                    "type": "var"
+                  }
+                ],
+                "op": "/",
+                "pretty": "(1.0 / controller_scanCycleFrequencyHz)",
+                "type": "op"
+              }
+            ],
+            "op": ">=",
+            "pretty": "((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz))",
+            "type": "op"
+          },
+          "else": {
+            "name": "controller_observedLevel1",
+            "pretty": "controller_observedLevel1",
+            "type": "var"
+          },
+          "pretty": "ite(((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz)), feederTank1_currentLevelMl, controller_observedLevel1)",
+          "then": {
+            "name": "feederTank1_currentLevelMl",
+            "pretty": "feederTank1_currentLevelMl",
+            "type": "var"
+          },
+          "type": "ite"
+        },
+        "kind": "performed_transition",
+        "pretty": "[performed_transition] controller_observedLevel1' = ite(((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz)), feederTank1_currentLevelMl, controller_observedLevel1)    # flattened performed action inside step",
+        "raw_refs": [],
+        "refs": [
+          "controller_currentTimeSeconds",
+          "controller_lastScanTimeSeconds",
+          "controller_observedLevel1",
+          "controller_scanCycleFrequencyHz",
+          "feederTank1_currentLevelMl"
+        ],
+        "source": "flattened performed action inside step",
+        "target": "controller_observedLevel1",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "cond": {
+            "args": [
+              {
+                "args": [
+                  {
+                    "name": "controller_currentTimeSeconds",
+                    "pretty": "controller_currentTimeSeconds",
+                    "type": "var"
+                  },
+                  {
+                    "name": "controller_lastScanTimeSeconds",
+                    "pretty": "controller_lastScanTimeSeconds",
+                    "type": "var"
+                  }
+                ],
+                "op": "-",
+                "pretty": "(controller_currentTimeSeconds - controller_lastScanTimeSeconds)",
+                "type": "op"
+              },
+              {
+                "args": [
+                  {
+                    "pretty": "1.0",
+                    "type": "const",
+                    "value": 1.0
+                  },
+                  {
+                    "name": "controller_scanCycleFrequencyHz",
+                    "pretty": "controller_scanCycleFrequencyHz",
+                    "type": "var"
+                  }
+                ],
+                "op": "/",
+                "pretty": "(1.0 / controller_scanCycleFrequencyHz)",
+                "type": "op"
+              }
+            ],
+            "op": ">=",
+            "pretty": "((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz))",
+            "type": "op"
+          },
+          "else": {
+            "name": "controller_observedLevel2",
+            "pretty": "controller_observedLevel2",
+            "type": "var"
+          },
+          "pretty": "ite(((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz)), feederTank2_currentLevelMl, controller_observedLevel2)",
+          "then": {
+            "name": "feederTank2_currentLevelMl",
+            "pretty": "feederTank2_currentLevelMl",
+            "type": "var"
+          },
+          "type": "ite"
+        },
+        "kind": "performed_transition",
+        "pretty": "[performed_transition] controller_observedLevel2' = ite(((controller_currentTimeSeconds - controller_lastScanTimeSeconds) >= (1.0 / controller_scanCycleFrequencyHz)), feederTank2_currentLevelMl, controller_observedLevel2)    # flattened performed action inside step",
+        "raw_refs": [],
+        "refs": [
+          "controller_currentTimeSeconds",
+          "controller_lastScanTimeSeconds",
+          "controller_observedLevel2",
+          "controller_scanCycleFrequencyHz",
+          "feederTank2_currentLevelMl"
+        ],
+        "source": "flattened performed action inside step",
+        "target": "controller_observedLevel2",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [
+          "feederTank1_dt"
+        ],
+        "expr": {
+          "args": [
+            {
+              "name": "feederTank1_currentLevelMl",
+              "pretty": "feederTank1_currentLevelMl",
+              "type": "var"
+            },
+            {
+              "args": [
+                {
+                  "args": [
+                    {
+                      "name": "feederTank1_inlet_flowRateMl",
+                      "pretty": "feederTank1_inlet_flowRateMl",
+                      "type": "var"
+                    },
+                    {
+                      "name": "feederTank1_outlet_flowRateMl",
+                      "pretty": "feederTank1_outlet_flowRateMl",
+                      "type": "var"
+                    }
+                  ],
+                  "op": "-",
+                  "pretty": "(feederTank1_inlet_flowRateMl - feederTank1_outlet_flowRateMl)",
+                  "type": "op"
+                },
+                {
+                  "path": "feederTank1_dt",
+                  "pretty": "feederTank1_dt",
+                  "type": "raw_ref"
+                }
+              ],
+              "op": "*",
+              "pretty": "((feederTank1_inlet_flowRateMl - feederTank1_outlet_flowRateMl) * feederTank1_dt)",
+              "type": "op"
+            }
+          ],
+          "op": "+",
+          "pretty": "(feederTank1_currentLevelMl + ((feederTank1_inlet_flowRateMl - feederTank1_outlet_flowRateMl) * feederTank1_dt))",
+          "type": "op"
+        },
+        "kind": "transition",
+        "pretty": "[transition] feederTank1_currentLevelMl' = (feederTank1_currentLevelMl + ((feederTank1_inlet_flowRateMl - feederTank1_outlet_flowRateMl) * feederTank1_dt))    # step:step",
+        "raw_refs": [
+          "feederTank1_dt"
+        ],
+        "refs": [
+          "feederTank1_currentLevelMl",
+          "feederTank1_inlet_flowRateMl",
+          "feederTank1_outlet_flowRateMl"
+        ],
+        "source": "step:step",
+        "target": "feederTank1_currentLevelMl",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [
+          "feederTank2_dt"
+        ],
+        "expr": {
+          "args": [
+            {
+              "name": "feederTank2_currentLevelMl",
+              "pretty": "feederTank2_currentLevelMl",
+              "type": "var"
+            },
+            {
+              "args": [
+                {
+                  "args": [
+                    {
+                      "name": "feederTank2_inlet_flowRateMl",
+                      "pretty": "feederTank2_inlet_flowRateMl",
+                      "type": "var"
+                    },
+                    {
+                      "name": "feederTank2_outlet_flowRateMl",
+                      "pretty": "feederTank2_outlet_flowRateMl",
+                      "type": "var"
+                    }
+                  ],
+                  "op": "-",
+                  "pretty": "(feederTank2_inlet_flowRateMl - feederTank2_outlet_flowRateMl)",
+                  "type": "op"
+                },
+                {
+                  "path": "feederTank2_dt",
+                  "pretty": "feederTank2_dt",
+                  "type": "raw_ref"
+                }
+              ],
+              "op": "*",
+              "pretty": "((feederTank2_inlet_flowRateMl - feederTank2_outlet_flowRateMl) * feederTank2_dt)",
+              "type": "op"
+            }
+          ],
+          "op": "+",
+          "pretty": "(feederTank2_currentLevelMl + ((feederTank2_inlet_flowRateMl - feederTank2_outlet_flowRateMl) * feederTank2_dt))",
+          "type": "op"
+        },
+        "kind": "transition",
+        "pretty": "[transition] feederTank2_currentLevelMl' = (feederTank2_currentLevelMl + ((feederTank2_inlet_flowRateMl - feederTank2_outlet_flowRateMl) * feederTank2_dt))    # step:step",
+        "raw_refs": [
+          "feederTank2_dt"
+        ],
+        "refs": [
+          "feederTank2_currentLevelMl",
+          "feederTank2_inlet_flowRateMl",
+          "feederTank2_outlet_flowRateMl"
+        ],
+        "source": "step:step",
+        "target": "feederTank2_currentLevelMl",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [
+          "fillingTank_dt"
+        ],
+        "expr": {
+          "args": [
+            {
+              "name": "fillingTank_currentLevelMl",
+              "pretty": "fillingTank_currentLevelMl",
+              "type": "var"
+            },
+            {
+              "args": [
+                {
+                  "args": [
+                    {
+                      "name": "fillingTank_inlet_flowRateMl",
+                      "pretty": "fillingTank_inlet_flowRateMl",
+                      "type": "var"
+                    },
+                    {
+                      "name": "fillingTank_outlet_flowRateMl",
+                      "pretty": "fillingTank_outlet_flowRateMl",
+                      "type": "var"
+                    }
+                  ],
+                  "op": "-",
+                  "pretty": "(fillingTank_inlet_flowRateMl - fillingTank_outlet_flowRateMl)",
+                  "type": "op"
+                },
+                {
+                  "path": "fillingTank_dt",
+                  "pretty": "fillingTank_dt",
+                  "type": "raw_ref"
+                }
+              ],
+              "op": "*",
+              "pretty": "((fillingTank_inlet_flowRateMl - fillingTank_outlet_flowRateMl) * fillingTank_dt)",
+              "type": "op"
+            }
+          ],
+          "op": "+",
+          "pretty": "(fillingTank_currentLevelMl + ((fillingTank_inlet_flowRateMl - fillingTank_outlet_flowRateMl) * fillingTank_dt))",
+          "type": "op"
+        },
+        "kind": "transition",
+        "pretty": "[transition] fillingTank_currentLevelMl' = (fillingTank_currentLevelMl + ((fillingTank_inlet_flowRateMl - fillingTank_outlet_flowRateMl) * fillingTank_dt))    # step:step",
+        "raw_refs": [
+          "fillingTank_dt"
+        ],
+        "refs": [
+          "fillingTank_currentLevelMl",
+          "fillingTank_inlet_flowRateMl",
+          "fillingTank_outlet_flowRateMl"
+        ],
+        "source": "step:step",
+        "target": "fillingTank_currentLevelMl",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "controller_policyCall_shouldTurnOnPump1",
+          "pretty": "controller_policyCall_shouldTurnOnPump1",
+          "type": "var"
+        },
+        "kind": "state_machine_transition",
+        "pretty": "[state_machine_transition] pump1_isRunning' = controller_policyCall_shouldTurnOnPump1    # pump1.waiting_to_waiting: coil-write latch",
+        "raw_refs": [],
+        "refs": [
+          "controller_policyCall_shouldTurnOnPump1"
+        ],
+        "source": "pump1.waiting_to_waiting: coil-write latch",
+        "target": "pump1_isRunning",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "controller_policyCall_shouldTurnOnPump2",
+          "pretty": "controller_policyCall_shouldTurnOnPump2",
+          "type": "var"
+        },
+        "kind": "state_machine_transition",
+        "pretty": "[state_machine_transition] pump2_isRunning' = controller_policyCall_shouldTurnOnPump2    # pump2.waiting_to_waiting: coil-write latch",
+        "raw_refs": [],
+        "refs": [
+          "controller_policyCall_shouldTurnOnPump2"
+        ],
+        "source": "pump2.waiting_to_waiting: coil-write latch",
+        "target": "pump2_isRunning",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "controller_policyCall_shouldOpenValve1",
+          "pretty": "controller_policyCall_shouldOpenValve1",
+          "type": "var"
+        },
+        "kind": "state_machine_transition",
+        "pretty": "[state_machine_transition] valve1_isOpen' = controller_policyCall_shouldOpenValve1    # valve1.waiting_to_waiting: coil-write latch",
+        "raw_refs": [],
+        "refs": [
+          "controller_policyCall_shouldOpenValve1"
+        ],
+        "source": "valve1.waiting_to_waiting: coil-write latch",
+        "target": "valve1_isOpen",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "controller_policyCall_shouldOpenValve2",
+          "pretty": "controller_policyCall_shouldOpenValve2",
+          "type": "var"
+        },
+        "kind": "state_machine_transition",
+        "pretty": "[state_machine_transition] valve2_isOpen' = controller_policyCall_shouldOpenValve2    # valve2.waiting_to_waiting: coil-write latch",
+        "raw_refs": [],
+        "refs": [
+          "controller_policyCall_shouldOpenValve2"
+        ],
+        "source": "valve2.waiting_to_waiting: coil-write latch",
+        "target": "valve2_isOpen",
+        "unresolved_raw_refs": []
+      }
+    ]
+  },
+  "mdp_obligations": {
+    "done": {
+      "covered": true,
+      "depends_on": [
+        "safety requirement violation",
+        "current #Completion input",
+        "environment step_count >= max_steps"
+      ],
+      "status": "discharged_over_augmented_state"
+    },
+    "observation": {
+      "equations": [
+        {
+          "action_refs": [],
+          "constant_refs": [
+            "controller_tank1OriginalLevelMl"
+          ],
+          "covered_by_q_and_action": true,
+          "kind": "observation",
+          "pretty": "[observation] obs.tank1OriginalMl = controller_tank1OriginalLevelMl    # Neural input binding",
+          "refs": [],
+          "source": "Neural input binding",
+          "state_refs": [],
+          "target": "obs.tank1OriginalMl",
+          "unresolved_raw_refs": [],
+          "unresolved_refs": []
+        },
+        {
+          "action_refs": [],
+          "constant_refs": [
+            "controller_tank1TransferMl"
+          ],
+          "covered_by_q_and_action": true,
+          "kind": "observation",
+          "pretty": "[observation] obs.tank1TargetTransferMl = controller_tank1TransferMl    # Neural input binding",
+          "refs": [],
+          "source": "Neural input binding",
+          "state_refs": [],
+          "target": "obs.tank1TargetTransferMl",
+          "unresolved_raw_refs": [],
+          "unresolved_refs": []
+        },
+        {
+          "action_refs": [],
+          "constant_refs": [],
+          "covered_by_q_and_action": true,
+          "kind": "observation",
+          "pretty": "[observation] obs.tank1VolumeMl = feederTank1_currentLevelMl    # Neural input binding",
+          "refs": [
+            "feederTank1_currentLevelMl"
+          ],
+          "source": "Neural input binding",
+          "state_refs": [
+            "feederTank1_currentLevelMl"
+          ],
+          "target": "obs.tank1VolumeMl",
+          "unresolved_raw_refs": [],
+          "unresolved_refs": []
+        },
+        {
+          "action_refs": [],
+          "constant_refs": [
+            "controller_tank2OriginalLevelMl"
+          ],
+          "covered_by_q_and_action": true,
+          "kind": "observation",
+          "pretty": "[observation] obs.tank2OriginalMl = controller_tank2OriginalLevelMl    # Neural input binding",
+          "refs": [],
+          "source": "Neural input binding",
+          "state_refs": [],
+          "target": "obs.tank2OriginalMl",
+          "unresolved_raw_refs": [],
+          "unresolved_refs": []
+        },
+        {
+          "action_refs": [],
+          "constant_refs": [
+            "controller_tank2TransferMl"
+          ],
+          "covered_by_q_and_action": true,
+          "kind": "observation",
+          "pretty": "[observation] obs.tank2TargetTransferMl = controller_tank2TransferMl    # Neural input binding",
+          "refs": [],
+          "source": "Neural input binding",
+          "state_refs": [],
+          "target": "obs.tank2TargetTransferMl",
+          "unresolved_raw_refs": [],
+          "unresolved_refs": []
+        },
+        {
+          "action_refs": [],
+          "constant_refs": [],
+          "covered_by_q_and_action": true,
+          "kind": "observation",
+          "pretty": "[observation] obs.tank2VolumeMl = feederTank2_currentLevelMl    # Neural input binding",
+          "refs": [
+            "feederTank2_currentLevelMl"
+          ],
+          "source": "Neural input binding",
+          "state_refs": [
+            "feederTank2_currentLevelMl"
+          ],
+          "target": "obs.tank2VolumeMl",
+          "unresolved_raw_refs": [],
+          "unresolved_refs": []
+        }
+      ],
+      "status": "covered_by_q"
+    },
+    "overall_mdp_theorem_status": "profile_obligations_discharged_solver_gate_required",
+    "requirement_status": {
+      "equations": [
+        {
+          "action_refs": [],
+          "constant_refs": [
+            "controller_tank1OriginalLevelMl",
+            "controller_tank1TransferMl",
+            "controller_tank2OriginalLevelMl",
+            "controller_tank2TransferMl"
+          ],
+          "covered_by_q_and_action": true,
+          "kind": "requirement",
+          "pretty": "[requirement] status.Fluid Transfer Liveness = ((controller_lastScanTimeSeconds > 0) implies (((controller_tank1OriginalLevelMl - controller_observedLevel1) < controller_tank1TransferMl) implies (((valve1_isOpen and pump1_isRunning) and ((controller_tank2OriginalLevelMl - controller_observedLevel2) < controller_tank2TransferMl)) implies (valve2_isOpen and pump2_isRunning))))    # Obligation",
+          "refs": [
+            "controller_lastScanTimeSeconds",
+            "controller_observedLevel1",
+            "controller_observedLevel2",
+            "pump1_isRunning",
+            "pump2_isRunning",
+            "valve1_isOpen",
+            "valve2_isOpen"
+          ],
+          "source": "Obligation",
+          "state_refs": [
+            "controller_lastScanTimeSeconds",
+            "controller_observedLevel1",
+            "controller_observedLevel2",
+            "pump1_isRunning",
+            "pump2_isRunning",
+            "valve1_isOpen",
+            "valve2_isOpen"
+          ],
+          "target": "status.Fluid Transfer Liveness",
+          "unresolved_raw_refs": [],
+          "unresolved_refs": []
+        },
+        {
+          "action_refs": [],
+          "constant_refs": [
+            "controller_tank1OriginalLevelMl",
+            "controller_tank1TransferMl",
+            "controller_tank2OriginalLevelMl",
+            "controller_tank2TransferMl"
+          ],
+          "covered_by_q_and_action": true,
+          "kind": "requirement",
+          "pretty": "[requirement] status.Fluid Transfer Termination Safety = ((controller_lastScanTimeSeconds > 0) implies ((((controller_tank1OriginalLevelMl - controller_observedLevel1) >= (controller_tank1TransferMl + controller_toleranceMl)) implies (not pump1_isRunning)) and (((controller_tank2OriginalLevelMl - controller_observedLevel2) >= (controller_tank2TransferMl + controller_toleranceMl)) implies (not pump2_isRunning))))    # Obligation",
+          "refs": [
+            "controller_lastScanTimeSeconds",
+            "controller_observedLevel1",
+            "controller_observedLevel2",
+            "pump1_isRunning",
+            "pump2_isRunning"
+          ],
+          "source": "Obligation",
+          "state_refs": [
+            "controller_lastScanTimeSeconds",
+            "controller_observedLevel1",
+            "controller_observedLevel2",
+            "pump1_isRunning",
+            "pump2_isRunning"
+          ],
+          "target": "status.Fluid Transfer Termination Safety",
+          "unresolved_raw_refs": [],
+          "unresolved_refs": []
+        },
+        {
+          "action_refs": [],
+          "constant_refs": [],
+          "covered_by_q_and_action": true,
+          "kind": "requirement",
+          "pretty": "[requirement] status.No Dead Heading = (((not valve1_isOpen) implies (not pump1_isRunning)) and ((not valve2_isOpen) implies (not pump2_isRunning)))    # Prohibition",
+          "refs": [
+            "pump1_isRunning",
+            "pump2_isRunning",
+            "valve1_isOpen",
+            "valve2_isOpen"
+          ],
+          "source": "Prohibition",
+          "state_refs": [
+            "pump1_isRunning",
+            "pump2_isRunning",
+            "valve1_isOpen",
+            "valve2_isOpen"
+          ],
+          "target": "status.No Dead Heading",
+          "unresolved_raw_refs": [],
+          "unresolved_refs": []
+        },
+        {
+          "action_refs": [],
+          "constant_refs": [],
+          "covered_by_q_and_action": true,
+          "kind": "requirement",
+          "pretty": "[requirement] status.No Dry Running = (((controller_observedLevel1 <= 0) implies (not pump1_isRunning)) and ((controller_observedLevel2 <= 0) implies (not pump2_isRunning)))    # Prohibition",
+          "refs": [
+            "controller_observedLevel1",
+            "controller_observedLevel2",
+            "pump1_isRunning",
+            "pump2_isRunning"
+          ],
+          "source": "Prohibition",
+          "state_refs": [
+            "controller_observedLevel1",
+            "controller_observedLevel2",
+            "pump1_isRunning",
+            "pump2_isRunning"
+          ],
+          "target": "status.No Dry Running",
+          "unresolved_raw_refs": [],
+          "unresolved_refs": []
+        }
+      ],
+      "status": "covered_by_q_and_action"
+    },
+    "reward": {
+      "covered_terms": {
+        "all_safety_statuses_covered": true,
+        "all_terminal_state_terms_covered": true,
+        "finite_horizon_truncation_covered": true,
+        "safety_requirement_statuses": [
+          {
+            "action_refs": [],
+            "constant_refs": [
+              "controller_tank1OriginalLevelMl",
+              "controller_tank1TransferMl",
+              "controller_tank2OriginalLevelMl",
+              "controller_tank2TransferMl"
+            ],
+            "covered_by_q_and_action": true,
+            "kind": "requirement",
+            "pretty": "[requirement] status.Fluid Transfer Liveness = ((controller_lastScanTimeSeconds > 0) implies (((controller_tank1OriginalLevelMl - controller_observedLevel1) < controller_tank1TransferMl) implies (((valve1_isOpen and pump1_isRunning) and ((controller_tank2OriginalLevelMl - controller_observedLevel2) < controller_tank2TransferMl)) implies (valve2_isOpen and pump2_isRunning))))    # Obligation",
+            "refs": [
+              "controller_lastScanTimeSeconds",
+              "controller_observedLevel1",
+              "controller_observedLevel2",
+              "pump1_isRunning",
+              "pump2_isRunning",
+              "valve1_isOpen",
+              "valve2_isOpen"
+            ],
+            "source": "Obligation",
+            "state_refs": [
+              "controller_lastScanTimeSeconds",
+              "controller_observedLevel1",
+              "controller_observedLevel2",
+              "pump1_isRunning",
+              "pump2_isRunning",
+              "valve1_isOpen",
+              "valve2_isOpen"
+            ],
+            "target": "status.Fluid Transfer Liveness",
+            "unresolved_raw_refs": [],
+            "unresolved_refs": []
+          },
+          {
+            "action_refs": [],
+            "constant_refs": [
+              "controller_tank1OriginalLevelMl",
+              "controller_tank1TransferMl",
+              "controller_tank2OriginalLevelMl",
+              "controller_tank2TransferMl"
+            ],
+            "covered_by_q_and_action": true,
+            "kind": "requirement",
+            "pretty": "[requirement] status.Fluid Transfer Termination Safety = ((controller_lastScanTimeSeconds > 0) implies ((((controller_tank1OriginalLevelMl - controller_observedLevel1) >= (controller_tank1TransferMl + controller_toleranceMl)) implies (not pump1_isRunning)) and (((controller_tank2OriginalLevelMl - controller_observedLevel2) >= (controller_tank2TransferMl + controller_toleranceMl)) implies (not pump2_isRunning))))    # Obligation",
+            "refs": [
+              "controller_lastScanTimeSeconds",
+              "controller_observedLevel1",
+              "controller_observedLevel2",
+              "pump1_isRunning",
+              "pump2_isRunning"
+            ],
+            "source": "Obligation",
+            "state_refs": [
+              "controller_lastScanTimeSeconds",
+              "controller_observedLevel1",
+              "controller_observedLevel2",
+              "pump1_isRunning",
+              "pump2_isRunning"
+            ],
+            "target": "status.Fluid Transfer Termination Safety",
+            "unresolved_raw_refs": [],
+            "unresolved_refs": []
+          },
+          {
+            "action_refs": [],
+            "constant_refs": [],
+            "covered_by_q_and_action": true,
+            "kind": "requirement",
+            "pretty": "[requirement] status.No Dead Heading = (((not valve1_isOpen) implies (not pump1_isRunning)) and ((not valve2_isOpen) implies (not pump2_isRunning)))    # Prohibition",
+            "refs": [
+              "pump1_isRunning",
+              "pump2_isRunning",
+              "valve1_isOpen",
+              "valve2_isOpen"
+            ],
+            "source": "Prohibition",
+            "state_refs": [
+              "pump1_isRunning",
+              "pump2_isRunning",
+              "valve1_isOpen",
+              "valve2_isOpen"
+            ],
+            "target": "status.No Dead Heading",
+            "unresolved_raw_refs": [],
+            "unresolved_refs": []
+          },
+          {
+            "action_refs": [],
+            "constant_refs": [],
+            "covered_by_q_and_action": true,
+            "kind": "requirement",
+            "pretty": "[requirement] status.No Dry Running = (((controller_observedLevel1 <= 0) implies (not pump1_isRunning)) and ((controller_observedLevel2 <= 0) implies (not pump2_isRunning)))    # Prohibition",
+            "refs": [
+              "controller_observedLevel1",
+              "controller_observedLevel2",
+              "pump1_isRunning",
+              "pump2_isRunning"
+            ],
+            "source": "Prohibition",
+            "state_refs": [
+              "controller_observedLevel1",
+              "controller_observedLevel2",
+              "pump1_isRunning",
+              "pump2_isRunning"
+            ],
+            "target": "status.No Dry Running",
+            "unresolved_raw_refs": [],
+            "unresolved_refs": []
+          }
+        ],
+        "terminal_state": [
+          {
+            "action_refs": [],
+            "constant_refs": [
+              "controller_tank1OriginalLevelMl",
+              "controller_tank1TransferMl",
+              "controller_tank2OriginalLevelMl",
+              "controller_tank2TransferMl"
+            ],
+            "covered_by_q_and_action": true,
+            "kind": "terminal",
+            "pretty": "[terminal] env.completion.done = (((controller_tank1OriginalLevelMl - feederTank1_currentLevelMl) >= controller_tank1TransferMl) and ((controller_tank2OriginalLevelMl - feederTank2_currentLevelMl) >= controller_tank2TransferMl))    # #Completion input binding in ScanCycle",
+            "refs": [
+              "feederTank1_currentLevelMl",
+              "feederTank2_currentLevelMl"
+            ],
+            "source": "#Completion input binding in ScanCycle",
+            "state_refs": [
+              "feederTank1_currentLevelMl",
+              "feederTank2_currentLevelMl"
+            ],
+            "target": "env.completion.done",
+            "unresolved_raw_refs": [],
+            "unresolved_refs": []
+          }
+        ]
+      },
+      "environment_formula": "phase 2: if any safety requirement status is false, reward=-1 and done=True; else if the current #Completion input is true, reward=1 and done=True; else reward=-0.01 and done=False; max-step truncation overrides reward to 0.",
+      "external_terms_not_yet_in_q": [],
+      "modeled_external_terms": [
+        "current #Completion input via terminal_state equation",
+        "environment step_count >= max_steps via augmented finite-horizon state"
+      ],
+      "status": "discharged_over_augmented_state"
+    },
+    "shield": {
+      "action_map": {
+        "0": {
+          "shouldOpenValve1": false,
+          "shouldOpenValve2": false,
+          "shouldTurnOnPump1": false,
+          "shouldTurnOnPump2": false
+        },
+        "1": {
+          "shouldOpenValve1": true,
+          "shouldOpenValve2": false,
+          "shouldTurnOnPump1": false,
+          "shouldTurnOnPump2": false
+        },
+        "10": {
+          "shouldOpenValve1": false,
+          "shouldOpenValve2": true,
+          "shouldTurnOnPump1": false,
+          "shouldTurnOnPump2": true
+        },
+        "11": {
+          "shouldOpenValve1": true,
+          "shouldOpenValve2": true,
+          "shouldTurnOnPump1": false,
+          "shouldTurnOnPump2": true
+        },
+        "12": {
+          "shouldOpenValve1": false,
+          "shouldOpenValve2": false,
+          "shouldTurnOnPump1": true,
+          "shouldTurnOnPump2": true
+        },
+        "13": {
+          "shouldOpenValve1": true,
+          "shouldOpenValve2": false,
+          "shouldTurnOnPump1": true,
+          "shouldTurnOnPump2": true
+        },
+        "14": {
+          "shouldOpenValve1": false,
+          "shouldOpenValve2": true,
+          "shouldTurnOnPump1": true,
+          "shouldTurnOnPump2": true
+        },
+        "15": {
+          "shouldOpenValve1": true,
+          "shouldOpenValve2": true,
+          "shouldTurnOnPump1": true,
+          "shouldTurnOnPump2": true
+        },
+        "2": {
+          "shouldOpenValve1": false,
+          "shouldOpenValve2": true,
+          "shouldTurnOnPump1": false,
+          "shouldTurnOnPump2": false
+        },
+        "3": {
+          "shouldOpenValve1": true,
+          "shouldOpenValve2": true,
+          "shouldTurnOnPump1": false,
+          "shouldTurnOnPump2": false
+        },
+        "4": {
+          "shouldOpenValve1": false,
+          "shouldOpenValve2": false,
+          "shouldTurnOnPump1": true,
+          "shouldTurnOnPump2": false
+        },
+        "5": {
+          "shouldOpenValve1": true,
+          "shouldOpenValve2": false,
+          "shouldTurnOnPump1": true,
+          "shouldTurnOnPump2": false
+        },
+        "6": {
+          "shouldOpenValve1": false,
+          "shouldOpenValve2": true,
+          "shouldTurnOnPump1": true,
+          "shouldTurnOnPump2": false
+        },
+        "7": {
+          "shouldOpenValve1": true,
+          "shouldOpenValve2": true,
+          "shouldTurnOnPump1": true,
+          "shouldTurnOnPump2": false
+        },
+        "8": {
+          "shouldOpenValve1": false,
+          "shouldOpenValve2": false,
+          "shouldTurnOnPump1": false,
+          "shouldTurnOnPump2": true
+        },
+        "9": {
+          "shouldOpenValve1": true,
+          "shouldOpenValve2": false,
+          "shouldTurnOnPump1": false,
+          "shouldTurnOnPump2": true
+        }
+      },
+      "action_space": "discrete_boolean_output_bitvector",
+      "clauses": [
+        {
+          "left": {
+            "left": {
+              "left": {
+                "path": [
+                  "p",
+                  "tank1OriginalMl"
+                ],
+                "pretty": "p.tank1OriginalMl",
+                "type": "ref"
+              },
+              "op": "-",
+              "right": {
+                "path": [
+                  "p",
+                  "tank1VolumeMl"
+                ],
+                "pretty": "p.tank1VolumeMl",
+                "type": "ref"
+              },
+              "type": "binary"
+            },
+            "op": "<",
+            "right": {
+              "path": [
+                "p",
+                "tank1TargetTransferMl"
+              ],
+              "pretty": "p.tank1TargetTransferMl",
+              "type": "ref"
+            },
+            "type": "binary"
+          },
+          "op": "==",
+          "right": {
+            "path": [
+              "p",
+              "shouldTurnOnPump1"
+            ],
+            "pretty": "p.shouldTurnOnPump1",
+            "type": "ref"
+          },
+          "type": "binary"
+        },
+        {
+          "left": {
+            "path": [
+              "p",
+              "shouldTurnOnPump1"
+            ],
+            "pretty": "p.shouldTurnOnPump1",
+            "type": "ref"
+          },
+          "op": "==",
+          "right": {
+            "path": [
+              "p",
+              "shouldOpenValve1"
+            ],
+            "pretty": "p.shouldOpenValve1",
+            "type": "ref"
+          },
+          "type": "binary"
+        },
+        {
+          "left": {
+            "left": {
+              "left": {
+                "path": [
+                  "p",
+                  "tank2OriginalMl"
+                ],
+                "pretty": "p.tank2OriginalMl",
+                "type": "ref"
+              },
+              "op": "-",
+              "right": {
+                "path": [
+                  "p",
+                  "tank2VolumeMl"
+                ],
+                "pretty": "p.tank2VolumeMl",
+                "type": "ref"
+              },
+              "type": "binary"
+            },
+            "op": "<",
+            "right": {
+              "path": [
+                "p",
+                "tank2TargetTransferMl"
+              ],
+              "pretty": "p.tank2TargetTransferMl",
+              "type": "ref"
+            },
+            "type": "binary"
+          },
+          "op": "==",
+          "right": {
+            "path": [
+              "p",
+              "shouldTurnOnPump2"
+            ],
+            "pretty": "p.shouldTurnOnPump2",
+            "type": "ref"
+          },
+          "type": "binary"
+        },
+        {
+          "left": {
+            "path": [
+              "p",
+              "shouldTurnOnPump2"
+            ],
+            "pretty": "p.shouldTurnOnPump2",
+            "type": "ref"
+          },
+          "op": "==",
+          "right": {
+            "path": [
+              "p",
+              "shouldOpenValve2"
+            ],
+            "pretty": "p.shouldOpenValve2",
+            "type": "ref"
+          },
+          "type": "binary"
+        }
+      ],
+      "constants": {
+        "tank1OriginalLevelMl": 150.0,
+        "tank1TransferMl": 50.0,
+        "tank2OriginalLevelMl": 150.0,
+        "tank2TransferMl": 100.0
+      },
+      "continuous_details": {},
+      "dead_actions": [
+        1,
+        2,
+        3,
+        4,
+        6,
+        7,
+        8,
+        9,
+        11,
+        12,
+        13,
+        14
+      ],
+      "determinism_claim": "executed action is a deterministic function of covered shield inputs and the policy proposed action",
+      "executed_action_history": "buffered environments push the shielded/executed action, not the raw proposal",
+      "input_coverage": [
+        {
+          "covered_by_q_and_action": true,
+          "param": "tank1VolumeMl",
+          "source_kind": "observation",
+          "source_target": "obs.tank1VolumeMl"
+        },
+        {
+          "covered_by_q_and_action": true,
+          "param": "tank2VolumeMl",
+          "source_kind": "observation",
+          "source_target": "obs.tank2VolumeMl"
+        },
+        {
+          "covered_by_q_and_action": true,
+          "param": "tank1TargetTransferMl",
+          "source_kind": "observation",
+          "source_target": "obs.tank1TargetTransferMl"
+        },
+        {
+          "covered_by_q_and_action": true,
+          "param": "tank2TargetTransferMl",
+          "source_kind": "observation",
+          "source_target": "obs.tank2TargetTransferMl"
+        },
+        {
+          "covered_by_q_and_action": true,
+          "param": "tank1OriginalMl",
+          "source_kind": "observation",
+          "source_target": "obs.tank1OriginalMl"
+        },
+        {
+          "covered_by_q_and_action": true,
+          "param": "tank2OriginalMl",
+          "source_kind": "observation",
+          "source_target": "obs.tank2OriginalMl"
+        },
+        {
+          "covered_by_q_and_action": true,
+          "param": "done",
+          "source_kind": "terminal_state",
+          "source_target": "env.completion.done"
+        }
+      ],
+      "interface": {
+        "completion_params": [
+          "done"
+        ],
+        "controller_part": "system::controller",
+        "input_param_types": {
+          "done": "Boolean",
+          "tank1OriginalMl": "Integer",
+          "tank1TargetTransferMl": "Integer",
+          "tank1VolumeMl": "Integer",
+          "tank2OriginalMl": "Integer",
+          "tank2TargetTransferMl": "Integer",
+          "tank2VolumeMl": "Integer"
+        },
+        "input_params": [
+          "tank1VolumeMl",
+          "tank2VolumeMl",
+          "tank1TargetTransferMl",
+          "tank2TargetTransferMl",
+          "tank1OriginalMl",
+          "tank2OriginalMl",
+          "done"
+        ],
+        "neural_requirement": {
+          "metadata": [
+            "NeuralRequirement"
+          ],
+          "name": "Neural Controller Soundness",
+          "raw_expression": "(p.tank1OriginalMl - p.tank1VolumeMl < p.tank1TargetTransferMl == p.shouldTurnOnPump1) and\n                (p.shouldTurnOnPump1 == p.shouldOpenValve1) and\n                (p.tank2OriginalMl - p.tank2VolumeMl < p.tank2TargetTransferMl == p.shouldTurnOnPump2) and\n                (p.shouldTurnOnPump2 == p.shouldOpenValve2)",
+          "subject_type": "Policy",
+          "subject_var": "p"
+        },
+        "output_action_matches": {
+          "shouldOpenValve1": [
+            "controller_policyCall_shouldOpenValve1"
+          ],
+          "shouldOpenValve2": [
+            "controller_policyCall_shouldOpenValve2"
+          ],
+          "shouldTurnOnPump1": [
+            "controller_policyCall_shouldTurnOnPump1"
+          ],
+          "shouldTurnOnPump2": [
+            "controller_policyCall_shouldTurnOnPump2"
+          ]
+        },
+        "output_param_types": {
+          "shouldOpenValve1": "Boolean",
+          "shouldOpenValve2": "Boolean",
+          "shouldTurnOnPump1": "Boolean",
+          "shouldTurnOnPump2": "Boolean"
+        },
+        "output_params": [
+          "shouldOpenValve1",
+          "shouldOpenValve2",
+          "shouldTurnOnPump1",
+          "shouldTurnOnPump2"
+        ],
+        "status": "recorded_not_semantically_proven"
+      },
+      "missing_input_params": [],
+      "missing_output_params": [],
+      "output_action_mapping": [
+        {
+          "action_vars": [
+            "controller_policyCall_shouldOpenValve1"
+          ],
+          "param": "shouldOpenValve1",
+          "type": "Boolean",
+          "unique_action_var": true
+        },
+        {
+          "action_vars": [
+            "controller_policyCall_shouldOpenValve2"
+          ],
+          "param": "shouldOpenValve2",
+          "type": "Boolean",
+          "unique_action_var": true
+        },
+        {
+          "action_vars": [
+            "controller_policyCall_shouldTurnOnPump1"
+          ],
+          "param": "shouldTurnOnPump1",
+          "type": "Boolean",
+          "unique_action_var": true
+        },
+        {
+          "action_vars": [
+            "controller_policyCall_shouldTurnOnPump2"
+          ],
+          "param": "shouldTurnOnPump2",
+          "type": "Boolean",
+          "unique_action_var": true
+        }
+      ],
+      "predicate_ast": {
+        "left": {
+          "left": {
+            "left": {
+              "left": {
+                "left": {
+                  "left": {
+                    "path": [
+                      "p",
+                      "tank1OriginalMl"
+                    ],
+                    "pretty": "p.tank1OriginalMl",
+                    "type": "ref"
+                  },
+                  "op": "-",
+                  "right": {
+                    "path": [
+                      "p",
+                      "tank1VolumeMl"
+                    ],
+                    "pretty": "p.tank1VolumeMl",
+                    "type": "ref"
+                  },
+                  "type": "binary"
+                },
+                "op": "<",
+                "right": {
+                  "path": [
+                    "p",
+                    "tank1TargetTransferMl"
+                  ],
+                  "pretty": "p.tank1TargetTransferMl",
+                  "type": "ref"
+                },
+                "type": "binary"
+              },
+              "op": "==",
+              "right": {
+                "path": [
+                  "p",
+                  "shouldTurnOnPump1"
+                ],
+                "pretty": "p.shouldTurnOnPump1",
+                "type": "ref"
+              },
+              "type": "binary"
+            },
+            "op": "and",
+            "right": {
+              "left": {
+                "path": [
+                  "p",
+                  "shouldTurnOnPump1"
+                ],
+                "pretty": "p.shouldTurnOnPump1",
+                "type": "ref"
+              },
+              "op": "==",
+              "right": {
+                "path": [
+                  "p",
+                  "shouldOpenValve1"
+                ],
+                "pretty": "p.shouldOpenValve1",
+                "type": "ref"
+              },
+              "type": "binary"
+            },
+            "type": "binary"
+          },
+          "op": "and",
+          "right": {
+            "left": {
+              "left": {
+                "left": {
+                  "path": [
+                    "p",
+                    "tank2OriginalMl"
+                  ],
+                  "pretty": "p.tank2OriginalMl",
+                  "type": "ref"
+                },
+                "op": "-",
+                "right": {
+                  "path": [
+                    "p",
+                    "tank2VolumeMl"
+                  ],
+                  "pretty": "p.tank2VolumeMl",
+                  "type": "ref"
+                },
+                "type": "binary"
+              },
+              "op": "<",
+              "right": {
+                "path": [
+                  "p",
+                  "tank2TargetTransferMl"
+                ],
+                "pretty": "p.tank2TargetTransferMl",
+                "type": "ref"
+              },
+              "type": "binary"
+            },
+            "op": "==",
+            "right": {
+              "path": [
+                "p",
+                "shouldTurnOnPump2"
+              ],
+              "pretty": "p.shouldTurnOnPump2",
+              "type": "ref"
+            },
+            "type": "binary"
+          },
+          "type": "binary"
+        },
+        "op": "and",
+        "right": {
+          "left": {
+            "path": [
+              "p",
+              "shouldTurnOnPump2"
+            ],
+            "pretty": "p.shouldTurnOnPump2",
+            "type": "ref"
+          },
+          "op": "==",
+          "right": {
+            "path": [
+              "p",
+              "shouldOpenValve2"
+            ],
+            "pretty": "p.shouldOpenValve2",
+            "type": "ref"
+          },
+          "type": "binary"
+        },
+        "type": "binary"
+      },
+      "runtime_class": "SpecShield",
+      "semantic_status": "discharged_discrete_exact_ast",
+      "status": "discharged",
+      "subject_var": "p",
+      "unknown_requirement_refs": []
+    },
+    "terminal_state": {
+      "equations": [
+        {
+          "action_refs": [],
+          "constant_refs": [
+            "controller_tank1OriginalLevelMl",
+            "controller_tank1TransferMl",
+            "controller_tank2OriginalLevelMl",
+            "controller_tank2TransferMl"
+          ],
+          "covered_by_q_and_action": true,
+          "kind": "terminal",
+          "pretty": "[terminal] env.completion.done = (((controller_tank1OriginalLevelMl - feederTank1_currentLevelMl) >= controller_tank1TransferMl) and ((controller_tank2OriginalLevelMl - feederTank2_currentLevelMl) >= controller_tank2TransferMl))    # #Completion input binding in ScanCycle",
+          "refs": [
+            "feederTank1_currentLevelMl",
+            "feederTank2_currentLevelMl"
+          ],
+          "source": "#Completion input binding in ScanCycle",
+          "state_refs": [
+            "feederTank1_currentLevelMl",
+            "feederTank2_currentLevelMl"
+          ],
+          "target": "env.completion.done",
+          "unresolved_raw_refs": [],
+          "unresolved_refs": []
+        }
+      ],
+      "runtime_source": "SysMLEnv reads the current #Completion input",
+      "status": "covered_by_q_and_action"
+    },
+    "truncation": {
+      "augmented_state_variable": "env.step_count",
+      "reset": "env.step_count := 0 on reset after warmup calls",
+      "reward_override": "if truncated and not already done: done=True, reward=0.0",
+      "status": "discharged_as_finite_horizon_augmented_state",
+      "terminal_condition": "env.step_count >= env.max_steps",
+      "transition": "env.step_count' := env.step_count + 1 after every env.step"
+    }
+  },
+  "model": {
+    "path": "/home/csned/Documents/Codex-Docs/projects/automated-writing/fitter_artifact/bundle/sysml-models/mixing-sysml-model/model.sysml",
+    "sha256": "24b70d1c542aea700fc13fdeaabd3230c69bdb4f4c5242d2115f2fedd5463c84"
+  },
+  "proof": {
+    "b_act": 1,
+    "b_obs": 2,
+    "facts": [
+      {
+        "detail": {},
+        "key": "controller_currentTimeSeconds@-14",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -14,
+        "var": "controller_currentTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_lastScanTimeSeconds@-14",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -14,
+        "var": "controller_lastScanTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_currentTimeSeconds@-13",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -13,
+        "var": "controller_currentTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_lastScanTimeSeconds@-13",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -13,
+        "var": "controller_lastScanTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_currentTimeSeconds@-12",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -12,
+        "var": "controller_currentTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_lastScanTimeSeconds@-12",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -12,
+        "var": "controller_lastScanTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_currentTimeSeconds@-11",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -11,
+        "var": "controller_currentTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_lastScanTimeSeconds@-11",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -11,
+        "var": "controller_lastScanTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_currentTimeSeconds@-10",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -10,
+        "var": "controller_currentTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_lastScanTimeSeconds@-10",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -10,
+        "var": "controller_lastScanTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_currentTimeSeconds@-9",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -9,
+        "var": "controller_currentTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_lastScanTimeSeconds@-9",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -9,
+        "var": "controller_lastScanTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_currentTimeSeconds@-8",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -8,
+        "var": "controller_currentTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_lastScanTimeSeconds@-8",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -8,
+        "var": "controller_lastScanTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_currentTimeSeconds@-7",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -7,
+        "var": "controller_currentTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_lastScanTimeSeconds@-7",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -7,
+        "var": "controller_lastScanTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_currentTimeSeconds@-6",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -6,
+        "var": "controller_currentTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_lastScanTimeSeconds@-6",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -6,
+        "var": "controller_lastScanTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_currentTimeSeconds@-5",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -5,
+        "var": "controller_currentTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_lastScanTimeSeconds@-5",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -5,
+        "var": "controller_lastScanTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_currentTimeSeconds@-4",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -4,
+        "var": "controller_currentTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_lastScanTimeSeconds@-4",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -4,
+        "var": "controller_lastScanTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_currentTimeSeconds@-3",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -3,
+        "var": "controller_currentTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_lastScanTimeSeconds@-3",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -3,
+        "var": "controller_lastScanTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_currentTimeSeconds@-2",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -2,
+        "var": "controller_currentTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_lastScanTimeSeconds@-2",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -2,
+        "var": "controller_lastScanTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_currentTimeSeconds@-1",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -1,
+        "var": "controller_currentTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_lastScanTimeSeconds@-1",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -1,
+        "var": "controller_lastScanTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_currentTimeSeconds@0",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": 0,
+        "var": "controller_currentTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "controller_lastScanTimeSeconds@0",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": 0,
+        "var": "controller_lastScanTimeSeconds"
+      },
+      {
+        "detail": {},
+        "key": "feederTank1_currentLevelMl@-2",
+        "premises": [],
+        "rule": "observation_buffer",
+        "tau": -2,
+        "var": "feederTank1_currentLevelMl"
+      },
+      {
+        "detail": {},
+        "key": "feederTank1_currentLevelMl@-1",
+        "premises": [],
+        "rule": "observation_buffer",
+        "tau": -1,
+        "var": "feederTank1_currentLevelMl"
+      },
+      {
+        "detail": {},
+        "key": "feederTank1_currentLevelMl@0",
+        "premises": [],
+        "rule": "observation_buffer",
+        "tau": 0,
+        "var": "feederTank1_currentLevelMl"
+      },
+      {
+        "detail": {},
+        "key": "feederTank2_currentLevelMl@-2",
+        "premises": [],
+        "rule": "observation_buffer",
+        "tau": -2,
+        "var": "feederTank2_currentLevelMl"
+      },
+      {
+        "detail": {},
+        "key": "feederTank2_currentLevelMl@-1",
+        "premises": [],
+        "rule": "observation_buffer",
+        "tau": -1,
+        "var": "feederTank2_currentLevelMl"
+      },
+      {
+        "detail": {},
+        "key": "feederTank2_currentLevelMl@0",
+        "premises": [],
+        "rule": "observation_buffer",
+        "tau": 0,
+        "var": "feederTank2_currentLevelMl"
+      },
+      {
+        "detail": {},
+        "key": "controller_policyCall_shouldOpenValve1@-1",
+        "premises": [],
+        "rule": "executed_action_history",
+        "tau": -1,
+        "var": "controller_policyCall_shouldOpenValve1"
+      },
+      {
+        "detail": {},
+        "key": "controller_policyCall_shouldOpenValve2@-1",
+        "premises": [],
+        "rule": "executed_action_history",
+        "tau": -1,
+        "var": "controller_policyCall_shouldOpenValve2"
+      },
+      {
+        "detail": {},
+        "key": "controller_policyCall_shouldTurnOnPump1@-1",
+        "premises": [],
+        "rule": "executed_action_history",
+        "tau": -1,
+        "var": "controller_policyCall_shouldTurnOnPump1"
+      },
+      {
+        "detail": {},
+        "key": "controller_policyCall_shouldTurnOnPump2@-1",
+        "premises": [],
+        "rule": "executed_action_history",
+        "tau": -1,
+        "var": "controller_policyCall_shouldTurnOnPump2"
+      },
+      {
+        "detail": {
+          "from_tau": -1,
+          "support": [
+            "controller_policyCall_shouldTurnOnPump1"
+          ],
+          "transition_var": "pump1_isRunning"
+        },
+        "key": "pump1_isRunning@0",
+        "premises": [
+          "controller_policyCall_shouldTurnOnPump1@-1"
+        ],
+        "rule": "forward_transition",
+        "tau": 0,
+        "var": "pump1_isRunning"
+      },
+      {
+        "detail": {
+          "from_tau": -1,
+          "support": [
+            "controller_policyCall_shouldTurnOnPump2"
+          ],
+          "transition_var": "pump2_isRunning"
+        },
+        "key": "pump2_isRunning@0",
+        "premises": [
+          "controller_policyCall_shouldTurnOnPump2@-1"
+        ],
+        "rule": "forward_transition",
+        "tau": 0,
+        "var": "pump2_isRunning"
+      },
+      {
+        "detail": {
+          "from_tau": -1,
+          "support": [
+            "controller_policyCall_shouldOpenValve1"
+          ],
+          "transition_var": "valve1_isOpen"
+        },
+        "key": "valve1_isOpen@0",
+        "premises": [
+          "controller_policyCall_shouldOpenValve1@-1"
+        ],
+        "rule": "forward_transition",
+        "tau": 0,
+        "var": "valve1_isOpen"
+      },
+      {
+        "detail": {
+          "from_tau": -1,
+          "support": [
+            "controller_policyCall_shouldOpenValve2"
+          ],
+          "transition_var": "valve2_isOpen"
+        },
+        "key": "valve2_isOpen@0",
+        "premises": [
+          "controller_policyCall_shouldOpenValve2@-1"
+        ],
+        "rule": "forward_transition",
+        "tau": 0,
+        "var": "valve2_isOpen"
+      },
+      {
+        "detail": {
+          "max_delay": 2,
+          "source": "feederTank1_currentLevelMl",
+          "target": "controller_observedLevel1",
+          "tau": 0
+        },
+        "key": "controller_observedLevel1@0",
+        "premises": [
+          "feederTank1_currentLevelMl@-2",
+          "feederTank1_currentLevelMl@-1"
+        ],
+        "rule": "sampled_memory_bound",
+        "tau": 0,
+        "var": "controller_observedLevel1"
+      },
+      {
+        "detail": {
+          "max_delay": 2,
+          "source": "feederTank2_currentLevelMl",
+          "target": "controller_observedLevel2",
+          "tau": 0
+        },
+        "key": "controller_observedLevel2@0",
+        "premises": [
+          "feederTank2_currentLevelMl@-2",
+          "feederTank2_currentLevelMl@-1"
+        ],
+        "rule": "sampled_memory_bound",
+        "tau": 0,
+        "var": "controller_observedLevel2"
+      }
+    ],
+    "horizon": 14,
+    "missing_target_facts": [],
+    "passes": true,
+    "target_facts": [
+      "controller_currentTimeSeconds@0",
+      "controller_lastScanTimeSeconds@0",
+      "controller_observedLevel1@0",
+      "controller_observedLevel2@0",
+      "feederTank1_currentLevelMl@0",
+      "feederTank2_currentLevelMl@0",
+      "pump1_isRunning@0",
+      "pump2_isRunning@0",
+      "valve1_isOpen@0",
+      "valve2_isOpen@0"
+    ]
+  },
+  "proof_mode": {
+    "blocking_diagnostic_codes": [
+      "legacy_dependency_fallback"
+    ],
+    "blocking_diagnostic_severities": [
+      "error",
+      "warning"
+    ],
+    "pass_requires": [
+      "selected buffer reconstructs every q variable at tau=0",
+      "equation-IR proof trace reconstructs every q variable at tau=0",
+      "no warning/error diagnostics",
+      "no legacy dependency fallback transitions",
+      "reward and done obligations discharged over the augmented state",
+      "shield semantics discharged as deterministic function of covered inputs",
+      "solver-backed one-step transition closure is discharged",
+      "independent checker can replay every proof fact"
+    ],
+    "strict_no_legacy_fallback": true
+  },
+  "proof_profile": "strict_q_syntactic_reconstructibility_v1",
+  "result": "PASS",
+  "schema_version": 2,
+  "search": {
+    "attempts": [
+      {
+        "b_act": 0,
+        "b_obs": 0,
+        "missing": [
+          "controller_observedLevel1",
+          "controller_observedLevel2",
+          "pump1_isRunning",
+          "pump2_isRunning",
+          "valve1_isOpen",
+          "valve2_isOpen"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 1,
+        "b_obs": 0,
+        "missing": [
+          "controller_observedLevel1",
+          "controller_observedLevel2"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 2,
+        "b_obs": 0,
+        "missing": [
+          "controller_observedLevel1",
+          "controller_observedLevel2"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 3,
+        "b_obs": 0,
+        "missing": [
+          "controller_observedLevel1",
+          "controller_observedLevel2"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 4,
+        "b_obs": 0,
+        "missing": [
+          "controller_observedLevel1",
+          "controller_observedLevel2"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 0,
+        "b_obs": 1,
+        "missing": [
+          "controller_observedLevel1",
+          "controller_observedLevel2",
+          "pump1_isRunning",
+          "pump2_isRunning",
+          "valve1_isOpen",
+          "valve2_isOpen"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 1,
+        "b_obs": 1,
+        "missing": [
+          "controller_observedLevel1",
+          "controller_observedLevel2"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 2,
+        "b_obs": 1,
+        "missing": [
+          "controller_observedLevel1",
+          "controller_observedLevel2"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 3,
+        "b_obs": 1,
+        "missing": [
+          "controller_observedLevel1",
+          "controller_observedLevel2"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 4,
+        "b_obs": 1,
+        "missing": [
+          "controller_observedLevel1",
+          "controller_observedLevel2"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 0,
+        "b_obs": 2,
+        "missing": [
+          "pump1_isRunning",
+          "pump2_isRunning",
+          "valve1_isOpen",
+          "valve2_isOpen"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 1,
+        "b_obs": 2,
+        "missing": [],
+        "passes": true
+      },
+      {
+        "b_act": 2,
+        "b_obs": 2,
+        "missing": [],
+        "passes": true
+      },
+      {
+        "b_act": 3,
+        "b_obs": 2,
+        "missing": [],
+        "passes": true
+      },
+      {
+        "b_act": 4,
+        "b_obs": 2,
+        "missing": [],
+        "passes": true
+      }
+    ],
+    "equation_ir_attempts": [
+      {
+        "b_act": 0,
+        "b_obs": 0,
+        "blocked_unsafe_inversions": 14,
+        "missing": [
+          "controller_observedLevel1",
+          "controller_observedLevel2",
+          "pump1_isRunning",
+          "pump2_isRunning",
+          "valve1_isOpen",
+          "valve2_isOpen"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 1,
+        "b_obs": 0,
+        "blocked_unsafe_inversions": 14,
+        "missing": [
+          "controller_observedLevel1",
+          "controller_observedLevel2"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 2,
+        "b_obs": 0,
+        "blocked_unsafe_inversions": 14,
+        "missing": [
+          "controller_observedLevel1",
+          "controller_observedLevel2"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 3,
+        "b_obs": 0,
+        "blocked_unsafe_inversions": 14,
+        "missing": [
+          "controller_observedLevel1",
+          "controller_observedLevel2"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 4,
+        "b_obs": 0,
+        "blocked_unsafe_inversions": 14,
+        "missing": [
+          "controller_observedLevel1",
+          "controller_observedLevel2"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 0,
+        "b_obs": 1,
+        "blocked_unsafe_inversions": 14,
+        "missing": [
+          "controller_observedLevel1",
+          "controller_observedLevel2",
+          "pump1_isRunning",
+          "pump2_isRunning",
+          "valve1_isOpen",
+          "valve2_isOpen"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 1,
+        "b_obs": 1,
+        "blocked_unsafe_inversions": 14,
+        "missing": [
+          "controller_observedLevel1",
+          "controller_observedLevel2"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 2,
+        "b_obs": 1,
+        "blocked_unsafe_inversions": 14,
+        "missing": [
+          "controller_observedLevel1",
+          "controller_observedLevel2"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 3,
+        "b_obs": 1,
+        "blocked_unsafe_inversions": 14,
+        "missing": [
+          "controller_observedLevel1",
+          "controller_observedLevel2"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 4,
+        "b_obs": 1,
+        "blocked_unsafe_inversions": 14,
+        "missing": [
+          "controller_observedLevel1",
+          "controller_observedLevel2"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 0,
+        "b_obs": 2,
+        "blocked_unsafe_inversions": 16,
+        "missing": [
+          "pump1_isRunning",
+          "pump2_isRunning",
+          "valve1_isOpen",
+          "valve2_isOpen"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 1,
+        "b_obs": 2,
+        "blocked_unsafe_inversions": 16,
+        "missing": [],
+        "passes": true
+      },
+      {
+        "b_act": 2,
+        "b_obs": 2,
+        "blocked_unsafe_inversions": 16,
+        "missing": [],
+        "passes": true
+      },
+      {
+        "b_act": 3,
+        "b_obs": 2,
+        "blocked_unsafe_inversions": 16,
+        "missing": [],
+        "passes": true
+      },
+      {
+        "b_act": 4,
+        "b_obs": 2,
+        "blocked_unsafe_inversions": 16,
+        "missing": [],
+        "passes": true
+      }
+    ],
+    "equation_ir_selected_first_passing": {
+      "b_act": 1,
+      "b_obs": 2
+    },
+    "legacy_and_equation_search_agree": true,
+    "minimality_claim": "first passing pair in stated bounded lexicographic scan",
+    "selected_first_passing": {
+      "b_act": 1,
+      "b_obs": 2
+    }
+  },
+  "sets": {
+    "action_deps": [
+      "controller_policyCall_shouldOpenValve1",
+      "controller_policyCall_shouldOpenValve2",
+      "controller_policyCall_shouldTurnOnPump1",
+      "controller_policyCall_shouldTurnOnPump2"
+    ],
+    "actions": [
+      "controller_policyCall_shouldOpenValve1",
+      "controller_policyCall_shouldOpenValve2",
+      "controller_policyCall_shouldTurnOnPump1",
+      "controller_policyCall_shouldTurnOnPump2"
+    ],
+    "constants": [
+      "controller_dt",
+      "controller_tank1OriginalLevelMl",
+      "controller_tank1TransferMl",
+      "controller_tank2OriginalLevelMl",
+      "controller_tank2TransferMl",
+      "feederTank1_capacityMl",
+      "feederTank1_dt",
+      "feederTank2_capacityMl",
+      "feederTank2_dt",
+      "fillingTank_capacityMl",
+      "fillingTank_dt",
+      "pump1_maxFlowRateMl",
+      "pump2_maxFlowRateMl"
+    ],
+    "ignored_state": [
+      "fillingTank_currentLevelMl"
+    ],
+    "ignored_state_reasons": {
+      "fillingTank_currentLevelMl": "outside the backward cone of observation, terminal, requirement, reward/done, shield-input, and transition-closed q-next equations under the extracted equation model"
+    },
+    "initial_values": {
+      "controller_currentTimeSeconds": 0,
+      "controller_lastScanTimeSeconds": 0,
+      "controller_observedLevel1": 0,
+      "controller_observedLevel2": 0,
+      "feederTank1_currentLevelMl": 150.0,
+      "feederTank2_currentLevelMl": 150.0,
+      "fillingTank_currentLevelMl": 0.0
+    },
+    "observed_state_vars": [
+      "feederTank1_currentLevelMl",
+      "feederTank2_currentLevelMl"
+    ],
+    "q": [
+      "controller_currentTimeSeconds",
+      "controller_lastScanTimeSeconds",
+      "controller_observedLevel1",
+      "controller_observedLevel2",
+      "feederTank1_currentLevelMl",
+      "feederTank2_currentLevelMl",
+      "pump1_isRunning",
+      "pump2_isRunning",
+      "valve1_isOpen",
+      "valve2_isOpen"
+    ],
+    "q_seeds": [
+      "controller_lastScanTimeSeconds",
+      "controller_observedLevel1",
+      "controller_observedLevel2",
+      "feederTank1_currentLevelMl",
+      "feederTank2_currentLevelMl",
+      "pump1_isRunning",
+      "pump2_isRunning",
+      "valve1_isOpen",
+      "valve2_isOpen"
+    ],
+    "seed_equations": {
+      "env.completion.done": [
+        "feederTank1_currentLevelMl",
+        "feederTank2_currentLevelMl"
+      ],
+      "obs.tank1OriginalMl": [],
+      "obs.tank1TargetTransferMl": [],
+      "obs.tank1VolumeMl": [
+        "feederTank1_currentLevelMl"
+      ],
+      "obs.tank2OriginalMl": [],
+      "obs.tank2TargetTransferMl": [],
+      "obs.tank2VolumeMl": [
+        "feederTank2_currentLevelMl"
+      ],
+      "status.Fluid Transfer Liveness": [
+        "controller_lastScanTimeSeconds",
+        "controller_observedLevel1",
+        "controller_observedLevel2",
+        "pump1_isRunning",
+        "pump2_isRunning",
+        "valve1_isOpen",
+        "valve2_isOpen"
+      ],
+      "status.Fluid Transfer Termination Safety": [
+        "controller_lastScanTimeSeconds",
+        "controller_observedLevel1",
+        "controller_observedLevel2",
+        "pump1_isRunning",
+        "pump2_isRunning"
+      ],
+      "status.No Dead Heading": [
+        "pump1_isRunning",
+        "pump2_isRunning",
+        "valve1_isOpen",
+        "valve2_isOpen"
+      ],
+      "status.No Dry Running": [
+        "controller_observedLevel1",
+        "controller_observedLevel2",
+        "pump1_isRunning",
+        "pump2_isRunning"
+      ]
+    },
+    "state": [
+      "controller_currentTimeSeconds",
+      "controller_lastScanTimeSeconds",
+      "controller_observedLevel1",
+      "controller_observedLevel2",
+      "feederTank1_currentLevelMl",
+      "feederTank2_currentLevelMl",
+      "fillingTank_currentLevelMl",
+      "pump1_isRunning",
+      "pump2_isRunning",
+      "valve1_isOpen",
+      "valve2_isOpen"
+    ],
+    "time_vars": [
+      "controller_currentTimeSeconds",
+      "controller_lastScanTimeSeconds"
+    ]
+  },
+  "settings": {
+    "dt": 0.1,
+    "enable_sampled_memory": true,
+    "horizon": 14,
+    "max_act": 4,
+    "max_obs": 2,
+    "search_order": "lexicographic b_obs then b_act within stated bounds"
+  },
+  "solver_advisory": {
+    "one_step_transition_closure": {
+      "actions_size": 4,
+      "claim": "one_step_transition_closure",
+      "logic": "QF_UFLRA",
+      "max_polynomial_degree": 1,
+      "q_size": 10,
+      "solver": "z3",
+      "status": "discharged",
+      "timeout_ms": 1000,
+      "visible_terms_checked": [
+        "next_q.controller_currentTimeSeconds",
+        "next_q.controller_lastScanTimeSeconds",
+        "next_q.controller_observedLevel1",
+        "next_q.controller_observedLevel2",
+        "next_q.feederTank1_currentLevelMl",
+        "next_q.feederTank2_currentLevelMl",
+        "next_q.pump1_isRunning",
+        "next_q.pump2_isRunning",
+        "next_q.valve1_isOpen",
+        "next_q.valve2_isOpen",
+        "next_observation.tank1OriginalMl",
+        "next_observation.tank1TargetTransferMl",
+        "next_observation.tank1VolumeMl",
+        "next_observation.tank2OriginalMl",
+        "next_observation.tank2TargetTransferMl",
+        "next_observation.tank2VolumeMl",
+        "next_terminal.env.completion.done",
+        "next_requirement.status.Fluid Transfer Liveness",
+        "next_requirement.status.Fluid Transfer Termination Safety",
+        "next_requirement.status.No Dead Heading",
+        "next_requirement.status.No Dry Running"
+      ]
+    }
+  },
+  "theorem_gate": {
+    "claim_policy": "claim.profile_mdp_theorem, claim.solver_backed_mdp_theorem, and claim.mdp_theorem may be discharged only when profile obligations and solver-backed one-step uniqueness are both discharged.",
+    "full_mdp_theorem_blockers": [],
+    "full_mdp_theorem_claim_allowed": true,
+    "profile": "strict_q_profile_mdp_v1",
+    "profile_mdp_theorem": "discharged",
+    "profile_obligations_discharged": true,
+    "profile_requires": [
+      "strict proof trace reconstructs every q variable at tau=0",
+      "equation-IR proof trace reconstructs every q variable at tau=0",
+      "no blocking extraction diagnostics",
+      "no legacy dependency fallback transitions",
+      "observation obligations discharged",
+      "requirement-status obligations discharged",
+      "reward and done obligations discharged over augmented state",
+      "shield semantics discharged from covered inputs and mapped outputs",
+      "solver proves one-step transition closure over extracted equations"
+    ],
+    "profile_scope": [
+      "extracted equation/dependency semantics",
+      "finite-horizon augmented env.step_count",
+      "deterministic exact shield semantics",
+      "selected bounded buffer and replayed proof trace",
+      "solver-backed one-step self-composition over q and executed action"
+    ],
+    "profile_theorem_statement": "Within the extracted strict-Q syntactic semantics, the selected finite buffer reconstructs q and determines observations, requirement statuses, reward, done, and exact shield execution as recorded in mdp_obligations.",
+    "solver_backed_mdp_theorem": "discharged",
+    "solver_backed_profile": "strict_q_solver_backed_mdp_v1",
+    "solver_backed_theorem_statement": "Within the extracted equation semantics and stated solver fragment, the selected buffer is a sufficient Markov state for the transition-closed relevant state, visible outputs, reward, done, and shielded executed action.",
+    "solver_backed_uniqueness": {
+      "actions_size": 4,
+      "claim": "one_step_transition_closure",
+      "logic": "QF_UFLRA",
+      "max_polynomial_degree": 1,
+      "q_size": 10,
+      "result_status": "discharged",
+      "solver": "z3",
+      "source": "solver_advisory.one_step_transition_closure",
+      "status": "discharged",
+      "theorem_statement": "No two one-step executions of the extracted equation model can agree on current q and executed action while disagreeing on next q, next observations, next terminal equations, or next requirement status equations.",
+      "timeout_ms": 1000,
+      "visible_terms_checked": [
+        "next_q.controller_currentTimeSeconds",
+        "next_q.controller_lastScanTimeSeconds",
+        "next_q.controller_observedLevel1",
+        "next_q.controller_observedLevel2",
+        "next_q.feederTank1_currentLevelMl",
+        "next_q.feederTank2_currentLevelMl",
+        "next_q.pump1_isRunning",
+        "next_q.pump2_isRunning",
+        "next_q.valve1_isOpen",
+        "next_q.valve2_isOpen",
+        "next_observation.tank1OriginalMl",
+        "next_observation.tank1TargetTransferMl",
+        "next_observation.tank1VolumeMl",
+        "next_observation.tank2OriginalMl",
+        "next_observation.tank2TargetTransferMl",
+        "next_observation.tank2VolumeMl",
+        "next_terminal.env.completion.done",
+        "next_requirement.status.Fluid Transfer Liveness",
+        "next_requirement.status.Fluid Transfer Termination Safety",
+        "next_requirement.status.No Dead Heading",
+        "next_requirement.status.No Dry Running"
+      ]
+    }
+  }
+}

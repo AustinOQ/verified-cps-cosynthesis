@@ -35,6 +35,7 @@ from certification.reduced_mdp_spec import (  # noqa: E402
     write_reduced_mdp_spec,
 )
 from sysml_inputs import discover_sysml  # noqa: E402
+from runtime_settings import DEFAULT_DT, validate_dt  # noqa: E402
 
 
 def summarize_certificate(
@@ -221,7 +222,7 @@ def main() -> int:
     parser.add_argument("--max-obs", type=int, default=2)
     parser.add_argument("--max-act", type=int, default=4)
     parser.add_argument("--horizon", type=int, default=14)
-    parser.add_argument("--dt", type=float, default=0.1)
+    parser.add_argument("--dt", type=validate_dt, default=DEFAULT_DT)
     parser.add_argument("--max-steps", type=int, default=5000)
     args = parser.parse_args()
     models = discover_sysml(args.models, models_root=args.models_root)
@@ -285,6 +286,7 @@ def main() -> int:
         row["model_path"] = str(model.path)
         row["model_sha256"] = model.sha256
         row["action_kind"] = model.action_kind
+        row["dt"] = args.dt
         rows.append(row)
         if errors:
             failures += 1

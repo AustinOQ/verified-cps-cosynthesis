@@ -24,6 +24,7 @@ from .equations import Op, Var
 from .relevance import compute_transition_closed_relevance, equation_refs
 from .strict_extract import extract_equation_model
 from reconstruct_closure import get_strict_model, reconstruct
+from runtime_settings import DEFAULT_DT
 
 
 _DISCOVERED = {
@@ -38,6 +39,7 @@ MODELS = {
     "cruise-continuous": _DISCOVERED["cruise-control-continuous"],
     "cruise-discrete": _DISCOVERED["cruise-control"],
 }
+TEST_DT = DEFAULT_DT
 
 
 BLOCKED_DIAGNOSTICS = {
@@ -170,7 +172,7 @@ def _failures_for_model(name: str) -> list[str]:
         elif not isinstance(drive_force.expr, Var):
             failures.append("cruise-continuous: drive force flow definition is not a copy")
 
-    strict_model = get_strict_model(MODELS[name])
+    strict_model = get_strict_model(MODELS[name], dt=TEST_DT)
     best = _first_closure(strict_model)
     expected = EXPECTED_STRICT_CLOSURE[name]
     if best != expected:
@@ -180,7 +182,7 @@ def _failures_for_model(name: str) -> list[str]:
 
     if name == "mixing":
         without_sampled_memory = get_strict_model(
-            MODELS[name], enable_sampled_memory=False
+            MODELS[name], dt=TEST_DT, enable_sampled_memory=False
         )
         if _first_closure(without_sampled_memory) is not None:
             failures.append(
@@ -197,7 +199,7 @@ def _failures_for_model(name: str) -> list[str]:
 
 def _certificate_failures_for_model(name: str, out_dir: Path) -> list[str]:
     failures: list[str] = []
-    cert = build_certificate_for_path(MODELS[name])
+    cert = build_certificate_for_path(MODELS[name], dt=TEST_DT)
     expected = EXPECTED_STRICT_CLOSURE[name]
     observed = None if cert["buffer"] is None else (
         cert["buffer"]["b_obs"], cert["buffer"]["b_act"]

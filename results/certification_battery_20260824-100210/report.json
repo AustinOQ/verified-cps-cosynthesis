@@ -1,0 +1,567 @@
+{
+  "cases": [
+    {
+      "data": {},
+      "detail": "result={'status': 'discharged', 'claim': 'one_step_transition_closure', 'solver': 'z3', 'logic': 'QF_UFLRA', 'max_polynomial_degree': 1, 'timeout_ms': 1000, 'q_size': 1, 'actions_size': 1, 'visible_terms_checked': ['next_q.x', 'next_observation.xObs']}",
+      "name": "solver_unit/closed_linear_unsat",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "result={'status': 'counterexample', 'claim': 'not_claimed_by_this_artifact', 'solver': 'z3', 'logic': 'QF_UFLRA', 'max_polynomial_degree': 1, 'timeout_ms': 1000, 'disagreement': {'term': 'next_q.x', 'run1': '3', 'run2': '4'}, 'same_q': {'x': {'run1': '2', 'run2': '2'}}, 'same_action': {}, 'hidden_state': {'hidden': {'run1': '3', 'run2': '4'}}}",
+      "name": "solver_unit/hidden_dependency_sat",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "result={'status': 'discharged', 'claim': 'one_step_transition_closure', 'solver': 'z3', 'logic': 'QF_UFLRA', 'max_polynomial_degree': 1, 'timeout_ms': 1000, 'q_size': 1, 'actions_size': 1, 'visible_terms_checked': ['next_q.safe', 'next_requirement.status.safe']}",
+      "name": "solver_unit/boolean_ite_unsat",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "result={'status': 'discharged', 'claim': 'one_step_transition_closure', 'solver': 'z3', 'logic': 'QF_UFNRA', 'max_polynomial_degree': 2, 'timeout_ms': 1000, 'q_size': 1, 'actions_size': 0, 'visible_terms_checked': ['next_q.x']}",
+      "name": "solver_unit/quadratic_unsat",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "result={'status': 'counterexample', 'claim': 'not_claimed_by_this_artifact', 'solver': 'z3', 'logic': 'QF_UFNRA', 'max_polynomial_degree': 2, 'timeout_ms': 1000, 'disagreement': {'term': 'next_q.x', 'run1': '1', 'run2': '0'}, 'same_q': {'x': {'run1': '-1', 'run2': '-1'}}, 'same_action': {}, 'hidden_state': {'hidden': {'run1': '-1', 'run2': '0'}}}",
+      "name": "solver_unit/hidden_quadratic_sat",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "result={'status': 'discharged', 'claim': 'one_step_transition_closure', 'solver': 'z3', 'logic': 'QF_UFNRA', 'max_polynomial_degree': 3, 'timeout_ms': 1000, 'q_size': 1, 'actions_size': 0, 'visible_terms_checked': ['next_q.x']}",
+      "name": "solver_unit/degree_3_unsat",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "result={'status': 'counterexample', 'claim': 'not_claimed_by_this_artifact', 'solver': 'z3', 'logic': 'QF_UFNRA', 'max_polynomial_degree': 3, 'timeout_ms': 1000, 'disagreement': {'term': 'next_q.x', 'run1': '-1', 'run2': '0'}, 'same_q': {'x': {'run1': '-1', 'run2': '-1'}}, 'same_action': {}, 'hidden_state': {'hidden': {'run1': '-1', 'run2': '0'}}}",
+      "name": "solver_unit/hidden_degree_3_sat",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "result={'status': 'discharged', 'claim': 'one_step_transition_closure', 'solver': 'z3', 'logic': 'QF_UFNRA', 'max_polynomial_degree': 4, 'timeout_ms': 1000, 'q_size': 1, 'actions_size': 0, 'visible_terms_checked': ['next_q.x']}",
+      "name": "solver_unit/degree_4_unsat",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "result={'status': 'counterexample', 'claim': 'not_claimed_by_this_artifact', 'solver': 'z3', 'logic': 'QF_UFNRA', 'max_polynomial_degree': 4, 'timeout_ms': 1000, 'disagreement': {'term': 'next_q.x', 'run1': '1', 'run2': '0'}, 'same_q': {'x': {'run1': '-1', 'run2': '-1'}}, 'same_action': {}, 'hidden_state': {'hidden': {'run1': '-1', 'run2': '0'}}}",
+      "name": "solver_unit/hidden_degree_4_sat",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "result={'status': 'discharged', 'claim': 'one_step_transition_closure', 'solver': 'z3', 'logic': 'QF_UFNRA', 'max_polynomial_degree': 5, 'timeout_ms': 1000, 'q_size': 1, 'actions_size': 0, 'visible_terms_checked': ['next_q.x']}",
+      "name": "solver_unit/degree_5_unsat",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "result={'status': 'counterexample', 'claim': 'not_claimed_by_this_artifact', 'solver': 'z3', 'logic': 'QF_UFNRA', 'max_polynomial_degree': 5, 'timeout_ms': 1000, 'disagreement': {'term': 'next_q.x', 'run1': '-1', 'run2': '0'}, 'same_q': {'x': {'run1': '-1', 'run2': '-1'}}, 'same_action': {}, 'hidden_state': {'hidden': {'run1': '-1', 'run2': '0'}}}",
+      "name": "solver_unit/hidden_degree_5_sat",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "result={'status': 'unknown', 'reason': 'unsupported_fragment', 'type_conflicts': [], 'unsupported': ['polynomial degree 6 exceeds supported degree 5 polynomial fragment in x'], 'claim': 'not_claimed_by_this_artifact'}",
+      "name": "solver_unit/degree_6_unknown",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "result={'status': 'unknown', 'reason': 'unsupported_fragment', 'type_conflicts': [], 'unsupported': ['division by symbolic expression in x'], 'claim': 'not_claimed_by_this_artifact'}",
+      "name": "solver_unit/symbolic_division_unknown",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "facts=['y@0', 'x@-1']",
+      "name": "equation_unit/direct_copy_inversion",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "x@-1_present=False blocked=[{'equation_target': 'y', 'equation_kind': 'transition', 'equation_source': 'synthetic guarded copy', 'equation_pretty': \"[transition] y' = ite(guard, x, y)    # synthetic guarded copy\", 'target': 'y', 'source': 'x', 'tau': -1, 'known_transition_tau': 0, 'guard_status': 'not_proven_true', 'guard_pretty': 'guard', 'reason': 'guarded copy inversion is unsupported unless the guard is reconstructed and proven true'}]",
+      "name": "equation_unit/guarded_copy_not_inverted",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "blocked=[]",
+      "name": "equation_unit/proven_guarded_copy_inverted",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "state=11 def=27 trans=11 q=10",
+      "name": "mixing/shape",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "terminal_state_refs=['feederTank1_currentLevelMl', 'feederTank2_currentLevelMl']",
+      "name": "mixing/terminal_refs",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "blocked_diags=[] unresolved_raw={} missing_ignored_reasons=[]",
+      "name": "mixing/equation_audit",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "expected=(2, 1) observed=(2, 1)",
+      "name": "mixing/first_closure",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "unexpected earlier passing buffers=[]",
+      "name": "mixing/smaller_buffers_fail",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "buffer=(2, 1) checker_errors=[] solver=discharged unresolved_raw=[]",
+      "name": "mixing/certificate",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "state=10 def=6 trans=10 q=8",
+      "name": "thermostat/shape",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "terminal_state_refs=['controller_acOn', 'controller_heaterOn', 'thermometer_temperatureReading_temperatureCelcius']",
+      "name": "thermostat/terminal_refs",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "blocked_diags=[] unresolved_raw={} missing_ignored_reasons=[]",
+      "name": "thermostat/equation_audit",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "expected=(1, 2) observed=(1, 2)",
+      "name": "thermostat/first_closure",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "unexpected earlier passing buffers=[]",
+      "name": "thermostat/smaller_buffers_fail",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "buffer=(1, 2) checker_errors=[] solver=discharged unresolved_raw=[]",
+      "name": "thermostat/certificate",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "state=8 def=14 trans=8 q=8",
+      "name": "cruise-continuous/shape",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "terminal_state_refs=['controller_commandedForce', 'speedSensor_speedReading_speedMps']",
+      "name": "cruise-continuous/terminal_refs",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "blocked_diags=[] unresolved_raw={} missing_ignored_reasons=[]",
+      "name": "cruise-continuous/equation_audit",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "expected=(1, 2) observed=(1, 2)",
+      "name": "cruise-continuous/first_closure",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "unexpected earlier passing buffers=[]",
+      "name": "cruise-continuous/smaller_buffers_fail",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "buffer=(1, 2) checker_errors=[] solver=discharged unresolved_raw=[]",
+      "name": "cruise-continuous/certificate",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "state=13 def=9 trans=13 q=11",
+      "name": "cruise-discrete/shape",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "terminal_state_refs=['controller_brakeOn', 'controller_throttleOn', 'speedSensor_speedReading_speedMps']",
+      "name": "cruise-discrete/terminal_refs",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "blocked_diags=[] unresolved_raw={} missing_ignored_reasons=[]",
+      "name": "cruise-discrete/equation_audit",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "expected=(1, 2) observed=(1, 2)",
+      "name": "cruise-discrete/first_closure",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "unexpected earlier passing buffers=[]",
+      "name": "cruise-discrete/smaller_buffers_fail",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "buffer=(1, 2) checker_errors=[] solver=discharged unresolved_raw=[]",
+      "name": "cruise-discrete/certificate",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "result=FAIL blocking=['missing_terminal_binding'] errors=['certificate result is not PASS: FAIL', 'unsupported claim level=strict_q_profile_mdp_v1', 'profile MDP theorem is not discharged']",
+      "name": "negative_model/missing_terminal_binding",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "result=UNKNOWN buffer=None errors=['certificate result is not PASS: UNKNOWN', 'unsupported claim level=strict_q_profile_mdp_v1', 'profile MDP theorem is not discharged']",
+      "name": "negative_model/hidden_terminal_dependency",
+      "passed": [
+        "certificate result is not PASS: UNKNOWN",
+        "unsupported claim level=strict_q_profile_mdp_v1",
+        "profile MDP theorem is not discharged",
+        "solver-backed MDP theorem is not discharged",
+        "certificate does not claim discharged solver-backed MDP theorem",
+        "theorem gate profile theorem is not discharged",
+        "theorem gate solver-backed MDP theorem is not discharged",
+        "theorem gate does not allow the solver-backed MDP claim",
+        "theorem gate records blockers despite discharged solver-backed claim",
+        "missing proof section"
+      ]
+    },
+    {
+      "data": {},
+      "detail": "shield=spec_shield_construction_failed errors=['certificate result is not PASS: FAIL', 'unsupported claim level=strict_q_profile_mdp_v1', 'profile MDP theorem is not discharged']",
+      "name": "negative_model/missing_neural_requirement",
+      "passed": false
+    },
+    {
+      "data": {},
+      "detail": "unknown=None errors=['certificate result is not PASS: FAIL', 'unsupported claim level=strict_q_profile_mdp_v1', 'profile MDP theorem is not discharged']",
+      "name": "negative_model/unknown_shield_ref",
+      "passed": false
+    },
+    {
+      "data": {},
+      "detail": "blocking=['skipped_requirement_parse'] errors=['certificate result is not PASS: FAIL', 'unsupported claim level=strict_q_profile_mdp_v1', 'profile MDP theorem is not discharged']",
+      "name": "negative_model/unparsed_requirement",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "mixing must not certify if sampled-memory rules are disabled",
+      "name": "negative_closure/mixing_without_sampled_memory",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['certificate result is not PASS: FAIL']",
+      "name": "negative_certificate/result_fail",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['solver-backed MDP theorem is not discharged']",
+      "name": "negative_certificate/claim_mdp_not_discharged",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['profile MDP theorem is not discharged']",
+      "name": "negative_certificate/claim_profile_not_discharged",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['certificate does not claim discharged solver-backed MDP theorem']",
+      "name": "negative_certificate/claim_solver_backed_mdp_not_discharged",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['unsupported theorem gate profile=None', 'unsupported solver-backed theorem profile=None', 'theorem gate profile theorem is not discharged']",
+      "name": "negative_certificate/missing_theorem_gate",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['theorem gate profile theorem is not discharged']",
+      "name": "negative_certificate/theorem_gate_profile_not_discharged",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['theorem gate profile obligations are not discharged']",
+      "name": "negative_certificate/theorem_gate_obligations_false",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['theorem gate does not allow the solver-backed MDP claim']",
+      "name": "negative_certificate/theorem_gate_blocks_full_claim",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['solver-backed uniqueness status is not discharged']",
+      "name": "negative_certificate/theorem_gate_solver_uniqueness_not_discharged",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['unsupported solver logic=QF_BV', 'solver theorem gate/advisory mismatch: logic']",
+      "name": "negative_certificate/theorem_gate_solver_logic_mismatch",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['certificate proof mode is not strict no-fallback']",
+      "name": "negative_certificate/strict_mode_disabled",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['transitions contains legacy transition dependency: controller_currentTimeSeconds']",
+      "name": "negative_certificate/legacy_transition_kind",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['transitions contains legacy_dep expression: controller_currentTimeSeconds', 'transitions raw-ref audit mismatch: controller_currentTimeSeconds']",
+      "name": "negative_certificate/legacy_dep_expr",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['observations contains unresolved raw refs: obs.tank1OriginalMl']",
+      "name": "negative_certificate/equation_unresolved_raw_ref",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['observations raw-ref audit mismatch: obs.tank1OriginalMl']",
+      "name": "negative_certificate/equation_raw_ref_audit_mismatch",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['ignored state lacks noninterference reason: fillingTank_currentLevelMl']",
+      "name": "negative_certificate/missing_ignored_state_reason",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['missing MDP obligation section: terminal_state']",
+      "name": "negative_certificate/missing_terminal_section",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['terminal-state obligation is not covered by q and action']",
+      "name": "negative_certificate/terminal_not_covered",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['terminal-state obligation does not record terminal equations']",
+      "name": "negative_certificate/terminal_equations_empty",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['truncation obligation is not discharged as finite-horizon augmented state']",
+      "name": "negative_certificate/truncation_not_discharged",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['reward obligation is not discharged over augmented state']",
+      "name": "negative_certificate/reward_not_discharged",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['reward terminal-state terms are not fully covered']",
+      "name": "negative_certificate/reward_terminal_uncovered",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['reward obligation still has external terms outside q']",
+      "name": "negative_certificate/reward_external_terms_present",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['done obligation is not discharged over augmented state']",
+      "name": "negative_certificate/done_not_discharged",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['done obligation covered flag is not true']",
+      "name": "negative_certificate/done_covered_false",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['shield obligation is not discharged']",
+      "name": "negative_certificate/shield_not_discharged",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['shield semantic status is not discharged']",
+      "name": "negative_certificate/shield_bad_semantic_status",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['shield has missing input params']",
+      "name": "negative_certificate/shield_missing_input",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['shield has missing output params']",
+      "name": "negative_certificate/shield_missing_output",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['shield has unknown requirement refs']",
+      "name": "negative_certificate/shield_unknown_ref",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['shield input is not covered: tank1VolumeMl']",
+      "name": "negative_certificate/shield_input_uncovered",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['shield output is not uniquely mapped: shouldOpenValve1']",
+      "name": "negative_certificate/shield_output_not_unique",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['missing proof section']",
+      "name": "negative_certificate/missing_proof",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['missing equation proof section']",
+      "name": "negative_certificate/missing_equation_proof",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['equation proof section does not pass']",
+      "name": "negative_certificate/equation_proof_not_passes",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['equation target fact not established: controller_currentTimeSeconds@0']",
+      "name": "negative_certificate/equation_target_fact_removed",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['equation-forward premises not established for pump1_isRunning@0', 'equation target fact not established: pump1_isRunning@0']",
+      "name": "negative_certificate/equation_bad_forward_premise",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['unsafe guarded-copy inversion in equation proof: fakeSource@-1']",
+      "name": "negative_certificate/equation_unsafe_guarded_inversion",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['missing solver advisory one-step transition-closure section']",
+      "name": "negative_certificate/missing_solver_advisory",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['unsupported solver advisory status=magically_proven', 'solver advisory one-step transition closure is not discharged']",
+      "name": "negative_certificate/solver_advisory_bad_status",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['non-discharged solver advisory must not claim theorem support', 'solver advisory one-step transition closure is not discharged']",
+      "name": "negative_certificate/solver_advisory_unknown_claims",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['solver advisory one-step transition closure is not discharged', 'solver theorem gate/advisory mismatch: claim']",
+      "name": "negative_certificate/solver_advisory_unknown_not_claimed",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['target fact not established: controller_currentTimeSeconds@0']",
+      "name": "negative_certificate/target_fact_removed",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['forward premises not established for pump1_isRunning@0', 'target fact not established: pump1_isRunning@0']",
+      "name": "negative_certificate/bad_forward_premise",
+      "passed": true
+    },
+    {
+      "data": {},
+      "detail": "errors=['model sha256 does not match certificate']",
+      "name": "negative_certificate/model_hash_changed",
+      "passed": true
+    }
+  ],
+  "failures": [
+    "negative_model/missing_neural_requirement: shield=spec_shield_construction_failed errors=['certificate result is not PASS: FAIL', 'unsupported claim level=strict_q_profile_mdp_v1', 'profile MDP theorem is not discharged']",
+    "negative_model/unknown_shield_ref: unknown=None errors=['certificate result is not PASS: FAIL', 'unsupported claim level=strict_q_profile_mdp_v1', 'profile MDP theorem is not discharged']"
+  ],
+  "generated_at": "2026-08-24T10:02:10-0400",
+  "passed": false
+}

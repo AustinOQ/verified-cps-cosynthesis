@@ -29,6 +29,7 @@ from handmade.optim import Adam
 from handmade.ppo_update import ppo_update
 from handmade.train_oracle import train_oracle
 from oracle import extract_interface
+from runtime_settings import DEFAULT_DT, validate_dt
 
 from reduced_handmade.buffered_env import BufferedDiscreteEnv
 from reduced_handmade.composite import ProgramShieldComposite
@@ -77,9 +78,10 @@ def _mark(stages: list[dict], stage: str, start: float,
 
 
 def profile_one(model_path: str, out_dir: Path, *,
-                seed: int = 0, dt: float = 0.1, max_steps: int = 5000,
+                dt: float, seed: int = 0, max_steps: int = 5000,
                 oracle_samples: int = 256, ensure_class_coverage: int = 16,
                 oracle_epochs: int = 1, ppo_episodes: int = 8) -> dict:
+    dt = validate_dt(dt)
     model = inspect_sysml(model_path)
     if model.action_kind != "discrete":
         raise ValueError(f"memory profiler requires Boolean #Neural outputs: {model.path}")
@@ -117,7 +119,7 @@ def profile_one(model_path: str, out_dir: Path, *,
     _mark(stages, "after_probe_env", start,
           {"obs_dim": obs_dim, "n_actions": n_actions})
 
-    iface = extract_interface(model_path, dt=dt)
+    iface = extract_interface(model_path)
     _mark(stages, "after_extract_interface", start,
           {"obs_names": iface["obs_names"], "shield_type": "program_ast_spec_shield"})
 
@@ -176,6 +178,7 @@ def profile_one(model_path: str, out_dir: Path, *,
         "model_name": model.name,
         "model_path": model_path,
         "model_sha256": model.sha256,
+        "dt": dt,
         "hidden_dim": hidden_dim,
         "seed": seed,
         "device": "cpu",
@@ -196,6 +199,7 @@ def main() -> int:
     ap.add_argument("model", nargs="+", help="SysML file path")
     ap.add_argument("--out-dir", default=None)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--dt", type=validate_dt, default=DEFAULT_DT)
     ap.add_argument("--oracle-samples", type=int, default=256)
     ap.add_argument("--ensure-class-coverage", type=int, default=16)
     ap.add_argument("--oracle-epochs", type=int, default=1)
@@ -210,7 +214,7 @@ def main() -> int:
     results = []
     for model_path in args.model:
         results.append(profile_one(
-            model_path, out_dir, seed=args.seed,
+            model_path, out_dir, dt=args.dt, seed=args.seed,
             oracle_samples=args.oracle_samples,
             ensure_class_coverage=args.ensure_class_coverage,
             oracle_epochs=args.oracle_epochs,

@@ -50,7 +50,7 @@ package Thermostat {
             // Update temperature.
             // Delta T = (Energy Added - Heat Loss) / (mass * specific heat capacity).
             // Heat loss via Newton's law of cooling: Q_loss = U*A * (T_inside - T_outside).
-            assign temperatureCelcius :=
+            #ContinuousRate assign temperatureCelcius :=
                 temperatureCelcius +
                 ((heaterPort.heat.rateWatts + acPort.heat.rateWatts
                   - heatLossCoefficientWattsPerCelcius * (temperatureCelcius - outsideTemperatureCelcius))
@@ -200,7 +200,7 @@ package Thermostat {
 
         action step {
             in dt : Real;
-            assign currentTime := currentTime + dt;
+            #ContinuousRate assign currentTime := currentTime + dt;
         }
 
         #Prohibition

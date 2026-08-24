@@ -65,6 +65,7 @@ from sysml_parser import (
     Action, State, Transition, StateMachine, Flow, PartInstance, PartDef,
     SysMLParser,
 )
+from runtime_settings import DEFAULT_DT, validate_dt
 
 
 # =============================================================================
@@ -793,8 +794,11 @@ def build_argument_parser(parser: SysMLParser) -> argparse.ArgumentParser:
                           help="Path to SysML model file")
     argparser.add_argument("-c", "--config", type=Path,
                           help="Path to YAML configuration file")
-    argparser.add_argument("-t", "--timestep", type=float, default=0.1,
-                          help="Simulation timestep in seconds (default: 0.1)")
+    argparser.add_argument(
+        "-t", "--dt", "--timestep", dest="dt", type=validate_dt,
+        default=DEFAULT_DT,
+        help=f"Simulation time step in seconds (default: {DEFAULT_DT})",
+    )
     argparser.add_argument("-d", "--duration", type=float, default=20.0,
                           help="Simulation duration in seconds (default: 20.0)")
     argparser.add_argument("-o", "--output-interval", type=float, default=1.0,
@@ -817,11 +821,11 @@ def build_argument_parser(parser: SysMLParser) -> argparse.ArgumentParser:
 
 
 def run_simulation(engine: SimulationEngine, parser: SysMLParser,
-                   timestep: float, duration: float,
+                   dt: float, duration: float,
                    output_interval: float, quiet: bool) -> list[dict]:
     history = []
-    steps = int(duration / timestep)
-    output_steps = max(1, int(output_interval / timestep))
+    steps = int(duration / dt)
+    output_steps = max(1, int(output_interval / dt))
 
     # Issue first trigger from state machine (to start the simulation)
     triggers = parser.get_triggers()
@@ -842,7 +846,7 @@ def run_simulation(engine: SimulationEngine, parser: SysMLParser,
                 )
 
         if step < steps:
-            engine.step(timestep)
+            engine.step(dt)
 
     return history
 
@@ -889,7 +893,7 @@ def main() -> int:
 
     overrides = {}
     for key, value in config.items():
-        if key not in ('timestep', 'duration', 'output_interval', 'initial_state'):
+        if key not in ('dt', 'timestep', 'duration', 'output_interval', 'initial_state'):
             overrides[key] = value
 
     for param in parser.parameters:
@@ -910,7 +914,10 @@ def main() -> int:
                 engine.current_sm_state[fqn] = args.initial_state
         engine.solver.solve(engine.current_sm_state)
 
-    timestep = config.get('timestep', args.timestep)
+    if 'dt' in config and 'timestep' in config:
+        if validate_dt(config['dt']) != validate_dt(config['timestep']):
+            raise ValueError("config dt and timestep aliases must have the same value")
+    dt = validate_dt(config.get('dt', config.get('timestep', args.dt)))
     duration = config.get('duration', args.duration)
     output_interval = config.get('output_interval', args.output_interval)
 
@@ -932,10 +939,10 @@ def main() -> int:
         for param in parser.parameters:
             value = engine.state.get(param.qualified_name, param.value)
             print(f"  {param.qualified_name}: {value}")
-        print(f"\nTimestep: {timestep}s, Duration: {duration}s")
+        print(f"\nTime step: {dt}s, Duration: {duration}s")
         print("=" * 70 + "\n")
 
-    run_simulation(engine, parser, timestep, duration, output_interval, args.quiet)
+    run_simulation(engine, parser, dt, duration, output_interval, args.quiet)
 
     if not args.quiet:
         print("\n" + "=" * 70)

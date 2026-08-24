@@ -38,6 +38,7 @@ from continuous_env import SysMLContinuousEnv
 from continuous_shield import ContinuousShield
 from env import SysMLEnv
 from oracle import extract_interface
+from runtime_settings import DEFAULT_DT, validate_dt
 
 from .certificate import (
     SOLVER_BACKED_MDP_THEOREM,
@@ -213,10 +214,11 @@ def build_reduced_mdp_spec(
     *,
     certificate: dict[str, Any] | None = None,
     certificate_path: str | Path | None = None,
-    dt: float | None = None,
+    dt: float,
     max_steps: int = 5000,
 ) -> dict[str, Any]:
     """Build a training/eval architecture contract from a checked certificate."""
+    dt = validate_dt(dt)
     model_abs = os.path.abspath(model_path)
     if certificate is None:
         if certificate_path is None:
@@ -242,8 +244,11 @@ def build_reduced_mdp_spec(
         raise ValueError("model sha256 does not match certificate")
 
     settings = certificate.get("settings", {})
-    if dt is None:
-        dt = float(settings.get("dt", 0.1))
+    certificate_dt = validate_dt(settings.get("dt"))
+    if certificate_dt != dt:
+        raise ValueError(
+            f"certificate dt does not match requested dt: {certificate_dt} != {dt}"
+        )
     buffer = certificate.get("buffer") or {}
     b_obs = int(buffer["b_obs"])
     b_act = int(buffer["b_act"])
@@ -251,7 +256,7 @@ def build_reduced_mdp_spec(
     env_info = _inspect_env(model_abs, dt=dt, max_steps=max_steps)
     action_kind = env_info["action_kind"]
     if action_kind == "discrete":
-        iface = extract_interface(model_abs, dt=dt)
+        iface = extract_interface(model_abs)
         shield = iface["spec_shield"]
         action_width = int(env_info["action_count"])
         if list(shield.action_map.keys()) != [int(k) for k in sorted(env_info["action_map"], key=int)]:
@@ -451,6 +456,11 @@ def check_reduced_mdp_spec(
 
     model_info = spec.get("model", {})
     model_path = model_info.get("path")
+    try:
+        model_dt = validate_dt(model_info.get("dt"))
+    except (TypeError, ValueError):
+        model_dt = None
+        errors.append(f"invalid reduced-MDP spec dt={model_info.get('dt')}")
     if check_files and model_path:
         if not os.path.exists(model_path):
             errors.append(f"model path does not exist: {model_path}")
@@ -550,10 +560,7 @@ def check_reduced_mdp_spec(
             ))
             if check_files and model_path and os.path.exists(model_path):
                 try:
-                    observed_interface = extract_interface(
-                        model_path,
-                        dt=float(model_info.get("dt", 0.1)),
-                    )
+                    observed_interface = extract_interface(model_path)
                     observed_architecture = derive_feedforward_architecture(
                         observed_interface["spec_shield"],
                         input_dim=input_dim,
@@ -649,6 +656,13 @@ def check_reduced_mdp_spec(
                 for err in check_certificate(loaded):
                     errors.append(f"embedded certificate check failed: {err}")
                 loaded_buffer = loaded.get("buffer") or {}
+                try:
+                    loaded_dt = validate_dt(loaded.get("settings", {}).get("dt"))
+                except (TypeError, ValueError):
+                    loaded_dt = None
+                    errors.append("loaded certificate has an invalid dt")
+                if model_dt is not None and loaded_dt is not None and loaded_dt != model_dt:
+                    errors.append("loaded certificate dt does not match spec")
                 if loaded_buffer.get("b_obs") != buffer.get("b_obs"):
                     errors.append("loaded certificate b_obs does not match spec")
                 if loaded_buffer.get("b_act") != buffer.get("b_act"):
@@ -676,7 +690,7 @@ def main() -> int:
     ap.add_argument("model")
     ap.add_argument("--certificate", required=True)
     ap.add_argument("--out", required=True)
-    ap.add_argument("--dt", type=float, default=None)
+    ap.add_argument("--dt", type=validate_dt, default=DEFAULT_DT)
     ap.add_argument("--max-steps", type=int, default=5000)
     ap.add_argument("--check", action="store_true")
     args = ap.parse_args()

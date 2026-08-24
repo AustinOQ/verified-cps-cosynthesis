@@ -30,7 +30,7 @@ from shield import SpecShield
 # SysML interface extraction
 # ---------------------------------------------------------------------------
 
-def extract_interface(model_path: str, dt: float = 0.1):
+def extract_interface(model_path: str):
     """Extract observation, action, and completion names from SysML.
 
     Returns dict with everything the oracle and environment need.

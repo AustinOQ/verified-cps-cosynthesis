@@ -1,0 +1,3498 @@
+{
+  "assumptions": [
+    "deterministic_schedule_known: verifier treats these state values as known schedule counters because their equations depend only on themselves: ['currentTime']"
+  ],
+  "buffer": {
+    "b_act": 2,
+    "b_obs": 1
+  },
+  "claim": {
+    "description": "Proof that the selected finite buffer reconstructs the transition-closed relevant state q under the extracted equation/dependency semantics, and that Z3 discharges the one-step self-composed uniqueness obligation over q, executed actions, observations, terminal equations, and requirement status equations. Reward and done obligations are discharged over the finite-horizon augmented state when mdp_obligations says so. Shield obligations are discharged as deterministic exact-shield semantics when mdp_obligations says so.",
+    "level": "strict_q_solver_backed_mdp_v1",
+    "mdp_theorem": "discharged",
+    "profile_mdp_theorem": "discharged",
+    "solver_backed_mdp_theorem": "discharged"
+  },
+  "dependency_model": {
+    "copies": [
+      "speedSensor_lastGapMeters",
+      "speedSensor_lastReadingMps",
+      "speedSensor_speedReading_gapMeters",
+      "speedSensor_speedReading_speedMps"
+    ],
+    "nsupp": {
+      "controller_commandedForce": [
+        "controller_policyCall_driveForce"
+      ],
+      "currentTime": [
+        "currentTime"
+      ],
+      "speedSensor_lastGapMeters": [
+        "speedSensor_speedReading_gapMeters"
+      ],
+      "speedSensor_lastReadingMps": [
+        "speedSensor_speedReading_speedMps"
+      ],
+      "speedSensor_speedReading_gapMeters": [
+        "vehicle_gapMeters"
+      ],
+      "speedSensor_speedReading_speedMps": [
+        "vehicle_speedMps"
+      ],
+      "vehicle_gapMeters": [
+        "vehicle_gapMeters",
+        "vehicle_speedMps"
+      ],
+      "vehicle_speedMps": [
+        "controller_commandedForce",
+        "vehicle_speedMps"
+      ]
+    },
+    "sampled_memories": []
+  },
+  "diagnostics": {
+    "all": [],
+    "blocking": [],
+    "legacy_dependency_fallback_transitions": []
+  },
+  "equation_proof": {
+    "b_act": 2,
+    "b_obs": 1,
+    "blocked_unsafe_inversions": [],
+    "facts": [
+      {
+        "detail": {},
+        "key": "currentTime@-14",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -14,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-13",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -13,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-12",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -12,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-11",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -11,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-10",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -10,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-9",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -9,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-8",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -8,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-7",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -7,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-6",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -6,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-5",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -5,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-4",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -4,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-3",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -3,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-2",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -2,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-1",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -1,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@0",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": 0,
+        "var": "currentTime"
+      },
+      {
+        "detail": {
+          "equation_kind": "observation",
+          "equation_pretty": "[observation] obs.currentSpeedMps = speedSensor_speedReading_speedMps    # Neural input binding",
+          "equation_source": "Neural input binding",
+          "equation_target": "obs.currentSpeedMps",
+          "observation": "currentSpeedMps",
+          "source": "speedSensor_speedReading_speedMps"
+        },
+        "key": "speedSensor_speedReading_speedMps@-1",
+        "premises": [],
+        "rule": "equation_observation_direct_copy",
+        "tau": -1,
+        "var": "speedSensor_speedReading_speedMps"
+      },
+      {
+        "detail": {
+          "equation_kind": "observation",
+          "equation_pretty": "[observation] obs.currentSpeedMps = speedSensor_speedReading_speedMps    # Neural input binding",
+          "equation_source": "Neural input binding",
+          "equation_target": "obs.currentSpeedMps",
+          "observation": "currentSpeedMps",
+          "source": "speedSensor_speedReading_speedMps"
+        },
+        "key": "speedSensor_speedReading_speedMps@0",
+        "premises": [],
+        "rule": "equation_observation_direct_copy",
+        "tau": 0,
+        "var": "speedSensor_speedReading_speedMps"
+      },
+      {
+        "detail": {
+          "equation_kind": "observation",
+          "equation_pretty": "[observation] obs.gapMeters = speedSensor_speedReading_gapMeters    # Neural input binding",
+          "equation_source": "Neural input binding",
+          "equation_target": "obs.gapMeters",
+          "observation": "gapMeters",
+          "source": "speedSensor_speedReading_gapMeters"
+        },
+        "key": "speedSensor_speedReading_gapMeters@-1",
+        "premises": [],
+        "rule": "equation_observation_direct_copy",
+        "tau": -1,
+        "var": "speedSensor_speedReading_gapMeters"
+      },
+      {
+        "detail": {
+          "equation_kind": "observation",
+          "equation_pretty": "[observation] obs.gapMeters = speedSensor_speedReading_gapMeters    # Neural input binding",
+          "equation_source": "Neural input binding",
+          "equation_target": "obs.gapMeters",
+          "observation": "gapMeters",
+          "source": "speedSensor_speedReading_gapMeters"
+        },
+        "key": "speedSensor_speedReading_gapMeters@0",
+        "premises": [],
+        "rule": "equation_observation_direct_copy",
+        "tau": 0,
+        "var": "speedSensor_speedReading_gapMeters"
+      },
+      {
+        "detail": {},
+        "key": "controller_policyCall_driveForce@-2",
+        "premises": [],
+        "rule": "executed_action_history",
+        "tau": -2,
+        "var": "controller_policyCall_driveForce"
+      },
+      {
+        "detail": {},
+        "key": "controller_policyCall_driveForce@-1",
+        "premises": [],
+        "rule": "executed_action_history",
+        "tau": -1,
+        "var": "controller_policyCall_driveForce"
+      },
+      {
+        "detail": {
+          "equation_kind": "transition",
+          "equation_pretty": "[transition] controller_commandedForce' = controller_policyCall_driveForce    # step:step",
+          "equation_source": "step:step",
+          "equation_target": "controller_commandedForce",
+          "from_tau": -2,
+          "support": [
+            "controller_policyCall_driveForce"
+          ],
+          "unknown_refs": []
+        },
+        "key": "controller_commandedForce@-1",
+        "premises": [
+          "controller_policyCall_driveForce@-2"
+        ],
+        "rule": "equation_forward_transition",
+        "tau": -1,
+        "var": "controller_commandedForce"
+      },
+      {
+        "detail": {
+          "equation_kind": "transition",
+          "equation_pretty": "[transition] controller_commandedForce' = controller_policyCall_driveForce    # step:step",
+          "equation_source": "step:step",
+          "equation_target": "controller_commandedForce",
+          "from_tau": -1,
+          "support": [
+            "controller_policyCall_driveForce"
+          ],
+          "unknown_refs": []
+        },
+        "key": "controller_commandedForce@0",
+        "premises": [
+          "controller_policyCall_driveForce@-1"
+        ],
+        "rule": "equation_forward_transition",
+        "tau": 0,
+        "var": "controller_commandedForce"
+      },
+      {
+        "detail": {
+          "equation_kind": "transition",
+          "equation_pretty": "[transition] speedSensor_lastGapMeters' = speedSensor_speedReading_gapMeters    # step:step",
+          "equation_source": "step:step",
+          "equation_target": "speedSensor_lastGapMeters",
+          "from_tau": -1,
+          "support": [
+            "speedSensor_speedReading_gapMeters"
+          ],
+          "unknown_refs": []
+        },
+        "key": "speedSensor_lastGapMeters@0",
+        "premises": [
+          "speedSensor_speedReading_gapMeters@-1"
+        ],
+        "rule": "equation_forward_transition",
+        "tau": 0,
+        "var": "speedSensor_lastGapMeters"
+      },
+      {
+        "detail": {
+          "equation_kind": "transition",
+          "equation_pretty": "[transition] speedSensor_lastReadingMps' = speedSensor_speedReading_speedMps    # step:step",
+          "equation_source": "step:step",
+          "equation_target": "speedSensor_lastReadingMps",
+          "from_tau": -1,
+          "support": [
+            "speedSensor_speedReading_speedMps"
+          ],
+          "unknown_refs": []
+        },
+        "key": "speedSensor_lastReadingMps@0",
+        "premises": [
+          "speedSensor_speedReading_speedMps@-1"
+        ],
+        "rule": "equation_forward_transition",
+        "tau": 0,
+        "var": "speedSensor_lastReadingMps"
+      },
+      {
+        "detail": {
+          "equation_kind": "transition",
+          "equation_pretty": "[transition] speedSensor_speedReading_gapMeters' = speedSensor_vehiclePort_reading_gapMeters    # step:step",
+          "equation_source": "step:step",
+          "equation_target": "speedSensor_speedReading_gapMeters",
+          "inversion": "direct_transition_copy",
+          "known_transition_tau": -1,
+          "source": "vehicle_gapMeters"
+        },
+        "key": "vehicle_gapMeters@-2",
+        "premises": [
+          "speedSensor_speedReading_gapMeters@-1"
+        ],
+        "rule": "equation_direct_copy_inversion",
+        "tau": -2,
+        "var": "vehicle_gapMeters"
+      },
+      {
+        "detail": {
+          "equation_kind": "transition",
+          "equation_pretty": "[transition] speedSensor_speedReading_gapMeters' = speedSensor_vehiclePort_reading_gapMeters    # step:step",
+          "equation_source": "step:step",
+          "equation_target": "speedSensor_speedReading_gapMeters",
+          "inversion": "direct_transition_copy",
+          "known_transition_tau": 0,
+          "source": "vehicle_gapMeters"
+        },
+        "key": "vehicle_gapMeters@-1",
+        "premises": [
+          "speedSensor_speedReading_gapMeters@0"
+        ],
+        "rule": "equation_direct_copy_inversion",
+        "tau": -1,
+        "var": "vehicle_gapMeters"
+      },
+      {
+        "detail": {
+          "equation_kind": "transition",
+          "equation_pretty": "[transition] speedSensor_speedReading_speedMps' = speedSensor_vehiclePort_reading_speedMps    # step:step",
+          "equation_source": "step:step",
+          "equation_target": "speedSensor_speedReading_speedMps",
+          "inversion": "direct_transition_copy",
+          "known_transition_tau": -1,
+          "source": "vehicle_speedMps"
+        },
+        "key": "vehicle_speedMps@-2",
+        "premises": [
+          "speedSensor_speedReading_speedMps@-1"
+        ],
+        "rule": "equation_direct_copy_inversion",
+        "tau": -2,
+        "var": "vehicle_speedMps"
+      },
+      {
+        "detail": {
+          "equation_kind": "transition",
+          "equation_pretty": "[transition] speedSensor_speedReading_speedMps' = speedSensor_vehiclePort_reading_speedMps    # step:step",
+          "equation_source": "step:step",
+          "equation_target": "speedSensor_speedReading_speedMps",
+          "inversion": "direct_transition_copy",
+          "known_transition_tau": 0,
+          "source": "vehicle_speedMps"
+        },
+        "key": "vehicle_speedMps@-1",
+        "premises": [
+          "speedSensor_speedReading_speedMps@0"
+        ],
+        "rule": "equation_direct_copy_inversion",
+        "tau": -1,
+        "var": "vehicle_speedMps"
+      },
+      {
+        "detail": {
+          "equation_kind": "transition",
+          "equation_pretty": "[transition] vehicle_gapMeters' = (vehicle_gapMeters + ((vehicle_leadSpeedMps - vehicle_speedMps) * vehicle_dt))    # step:step",
+          "equation_source": "step:step",
+          "equation_target": "vehicle_gapMeters",
+          "from_tau": -1,
+          "support": [
+            "vehicle_gapMeters",
+            "vehicle_speedMps"
+          ],
+          "unknown_refs": []
+        },
+        "key": "vehicle_gapMeters@0",
+        "premises": [
+          "vehicle_gapMeters@-1",
+          "vehicle_speedMps@-1"
+        ],
+        "rule": "equation_forward_transition",
+        "tau": 0,
+        "var": "vehicle_gapMeters"
+      },
+      {
+        "detail": {
+          "equation_kind": "transition",
+          "equation_pretty": "[transition] vehicle_speedMps' = (vehicle_speedMps + ((((vehicle_drivePort_drive_forceNewtons - ((vehicle_dragCoefficient * vehicle_speedMps) * vehicle_speedMps)) - (((vehicle_massKg * 9.81) * vehicle_roadGradePercent) / 100.0)) * vehicle_dt) / vehicle_massKg))    # step:step",
+          "equation_source": "step:step",
+          "equation_target": "vehicle_speedMps",
+          "from_tau": -1,
+          "support": [
+            "controller_commandedForce",
+            "vehicle_speedMps"
+          ],
+          "unknown_refs": []
+        },
+        "key": "vehicle_speedMps@0",
+        "premises": [
+          "controller_commandedForce@-1",
+          "vehicle_speedMps@-1"
+        ],
+        "rule": "equation_forward_transition",
+        "tau": 0,
+        "var": "vehicle_speedMps"
+      }
+    ],
+    "horizon": 14,
+    "missing_target_facts": [],
+    "observation_sources": {
+      "currentSpeedMps": "speedSensor_speedReading_speedMps",
+      "gapMeters": "speedSensor_speedReading_gapMeters"
+    },
+    "passes": true,
+    "proof_engine": "equation_ir_syntactic_v1",
+    "sampled_memory_assumptions": [],
+    "target_facts": [
+      "controller_commandedForce@0",
+      "currentTime@0",
+      "speedSensor_lastGapMeters@0",
+      "speedSensor_lastReadingMps@0",
+      "speedSensor_speedReading_gapMeters@0",
+      "speedSensor_speedReading_speedMps@0",
+      "vehicle_gapMeters@0",
+      "vehicle_speedMps@0"
+    ]
+  },
+  "equations": {
+    "definitions": [
+      {
+        "constant_refs": [
+          "controller_onThreshold"
+        ],
+        "expr": {
+          "args": [
+            {
+              "name": "controller_commandedForce",
+              "pretty": "controller_commandedForce",
+              "type": "var"
+            },
+            {
+              "args": [
+                {
+                  "pretty": "0",
+                  "type": "const",
+                  "value": 0
+                },
+                {
+                  "path": "controller_onThreshold",
+                  "pretty": "controller_onThreshold",
+                  "type": "raw_ref"
+                }
+              ],
+              "op": "-",
+              "pretty": "(0 - controller_onThreshold)",
+              "type": "op"
+            }
+          ],
+          "op": "<",
+          "pretty": "(controller_commandedForce < (0 - controller_onThreshold))",
+          "type": "op"
+        },
+        "kind": "definition",
+        "pretty": "[definition] controller_brakeOn = (controller_commandedForce < (0 - controller_onThreshold))    # derived attribute",
+        "raw_refs": [
+          "controller_onThreshold"
+        ],
+        "refs": [
+          "controller_commandedForce"
+        ],
+        "source": "derived attribute",
+        "target": "controller_brakeOn",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "controller_commandedForce",
+          "pretty": "controller_commandedForce",
+          "type": "var"
+        },
+        "kind": "definition",
+        "pretty": "[definition] controller_commandOut_cmd_normalizedForce = controller_commandedForce    # bind",
+        "raw_refs": [],
+        "refs": [
+          "controller_commandedForce"
+        ],
+        "source": "bind",
+        "target": "controller_commandOut_cmd_normalizedForce",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "pretty": "3",
+          "type": "const",
+          "value": 3
+        },
+        "kind": "definition",
+        "pretty": "[definition] controller_propagationDelay = 3    # derived attribute",
+        "raw_refs": [],
+        "refs": [],
+        "source": "derived attribute",
+        "target": "controller_propagationDelay",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [
+          "controller_onThreshold"
+        ],
+        "expr": {
+          "args": [
+            {
+              "name": "controller_commandedForce",
+              "pretty": "controller_commandedForce",
+              "type": "var"
+            },
+            {
+              "path": "controller_onThreshold",
+              "pretty": "controller_onThreshold",
+              "type": "raw_ref"
+            }
+          ],
+          "op": ">",
+          "pretty": "(controller_commandedForce > controller_onThreshold)",
+          "type": "op"
+        },
+        "kind": "definition",
+        "pretty": "[definition] controller_throttleOn = (controller_commandedForce > controller_onThreshold)    # derived attribute",
+        "raw_refs": [
+          "controller_onThreshold"
+        ],
+        "refs": [
+          "controller_commandedForce"
+        ],
+        "source": "derived attribute",
+        "target": "controller_throttleOn",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [
+          "drive_maxBrakeForceNewtons",
+          "drive_maxEngineForceNewtons"
+        ],
+        "expr": {
+          "cond": {
+            "args": [
+              {
+                "name": "drive_cmdIn_cmd_normalizedForce",
+                "pretty": "drive_cmdIn_cmd_normalizedForce",
+                "type": "var"
+              },
+              {
+                "pretty": "0",
+                "type": "const",
+                "value": 0
+              }
+            ],
+            "op": ">=",
+            "pretty": "(drive_cmdIn_cmd_normalizedForce >= 0)",
+            "type": "op"
+          },
+          "else": {
+            "args": [
+              {
+                "args": [
+                  {
+                    "name": "drive_cmdIn_cmd_normalizedForce",
+                    "pretty": "drive_cmdIn_cmd_normalizedForce",
+                    "type": "var"
+                  },
+                  {
+                    "path": "drive_maxBrakeForceNewtons",
+                    "pretty": "drive_maxBrakeForceNewtons",
+                    "type": "raw_ref"
+                  }
+                ],
+                "op": "*",
+                "pretty": "(drive_cmdIn_cmd_normalizedForce * drive_maxBrakeForceNewtons)",
+                "type": "op"
+              },
+              {
+                "pretty": "100.0",
+                "type": "const",
+                "value": 100.0
+              }
+            ],
+            "op": "/",
+            "pretty": "((drive_cmdIn_cmd_normalizedForce * drive_maxBrakeForceNewtons) / 100.0)",
+            "type": "op"
+          },
+          "pretty": "ite((drive_cmdIn_cmd_normalizedForce >= 0), ((drive_cmdIn_cmd_normalizedForce * drive_maxEngineForceNewtons) / 100.0), ((drive_cmdIn_cmd_normalizedForce * drive_maxBrakeForceNewtons) / 100.0))",
+          "then": {
+            "args": [
+              {
+                "args": [
+                  {
+                    "name": "drive_cmdIn_cmd_normalizedForce",
+                    "pretty": "drive_cmdIn_cmd_normalizedForce",
+                    "type": "var"
+                  },
+                  {
+                    "path": "drive_maxEngineForceNewtons",
+                    "pretty": "drive_maxEngineForceNewtons",
+                    "type": "raw_ref"
+                  }
+                ],
+                "op": "*",
+                "pretty": "(drive_cmdIn_cmd_normalizedForce * drive_maxEngineForceNewtons)",
+                "type": "op"
+              },
+              {
+                "pretty": "100.0",
+                "type": "const",
+                "value": 100.0
+              }
+            ],
+            "op": "/",
+            "pretty": "((drive_cmdIn_cmd_normalizedForce * drive_maxEngineForceNewtons) / 100.0)",
+            "type": "op"
+          },
+          "type": "ite"
+        },
+        "kind": "definition",
+        "pretty": "[definition] drive_appliedForceNewtons = ite((drive_cmdIn_cmd_normalizedForce >= 0), ((drive_cmdIn_cmd_normalizedForce * drive_maxEngineForceNewtons) / 100.0), ((drive_cmdIn_cmd_normalizedForce * drive_maxBrakeForceNewtons) / 100.0))    # derived attribute",
+        "raw_refs": [
+          "drive_maxBrakeForceNewtons",
+          "drive_maxEngineForceNewtons"
+        ],
+        "refs": [
+          "drive_cmdIn_cmd_normalizedForce"
+        ],
+        "source": "derived attribute",
+        "target": "drive_appliedForceNewtons",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "controller_commandOut_cmd_normalizedForce",
+          "pretty": "controller_commandOut_cmd_normalizedForce",
+          "type": "var"
+        },
+        "kind": "definition",
+        "pretty": "[definition] drive_cmdIn_cmd_normalizedForce = controller_commandOut_cmd_normalizedForce    # flow copy",
+        "raw_refs": [],
+        "refs": [
+          "controller_commandOut_cmd_normalizedForce"
+        ],
+        "source": "flow copy",
+        "target": "drive_cmdIn_cmd_normalizedForce",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "drive_appliedForceNewtons",
+          "pretty": "drive_appliedForceNewtons",
+          "type": "var"
+        },
+        "kind": "definition",
+        "pretty": "[definition] drive_forceOut_drive_forceNewtons = drive_appliedForceNewtons    # bind",
+        "raw_refs": [],
+        "refs": [
+          "drive_appliedForceNewtons"
+        ],
+        "source": "bind",
+        "target": "drive_forceOut_drive_forceNewtons",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "speedSensor_lastGapMeters",
+          "pretty": "speedSensor_lastGapMeters",
+          "type": "var"
+        },
+        "kind": "definition",
+        "pretty": "[definition] lastObservedGap = speedSensor_lastGapMeters    # derived attribute",
+        "raw_refs": [],
+        "refs": [
+          "speedSensor_lastGapMeters"
+        ],
+        "source": "derived attribute",
+        "target": "lastObservedGap",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "speedSensor_lastReadingMps",
+          "pretty": "speedSensor_lastReadingMps",
+          "type": "var"
+        },
+        "kind": "definition",
+        "pretty": "[definition] lastObservedSpeed = speedSensor_lastReadingMps    # derived attribute",
+        "raw_refs": [],
+        "refs": [
+          "speedSensor_lastReadingMps"
+        ],
+        "source": "derived attribute",
+        "target": "lastObservedSpeed",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "vehicle_speedSensorPort_reading_gapMeters",
+          "pretty": "vehicle_speedSensorPort_reading_gapMeters",
+          "type": "var"
+        },
+        "kind": "definition",
+        "pretty": "[definition] speedSensor_vehiclePort_reading_gapMeters = vehicle_speedSensorPort_reading_gapMeters    # flow copy",
+        "raw_refs": [],
+        "refs": [
+          "vehicle_speedSensorPort_reading_gapMeters"
+        ],
+        "source": "flow copy",
+        "target": "speedSensor_vehiclePort_reading_gapMeters",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "vehicle_speedSensorPort_reading_speedMps",
+          "pretty": "vehicle_speedSensorPort_reading_speedMps",
+          "type": "var"
+        },
+        "kind": "definition",
+        "pretty": "[definition] speedSensor_vehiclePort_reading_speedMps = vehicle_speedSensorPort_reading_speedMps    # flow copy",
+        "raw_refs": [],
+        "refs": [
+          "vehicle_speedSensorPort_reading_speedMps"
+        ],
+        "source": "flow copy",
+        "target": "speedSensor_vehiclePort_reading_speedMps",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "drive_forceOut_drive_forceNewtons",
+          "pretty": "drive_forceOut_drive_forceNewtons",
+          "type": "var"
+        },
+        "kind": "definition",
+        "pretty": "[definition] vehicle_drivePort_drive_forceNewtons = drive_forceOut_drive_forceNewtons    # flow copy",
+        "raw_refs": [],
+        "refs": [
+          "drive_forceOut_drive_forceNewtons"
+        ],
+        "source": "flow copy",
+        "target": "vehicle_drivePort_drive_forceNewtons",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "vehicle_gapMeters",
+          "pretty": "vehicle_gapMeters",
+          "type": "var"
+        },
+        "kind": "definition",
+        "pretty": "[definition] vehicle_speedSensorPort_reading_gapMeters = vehicle_gapMeters    # bind",
+        "raw_refs": [],
+        "refs": [
+          "vehicle_gapMeters"
+        ],
+        "source": "bind",
+        "target": "vehicle_speedSensorPort_reading_gapMeters",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "vehicle_speedMps",
+          "pretty": "vehicle_speedMps",
+          "type": "var"
+        },
+        "kind": "definition",
+        "pretty": "[definition] vehicle_speedSensorPort_reading_speedMps = vehicle_speedMps    # bind",
+        "raw_refs": [],
+        "refs": [
+          "vehicle_speedMps"
+        ],
+        "source": "bind",
+        "target": "vehicle_speedSensorPort_reading_speedMps",
+        "unresolved_raw_refs": []
+      }
+    ],
+    "observations": [
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "speedSensor_speedReading_speedMps",
+          "pretty": "speedSensor_speedReading_speedMps",
+          "type": "var"
+        },
+        "kind": "observation",
+        "pretty": "[observation] obs.currentSpeedMps = speedSensor_speedReading_speedMps    # Neural input binding",
+        "raw_refs": [],
+        "refs": [
+          "speedSensor_speedReading_speedMps"
+        ],
+        "source": "Neural input binding",
+        "target": "obs.currentSpeedMps",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "speedSensor_speedReading_gapMeters",
+          "pretty": "speedSensor_speedReading_gapMeters",
+          "type": "var"
+        },
+        "kind": "observation",
+        "pretty": "[observation] obs.gapMeters = speedSensor_speedReading_gapMeters    # Neural input binding",
+        "raw_refs": [],
+        "refs": [
+          "speedSensor_speedReading_gapMeters"
+        ],
+        "source": "Neural input binding",
+        "target": "obs.gapMeters",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [
+          "controller_targetSpeedMps"
+        ],
+        "expr": {
+          "path": "controller_targetSpeedMps",
+          "pretty": "controller_targetSpeedMps",
+          "type": "raw_ref"
+        },
+        "kind": "observation",
+        "pretty": "[observation] obs.targetSpeed = controller_targetSpeedMps    # Neural input binding",
+        "raw_refs": [
+          "controller_targetSpeedMps"
+        ],
+        "refs": [],
+        "source": "Neural input binding",
+        "target": "obs.targetSpeed",
+        "unresolved_raw_refs": []
+      }
+    ],
+    "requirements": [
+      {
+        "constant_refs": [
+          "controller_safeFollowingDistanceMeters",
+          "controller_targetSpeedMps",
+          "controller_toleranceMps"
+        ],
+        "expr": {
+          "args": [
+            {
+              "args": [
+                {
+                  "name": "currentTime",
+                  "pretty": "currentTime",
+                  "type": "var"
+                },
+                {
+                  "pretty": "0",
+                  "type": "const",
+                  "value": 0
+                }
+              ],
+              "op": ">",
+              "pretty": "(currentTime > 0)",
+              "type": "op"
+            },
+            {
+              "args": [
+                {
+                  "args": [
+                    {
+                      "args": [
+                        {
+                          "name": "lastObservedSpeed",
+                          "pretty": "lastObservedSpeed",
+                          "type": "var"
+                        },
+                        {
+                          "args": [
+                            {
+                              "path": "controller_targetSpeedMps",
+                              "pretty": "controller_targetSpeedMps",
+                              "type": "raw_ref"
+                            },
+                            {
+                              "path": "controller_toleranceMps",
+                              "pretty": "controller_toleranceMps",
+                              "type": "raw_ref"
+                            }
+                          ],
+                          "op": "-",
+                          "pretty": "(controller_targetSpeedMps - controller_toleranceMps)",
+                          "type": "op"
+                        }
+                      ],
+                      "op": "<",
+                      "pretty": "(lastObservedSpeed < (controller_targetSpeedMps - controller_toleranceMps))",
+                      "type": "op"
+                    },
+                    {
+                      "args": [
+                        {
+                          "name": "lastObservedGap",
+                          "pretty": "lastObservedGap",
+                          "type": "var"
+                        },
+                        {
+                          "path": "controller_safeFollowingDistanceMeters",
+                          "pretty": "controller_safeFollowingDistanceMeters",
+                          "type": "raw_ref"
+                        }
+                      ],
+                      "op": ">=",
+                      "pretty": "(lastObservedGap >= controller_safeFollowingDistanceMeters)",
+                      "type": "op"
+                    }
+                  ],
+                  "op": "and",
+                  "pretty": "((lastObservedSpeed < (controller_targetSpeedMps - controller_toleranceMps)) and (lastObservedGap >= controller_safeFollowingDistanceMeters))",
+                  "type": "op"
+                },
+                {
+                  "name": "controller_throttleOn",
+                  "pretty": "controller_throttleOn",
+                  "type": "var"
+                }
+              ],
+              "op": "implies",
+              "pretty": "(((lastObservedSpeed < (controller_targetSpeedMps - controller_toleranceMps)) and (lastObservedGap >= controller_safeFollowingDistanceMeters)) implies controller_throttleOn)",
+              "type": "op"
+            }
+          ],
+          "op": "implies",
+          "pretty": "((currentTime > 0) implies (((lastObservedSpeed < (controller_targetSpeedMps - controller_toleranceMps)) and (lastObservedGap >= controller_safeFollowingDistanceMeters)) implies controller_throttleOn))",
+          "type": "op"
+        },
+        "kind": "requirement",
+        "pretty": "[requirement] status.Accelerate When Below Target = ((currentTime > 0) implies (((lastObservedSpeed < (controller_targetSpeedMps - controller_toleranceMps)) and (lastObservedGap >= controller_safeFollowingDistanceMeters)) implies controller_throttleOn))    # Obligation",
+        "raw_refs": [
+          "controller_safeFollowingDistanceMeters",
+          "controller_targetSpeedMps",
+          "controller_toleranceMps"
+        ],
+        "refs": [
+          "controller_throttleOn",
+          "currentTime",
+          "lastObservedGap",
+          "lastObservedSpeed"
+        ],
+        "source": "Obligation",
+        "target": "status.Accelerate When Below Target",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [
+          "controller_safeFollowingDistanceMeters",
+          "controller_targetSpeedMps",
+          "controller_toleranceMps"
+        ],
+        "expr": {
+          "args": [
+            {
+              "args": [
+                {
+                  "name": "currentTime",
+                  "pretty": "currentTime",
+                  "type": "var"
+                },
+                {
+                  "pretty": "0",
+                  "type": "const",
+                  "value": 0
+                }
+              ],
+              "op": ">",
+              "pretty": "(currentTime > 0)",
+              "type": "op"
+            },
+            {
+              "args": [
+                {
+                  "args": [
+                    {
+                      "args": [
+                        {
+                          "name": "lastObservedSpeed",
+                          "pretty": "lastObservedSpeed",
+                          "type": "var"
+                        },
+                        {
+                          "args": [
+                            {
+                              "path": "controller_targetSpeedMps",
+                              "pretty": "controller_targetSpeedMps",
+                              "type": "raw_ref"
+                            },
+                            {
+                              "path": "controller_toleranceMps",
+                              "pretty": "controller_toleranceMps",
+                              "type": "raw_ref"
+                            }
+                          ],
+                          "op": "+",
+                          "pretty": "(controller_targetSpeedMps + controller_toleranceMps)",
+                          "type": "op"
+                        }
+                      ],
+                      "op": ">",
+                      "pretty": "(lastObservedSpeed > (controller_targetSpeedMps + controller_toleranceMps))",
+                      "type": "op"
+                    },
+                    {
+                      "args": [
+                        {
+                          "name": "lastObservedGap",
+                          "pretty": "lastObservedGap",
+                          "type": "var"
+                        },
+                        {
+                          "path": "controller_safeFollowingDistanceMeters",
+                          "pretty": "controller_safeFollowingDistanceMeters",
+                          "type": "raw_ref"
+                        }
+                      ],
+                      "op": "<",
+                      "pretty": "(lastObservedGap < controller_safeFollowingDistanceMeters)",
+                      "type": "op"
+                    }
+                  ],
+                  "op": "or",
+                  "pretty": "((lastObservedSpeed > (controller_targetSpeedMps + controller_toleranceMps)) or (lastObservedGap < controller_safeFollowingDistanceMeters))",
+                  "type": "op"
+                },
+                {
+                  "name": "controller_brakeOn",
+                  "pretty": "controller_brakeOn",
+                  "type": "var"
+                }
+              ],
+              "op": "implies",
+              "pretty": "(((lastObservedSpeed > (controller_targetSpeedMps + controller_toleranceMps)) or (lastObservedGap < controller_safeFollowingDistanceMeters)) implies controller_brakeOn)",
+              "type": "op"
+            }
+          ],
+          "op": "implies",
+          "pretty": "((currentTime > 0) implies (((lastObservedSpeed > (controller_targetSpeedMps + controller_toleranceMps)) or (lastObservedGap < controller_safeFollowingDistanceMeters)) implies controller_brakeOn))",
+          "type": "op"
+        },
+        "kind": "requirement",
+        "pretty": "[requirement] status.Brake When Above Target Or Too Close = ((currentTime > 0) implies (((lastObservedSpeed > (controller_targetSpeedMps + controller_toleranceMps)) or (lastObservedGap < controller_safeFollowingDistanceMeters)) implies controller_brakeOn))    # Obligation",
+        "raw_refs": [
+          "controller_safeFollowingDistanceMeters",
+          "controller_targetSpeedMps",
+          "controller_toleranceMps"
+        ],
+        "refs": [
+          "controller_brakeOn",
+          "currentTime",
+          "lastObservedGap",
+          "lastObservedSpeed"
+        ],
+        "source": "Obligation",
+        "target": "status.Brake When Above Target Or Too Close",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "args": [
+            {
+              "args": [
+                {
+                  "name": "controller_throttleOn",
+                  "pretty": "controller_throttleOn",
+                  "type": "var"
+                },
+                {
+                  "name": "controller_brakeOn",
+                  "pretty": "controller_brakeOn",
+                  "type": "var"
+                }
+              ],
+              "op": "and",
+              "pretty": "(controller_throttleOn and controller_brakeOn)",
+              "type": "op"
+            }
+          ],
+          "op": "not",
+          "pretty": "(not (controller_throttleOn and controller_brakeOn))",
+          "type": "op"
+        },
+        "kind": "requirement",
+        "pretty": "[requirement] status.No Simultaneous Throttle and Brake = (not (controller_throttleOn and controller_brakeOn))    # Prohibition",
+        "raw_refs": [],
+        "refs": [
+          "controller_brakeOn",
+          "controller_throttleOn"
+        ],
+        "source": "Prohibition",
+        "target": "status.No Simultaneous Throttle and Brake",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [
+          "controller_targetSpeedMps",
+          "controller_toleranceMps"
+        ],
+        "expr": {
+          "args": [
+            {
+              "args": [
+                {
+                  "name": "currentTime",
+                  "pretty": "currentTime",
+                  "type": "var"
+                },
+                {
+                  "pretty": "0",
+                  "type": "const",
+                  "value": 0
+                }
+              ],
+              "op": ">",
+              "pretty": "(currentTime > 0)",
+              "type": "op"
+            },
+            {
+              "args": [
+                {
+                  "args": [
+                    {
+                      "name": "lastObservedSpeed",
+                      "pretty": "lastObservedSpeed",
+                      "type": "var"
+                    },
+                    {
+                      "args": [
+                        {
+                          "path": "controller_targetSpeedMps",
+                          "pretty": "controller_targetSpeedMps",
+                          "type": "raw_ref"
+                        },
+                        {
+                          "path": "controller_toleranceMps",
+                          "pretty": "controller_toleranceMps",
+                          "type": "raw_ref"
+                        }
+                      ],
+                      "op": "+",
+                      "pretty": "(controller_targetSpeedMps + controller_toleranceMps)",
+                      "type": "op"
+                    }
+                  ],
+                  "op": ">",
+                  "pretty": "(lastObservedSpeed > (controller_targetSpeedMps + controller_toleranceMps))",
+                  "type": "op"
+                },
+                {
+                  "args": [
+                    {
+                      "name": "controller_throttleOn",
+                      "pretty": "controller_throttleOn",
+                      "type": "var"
+                    }
+                  ],
+                  "op": "not",
+                  "pretty": "(not controller_throttleOn)",
+                  "type": "op"
+                }
+              ],
+              "op": "implies",
+              "pretty": "((lastObservedSpeed > (controller_targetSpeedMps + controller_toleranceMps)) implies (not controller_throttleOn))",
+              "type": "op"
+            }
+          ],
+          "op": "implies",
+          "pretty": "((currentTime > 0) implies ((lastObservedSpeed > (controller_targetSpeedMps + controller_toleranceMps)) implies (not controller_throttleOn)))",
+          "type": "op"
+        },
+        "kind": "requirement",
+        "pretty": "[requirement] status.No Throttle When Overspeeding = ((currentTime > 0) implies ((lastObservedSpeed > (controller_targetSpeedMps + controller_toleranceMps)) implies (not controller_throttleOn)))    # Prohibition",
+        "raw_refs": [
+          "controller_targetSpeedMps",
+          "controller_toleranceMps"
+        ],
+        "refs": [
+          "controller_throttleOn",
+          "currentTime",
+          "lastObservedSpeed"
+        ],
+        "source": "Prohibition",
+        "target": "status.No Throttle When Overspeeding",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [
+          "controller_safeFollowingDistanceMeters"
+        ],
+        "expr": {
+          "args": [
+            {
+              "args": [
+                {
+                  "name": "lastObservedGap",
+                  "pretty": "lastObservedGap",
+                  "type": "var"
+                },
+                {
+                  "path": "controller_safeFollowingDistanceMeters",
+                  "pretty": "controller_safeFollowingDistanceMeters",
+                  "type": "raw_ref"
+                }
+              ],
+              "op": "<",
+              "pretty": "(lastObservedGap < controller_safeFollowingDistanceMeters)",
+              "type": "op"
+            },
+            {
+              "args": [
+                {
+                  "name": "controller_throttleOn",
+                  "pretty": "controller_throttleOn",
+                  "type": "var"
+                }
+              ],
+              "op": "not",
+              "pretty": "(not controller_throttleOn)",
+              "type": "op"
+            }
+          ],
+          "op": "implies",
+          "pretty": "((lastObservedGap < controller_safeFollowingDistanceMeters) implies (not controller_throttleOn))",
+          "type": "op"
+        },
+        "kind": "requirement",
+        "pretty": "[requirement] status.No Throttle When Too Close = ((lastObservedGap < controller_safeFollowingDistanceMeters) implies (not controller_throttleOn))    # Prohibition",
+        "raw_refs": [
+          "controller_safeFollowingDistanceMeters"
+        ],
+        "refs": [
+          "controller_throttleOn",
+          "lastObservedGap"
+        ],
+        "source": "Prohibition",
+        "target": "status.No Throttle When Too Close",
+        "unresolved_raw_refs": []
+      }
+    ],
+    "terminals": [
+      {
+        "constant_refs": [
+          "controller_targetSpeedMps",
+          "controller_toleranceMps"
+        ],
+        "expr": {
+          "args": [
+            {
+              "args": [
+                {
+                  "args": [
+                    {
+                      "args": [
+                        {
+                          "path": "controller_targetSpeedMps",
+                          "pretty": "controller_targetSpeedMps",
+                          "type": "raw_ref"
+                        },
+                        {
+                          "args": [
+                            {
+                              "name": "speedSensor_speedReading_speedMps",
+                              "pretty": "speedSensor_speedReading_speedMps",
+                              "type": "var"
+                            },
+                            {
+                              "path": "controller_toleranceMps",
+                              "pretty": "controller_toleranceMps",
+                              "type": "raw_ref"
+                            }
+                          ],
+                          "op": "+",
+                          "pretty": "(speedSensor_speedReading_speedMps + controller_toleranceMps)",
+                          "type": "op"
+                        }
+                      ],
+                      "op": "<=",
+                      "pretty": "(controller_targetSpeedMps <= (speedSensor_speedReading_speedMps + controller_toleranceMps))",
+                      "type": "op"
+                    },
+                    {
+                      "args": [
+                        {
+                          "path": "controller_targetSpeedMps",
+                          "pretty": "controller_targetSpeedMps",
+                          "type": "raw_ref"
+                        },
+                        {
+                          "args": [
+                            {
+                              "name": "speedSensor_speedReading_speedMps",
+                              "pretty": "speedSensor_speedReading_speedMps",
+                              "type": "var"
+                            },
+                            {
+                              "path": "controller_toleranceMps",
+                              "pretty": "controller_toleranceMps",
+                              "type": "raw_ref"
+                            }
+                          ],
+                          "op": "-",
+                          "pretty": "(speedSensor_speedReading_speedMps - controller_toleranceMps)",
+                          "type": "op"
+                        }
+                      ],
+                      "op": ">=",
+                      "pretty": "(controller_targetSpeedMps >= (speedSensor_speedReading_speedMps - controller_toleranceMps))",
+                      "type": "op"
+                    }
+                  ],
+                  "op": "and",
+                  "pretty": "((controller_targetSpeedMps <= (speedSensor_speedReading_speedMps + controller_toleranceMps)) and (controller_targetSpeedMps >= (speedSensor_speedReading_speedMps - controller_toleranceMps)))",
+                  "type": "op"
+                },
+                {
+                  "args": [
+                    {
+                      "name": "controller_throttleOn",
+                      "pretty": "controller_throttleOn",
+                      "type": "var"
+                    }
+                  ],
+                  "op": "not",
+                  "pretty": "(not controller_throttleOn)",
+                  "type": "op"
+                }
+              ],
+              "op": "and",
+              "pretty": "(((controller_targetSpeedMps <= (speedSensor_speedReading_speedMps + controller_toleranceMps)) and (controller_targetSpeedMps >= (speedSensor_speedReading_speedMps - controller_toleranceMps))) and (not controller_throttleOn))",
+              "type": "op"
+            },
+            {
+              "args": [
+                {
+                  "name": "controller_brakeOn",
+                  "pretty": "controller_brakeOn",
+                  "type": "var"
+                }
+              ],
+              "op": "not",
+              "pretty": "(not controller_brakeOn)",
+              "type": "op"
+            }
+          ],
+          "op": "and",
+          "pretty": "((((controller_targetSpeedMps <= (speedSensor_speedReading_speedMps + controller_toleranceMps)) and (controller_targetSpeedMps >= (speedSensor_speedReading_speedMps - controller_toleranceMps))) and (not controller_throttleOn)) and (not controller_brakeOn))",
+          "type": "op"
+        },
+        "kind": "terminal",
+        "pretty": "[terminal] env.completion.done = ((((controller_targetSpeedMps <= (speedSensor_speedReading_speedMps + controller_toleranceMps)) and (controller_targetSpeedMps >= (speedSensor_speedReading_speedMps - controller_toleranceMps))) and (not controller_throttleOn)) and (not controller_brakeOn))    # #Completion input binding in step",
+        "raw_refs": [
+          "controller_targetSpeedMps",
+          "controller_toleranceMps"
+        ],
+        "refs": [
+          "controller_brakeOn",
+          "controller_throttleOn",
+          "speedSensor_speedReading_speedMps"
+        ],
+        "source": "#Completion input binding in step",
+        "target": "env.completion.done",
+        "unresolved_raw_refs": []
+      }
+    ],
+    "transitions": [
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "controller_policyCall_driveForce",
+          "pretty": "controller_policyCall_driveForce",
+          "type": "var"
+        },
+        "kind": "transition",
+        "pretty": "[transition] controller_commandedForce' = controller_policyCall_driveForce    # step:step",
+        "raw_refs": [],
+        "refs": [
+          "controller_policyCall_driveForce"
+        ],
+        "source": "step:step",
+        "target": "controller_commandedForce",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [
+          "dt"
+        ],
+        "expr": {
+          "args": [
+            {
+              "name": "currentTime",
+              "pretty": "currentTime",
+              "type": "var"
+            },
+            {
+              "path": "dt",
+              "pretty": "dt",
+              "type": "raw_ref"
+            }
+          ],
+          "op": "+",
+          "pretty": "(currentTime + dt)",
+          "type": "op"
+        },
+        "kind": "transition",
+        "pretty": "[transition] currentTime' = (currentTime + dt)    # step:step",
+        "raw_refs": [
+          "dt"
+        ],
+        "refs": [
+          "currentTime"
+        ],
+        "source": "step:step",
+        "target": "currentTime",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "speedSensor_speedReading_gapMeters",
+          "pretty": "speedSensor_speedReading_gapMeters",
+          "type": "var"
+        },
+        "kind": "transition",
+        "pretty": "[transition] speedSensor_lastGapMeters' = speedSensor_speedReading_gapMeters    # step:step",
+        "raw_refs": [],
+        "refs": [
+          "speedSensor_speedReading_gapMeters"
+        ],
+        "source": "step:step",
+        "target": "speedSensor_lastGapMeters",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "speedSensor_speedReading_speedMps",
+          "pretty": "speedSensor_speedReading_speedMps",
+          "type": "var"
+        },
+        "kind": "transition",
+        "pretty": "[transition] speedSensor_lastReadingMps' = speedSensor_speedReading_speedMps    # step:step",
+        "raw_refs": [],
+        "refs": [
+          "speedSensor_speedReading_speedMps"
+        ],
+        "source": "step:step",
+        "target": "speedSensor_lastReadingMps",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "speedSensor_vehiclePort_reading_gapMeters",
+          "pretty": "speedSensor_vehiclePort_reading_gapMeters",
+          "type": "var"
+        },
+        "kind": "transition",
+        "pretty": "[transition] speedSensor_speedReading_gapMeters' = speedSensor_vehiclePort_reading_gapMeters    # step:step",
+        "raw_refs": [],
+        "refs": [
+          "speedSensor_vehiclePort_reading_gapMeters"
+        ],
+        "source": "step:step",
+        "target": "speedSensor_speedReading_gapMeters",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "speedSensor_vehiclePort_reading_speedMps",
+          "pretty": "speedSensor_vehiclePort_reading_speedMps",
+          "type": "var"
+        },
+        "kind": "transition",
+        "pretty": "[transition] speedSensor_speedReading_speedMps' = speedSensor_vehiclePort_reading_speedMps    # step:step",
+        "raw_refs": [],
+        "refs": [
+          "speedSensor_vehiclePort_reading_speedMps"
+        ],
+        "source": "step:step",
+        "target": "speedSensor_speedReading_speedMps",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [
+          "vehicle_dt",
+          "vehicle_leadSpeedMps"
+        ],
+        "expr": {
+          "args": [
+            {
+              "name": "vehicle_gapMeters",
+              "pretty": "vehicle_gapMeters",
+              "type": "var"
+            },
+            {
+              "args": [
+                {
+                  "args": [
+                    {
+                      "path": "vehicle_leadSpeedMps",
+                      "pretty": "vehicle_leadSpeedMps",
+                      "type": "raw_ref"
+                    },
+                    {
+                      "name": "vehicle_speedMps",
+                      "pretty": "vehicle_speedMps",
+                      "type": "var"
+                    }
+                  ],
+                  "op": "-",
+                  "pretty": "(vehicle_leadSpeedMps - vehicle_speedMps)",
+                  "type": "op"
+                },
+                {
+                  "path": "vehicle_dt",
+                  "pretty": "vehicle_dt",
+                  "type": "raw_ref"
+                }
+              ],
+              "op": "*",
+              "pretty": "((vehicle_leadSpeedMps - vehicle_speedMps) * vehicle_dt)",
+              "type": "op"
+            }
+          ],
+          "op": "+",
+          "pretty": "(vehicle_gapMeters + ((vehicle_leadSpeedMps - vehicle_speedMps) * vehicle_dt))",
+          "type": "op"
+        },
+        "kind": "transition",
+        "pretty": "[transition] vehicle_gapMeters' = (vehicle_gapMeters + ((vehicle_leadSpeedMps - vehicle_speedMps) * vehicle_dt))    # step:step",
+        "raw_refs": [
+          "vehicle_dt",
+          "vehicle_leadSpeedMps"
+        ],
+        "refs": [
+          "vehicle_gapMeters",
+          "vehicle_speedMps"
+        ],
+        "source": "step:step",
+        "target": "vehicle_gapMeters",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [
+          "vehicle_dragCoefficient",
+          "vehicle_dt",
+          "vehicle_massKg",
+          "vehicle_roadGradePercent"
+        ],
+        "expr": {
+          "args": [
+            {
+              "name": "vehicle_speedMps",
+              "pretty": "vehicle_speedMps",
+              "type": "var"
+            },
+            {
+              "args": [
+                {
+                  "args": [
+                    {
+                      "args": [
+                        {
+                          "args": [
+                            {
+                              "name": "vehicle_drivePort_drive_forceNewtons",
+                              "pretty": "vehicle_drivePort_drive_forceNewtons",
+                              "type": "var"
+                            },
+                            {
+                              "args": [
+                                {
+                                  "args": [
+                                    {
+                                      "path": "vehicle_dragCoefficient",
+                                      "pretty": "vehicle_dragCoefficient",
+                                      "type": "raw_ref"
+                                    },
+                                    {
+                                      "name": "vehicle_speedMps",
+                                      "pretty": "vehicle_speedMps",
+                                      "type": "var"
+                                    }
+                                  ],
+                                  "op": "*",
+                                  "pretty": "(vehicle_dragCoefficient * vehicle_speedMps)",
+                                  "type": "op"
+                                },
+                                {
+                                  "name": "vehicle_speedMps",
+                                  "pretty": "vehicle_speedMps",
+                                  "type": "var"
+                                }
+                              ],
+                              "op": "*",
+                              "pretty": "((vehicle_dragCoefficient * vehicle_speedMps) * vehicle_speedMps)",
+                              "type": "op"
+                            }
+                          ],
+                          "op": "-",
+                          "pretty": "(vehicle_drivePort_drive_forceNewtons - ((vehicle_dragCoefficient * vehicle_speedMps) * vehicle_speedMps))",
+                          "type": "op"
+                        },
+                        {
+                          "args": [
+                            {
+                              "args": [
+                                {
+                                  "args": [
+                                    {
+                                      "path": "vehicle_massKg",
+                                      "pretty": "vehicle_massKg",
+                                      "type": "raw_ref"
+                                    },
+                                    {
+                                      "pretty": "9.81",
+                                      "type": "const",
+                                      "value": 9.81
+                                    }
+                                  ],
+                                  "op": "*",
+                                  "pretty": "(vehicle_massKg * 9.81)",
+                                  "type": "op"
+                                },
+                                {
+                                  "path": "vehicle_roadGradePercent",
+                                  "pretty": "vehicle_roadGradePercent",
+                                  "type": "raw_ref"
+                                }
+                              ],
+                              "op": "*",
+                              "pretty": "((vehicle_massKg * 9.81) * vehicle_roadGradePercent)",
+                              "type": "op"
+                            },
+                            {
+                              "pretty": "100.0",
+                              "type": "const",
+                              "value": 100.0
+                            }
+                          ],
+                          "op": "/",
+                          "pretty": "(((vehicle_massKg * 9.81) * vehicle_roadGradePercent) / 100.0)",
+                          "type": "op"
+                        }
+                      ],
+                      "op": "-",
+                      "pretty": "((vehicle_drivePort_drive_forceNewtons - ((vehicle_dragCoefficient * vehicle_speedMps) * vehicle_speedMps)) - (((vehicle_massKg * 9.81) * vehicle_roadGradePercent) / 100.0))",
+                      "type": "op"
+                    },
+                    {
+                      "path": "vehicle_dt",
+                      "pretty": "vehicle_dt",
+                      "type": "raw_ref"
+                    }
+                  ],
+                  "op": "*",
+                  "pretty": "(((vehicle_drivePort_drive_forceNewtons - ((vehicle_dragCoefficient * vehicle_speedMps) * vehicle_speedMps)) - (((vehicle_massKg * 9.81) * vehicle_roadGradePercent) / 100.0)) * vehicle_dt)",
+                  "type": "op"
+                },
+                {
+                  "path": "vehicle_massKg",
+                  "pretty": "vehicle_massKg",
+                  "type": "raw_ref"
+                }
+              ],
+              "op": "/",
+              "pretty": "((((vehicle_drivePort_drive_forceNewtons - ((vehicle_dragCoefficient * vehicle_speedMps) * vehicle_speedMps)) - (((vehicle_massKg * 9.81) * vehicle_roadGradePercent) / 100.0)) * vehicle_dt) / vehicle_massKg)",
+              "type": "op"
+            }
+          ],
+          "op": "+",
+          "pretty": "(vehicle_speedMps + ((((vehicle_drivePort_drive_forceNewtons - ((vehicle_dragCoefficient * vehicle_speedMps) * vehicle_speedMps)) - (((vehicle_massKg * 9.81) * vehicle_roadGradePercent) / 100.0)) * vehicle_dt) / vehicle_massKg))",
+          "type": "op"
+        },
+        "kind": "transition",
+        "pretty": "[transition] vehicle_speedMps' = (vehicle_speedMps + ((((vehicle_drivePort_drive_forceNewtons - ((vehicle_dragCoefficient * vehicle_speedMps) * vehicle_speedMps)) - (((vehicle_massKg * 9.81) * vehicle_roadGradePercent) / 100.0)) * vehicle_dt) / vehicle_massKg))    # step:step",
+        "raw_refs": [
+          "vehicle_dragCoefficient",
+          "vehicle_dt",
+          "vehicle_massKg",
+          "vehicle_roadGradePercent"
+        ],
+        "refs": [
+          "vehicle_drivePort_drive_forceNewtons",
+          "vehicle_speedMps"
+        ],
+        "source": "step:step",
+        "target": "vehicle_speedMps",
+        "unresolved_raw_refs": []
+      }
+    ]
+  },
+  "mdp_obligations": {
+    "done": {
+      "covered": true,
+      "depends_on": [
+        "safety requirement violation",
+        "current #Completion input",
+        "environment step_count >= max_steps"
+      ],
+      "status": "discharged_over_augmented_state"
+    },
+    "observation": {
+      "equations": [
+        {
+          "action_refs": [],
+          "constant_refs": [],
+          "covered_by_q_and_action": true,
+          "kind": "observation",
+          "pretty": "[observation] obs.currentSpeedMps = speedSensor_speedReading_speedMps    # Neural input binding",
+          "refs": [
+            "speedSensor_speedReading_speedMps"
+          ],
+          "source": "Neural input binding",
+          "state_refs": [
+            "speedSensor_speedReading_speedMps"
+          ],
+          "target": "obs.currentSpeedMps",
+          "unresolved_raw_refs": [],
+          "unresolved_refs": []
+        },
+        {
+          "action_refs": [],
+          "constant_refs": [],
+          "covered_by_q_and_action": true,
+          "kind": "observation",
+          "pretty": "[observation] obs.gapMeters = speedSensor_speedReading_gapMeters    # Neural input binding",
+          "refs": [
+            "speedSensor_speedReading_gapMeters"
+          ],
+          "source": "Neural input binding",
+          "state_refs": [
+            "speedSensor_speedReading_gapMeters"
+          ],
+          "target": "obs.gapMeters",
+          "unresolved_raw_refs": [],
+          "unresolved_refs": []
+        },
+        {
+          "action_refs": [],
+          "constant_refs": [
+            "controller_targetSpeedMps"
+          ],
+          "covered_by_q_and_action": true,
+          "kind": "observation",
+          "pretty": "[observation] obs.targetSpeed = controller_targetSpeedMps    # Neural input binding",
+          "refs": [],
+          "source": "Neural input binding",
+          "state_refs": [],
+          "target": "obs.targetSpeed",
+          "unresolved_raw_refs": [],
+          "unresolved_refs": []
+        }
+      ],
+      "status": "covered_by_q"
+    },
+    "overall_mdp_theorem_status": "profile_obligations_discharged_solver_gate_required",
+    "requirement_status": {
+      "equations": [
+        {
+          "action_refs": [],
+          "constant_refs": [
+            "controller_safeFollowingDistanceMeters",
+            "controller_targetSpeedMps",
+            "controller_toleranceMps"
+          ],
+          "covered_by_q_and_action": true,
+          "kind": "requirement",
+          "pretty": "[requirement] status.Accelerate When Below Target = ((currentTime > 0) implies (((lastObservedSpeed < (controller_targetSpeedMps - controller_toleranceMps)) and (lastObservedGap >= controller_safeFollowingDistanceMeters)) implies controller_throttleOn))    # Obligation",
+          "refs": [
+            "controller_commandedForce",
+            "currentTime",
+            "speedSensor_lastGapMeters",
+            "speedSensor_lastReadingMps"
+          ],
+          "source": "Obligation",
+          "state_refs": [
+            "controller_commandedForce",
+            "currentTime",
+            "speedSensor_lastGapMeters",
+            "speedSensor_lastReadingMps"
+          ],
+          "target": "status.Accelerate When Below Target",
+          "unresolved_raw_refs": [],
+          "unresolved_refs": []
+        },
+        {
+          "action_refs": [],
+          "constant_refs": [
+            "controller_safeFollowingDistanceMeters",
+            "controller_targetSpeedMps",
+            "controller_toleranceMps"
+          ],
+          "covered_by_q_and_action": true,
+          "kind": "requirement",
+          "pretty": "[requirement] status.Brake When Above Target Or Too Close = ((currentTime > 0) implies (((lastObservedSpeed > (controller_targetSpeedMps + controller_toleranceMps)) or (lastObservedGap < controller_safeFollowingDistanceMeters)) implies controller_brakeOn))    # Obligation",
+          "refs": [
+            "controller_commandedForce",
+            "currentTime",
+            "speedSensor_lastGapMeters",
+            "speedSensor_lastReadingMps"
+          ],
+          "source": "Obligation",
+          "state_refs": [
+            "controller_commandedForce",
+            "currentTime",
+            "speedSensor_lastGapMeters",
+            "speedSensor_lastReadingMps"
+          ],
+          "target": "status.Brake When Above Target Or Too Close",
+          "unresolved_raw_refs": [],
+          "unresolved_refs": []
+        },
+        {
+          "action_refs": [],
+          "constant_refs": [],
+          "covered_by_q_and_action": true,
+          "kind": "requirement",
+          "pretty": "[requirement] status.No Simultaneous Throttle and Brake = (not (controller_throttleOn and controller_brakeOn))    # Prohibition",
+          "refs": [
+            "controller_commandedForce"
+          ],
+          "source": "Prohibition",
+          "state_refs": [
+            "controller_commandedForce"
+          ],
+          "target": "status.No Simultaneous Throttle and Brake",
+          "unresolved_raw_refs": [],
+          "unresolved_refs": []
+        },
+        {
+          "action_refs": [],
+          "constant_refs": [
+            "controller_targetSpeedMps",
+            "controller_toleranceMps"
+          ],
+          "covered_by_q_and_action": true,
+          "kind": "requirement",
+          "pretty": "[requirement] status.No Throttle When Overspeeding = ((currentTime > 0) implies ((lastObservedSpeed > (controller_targetSpeedMps + controller_toleranceMps)) implies (not controller_throttleOn)))    # Prohibition",
+          "refs": [
+            "controller_commandedForce",
+            "currentTime",
+            "speedSensor_lastReadingMps"
+          ],
+          "source": "Prohibition",
+          "state_refs": [
+            "controller_commandedForce",
+            "currentTime",
+            "speedSensor_lastReadingMps"
+          ],
+          "target": "status.No Throttle When Overspeeding",
+          "unresolved_raw_refs": [],
+          "unresolved_refs": []
+        },
+        {
+          "action_refs": [],
+          "constant_refs": [
+            "controller_safeFollowingDistanceMeters"
+          ],
+          "covered_by_q_and_action": true,
+          "kind": "requirement",
+          "pretty": "[requirement] status.No Throttle When Too Close = ((lastObservedGap < controller_safeFollowingDistanceMeters) implies (not controller_throttleOn))    # Prohibition",
+          "refs": [
+            "controller_commandedForce",
+            "speedSensor_lastGapMeters"
+          ],
+          "source": "Prohibition",
+          "state_refs": [
+            "controller_commandedForce",
+            "speedSensor_lastGapMeters"
+          ],
+          "target": "status.No Throttle When Too Close",
+          "unresolved_raw_refs": [],
+          "unresolved_refs": []
+        }
+      ],
+      "status": "covered_by_q_and_action"
+    },
+    "reward": {
+      "covered_terms": {
+        "all_safety_statuses_covered": true,
+        "all_terminal_state_terms_covered": true,
+        "finite_horizon_truncation_covered": true,
+        "safety_requirement_statuses": [
+          {
+            "action_refs": [],
+            "constant_refs": [
+              "controller_safeFollowingDistanceMeters",
+              "controller_targetSpeedMps",
+              "controller_toleranceMps"
+            ],
+            "covered_by_q_and_action": true,
+            "kind": "requirement",
+            "pretty": "[requirement] status.Accelerate When Below Target = ((currentTime > 0) implies (((lastObservedSpeed < (controller_targetSpeedMps - controller_toleranceMps)) and (lastObservedGap >= controller_safeFollowingDistanceMeters)) implies controller_throttleOn))    # Obligation",
+            "refs": [
+              "controller_commandedForce",
+              "currentTime",
+              "speedSensor_lastGapMeters",
+              "speedSensor_lastReadingMps"
+            ],
+            "source": "Obligation",
+            "state_refs": [
+              "controller_commandedForce",
+              "currentTime",
+              "speedSensor_lastGapMeters",
+              "speedSensor_lastReadingMps"
+            ],
+            "target": "status.Accelerate When Below Target",
+            "unresolved_raw_refs": [],
+            "unresolved_refs": []
+          },
+          {
+            "action_refs": [],
+            "constant_refs": [
+              "controller_safeFollowingDistanceMeters",
+              "controller_targetSpeedMps",
+              "controller_toleranceMps"
+            ],
+            "covered_by_q_and_action": true,
+            "kind": "requirement",
+            "pretty": "[requirement] status.Brake When Above Target Or Too Close = ((currentTime > 0) implies (((lastObservedSpeed > (controller_targetSpeedMps + controller_toleranceMps)) or (lastObservedGap < controller_safeFollowingDistanceMeters)) implies controller_brakeOn))    # Obligation",
+            "refs": [
+              "controller_commandedForce",
+              "currentTime",
+              "speedSensor_lastGapMeters",
+              "speedSensor_lastReadingMps"
+            ],
+            "source": "Obligation",
+            "state_refs": [
+              "controller_commandedForce",
+              "currentTime",
+              "speedSensor_lastGapMeters",
+              "speedSensor_lastReadingMps"
+            ],
+            "target": "status.Brake When Above Target Or Too Close",
+            "unresolved_raw_refs": [],
+            "unresolved_refs": []
+          },
+          {
+            "action_refs": [],
+            "constant_refs": [],
+            "covered_by_q_and_action": true,
+            "kind": "requirement",
+            "pretty": "[requirement] status.No Simultaneous Throttle and Brake = (not (controller_throttleOn and controller_brakeOn))    # Prohibition",
+            "refs": [
+              "controller_commandedForce"
+            ],
+            "source": "Prohibition",
+            "state_refs": [
+              "controller_commandedForce"
+            ],
+            "target": "status.No Simultaneous Throttle and Brake",
+            "unresolved_raw_refs": [],
+            "unresolved_refs": []
+          },
+          {
+            "action_refs": [],
+            "constant_refs": [
+              "controller_targetSpeedMps",
+              "controller_toleranceMps"
+            ],
+            "covered_by_q_and_action": true,
+            "kind": "requirement",
+            "pretty": "[requirement] status.No Throttle When Overspeeding = ((currentTime > 0) implies ((lastObservedSpeed > (controller_targetSpeedMps + controller_toleranceMps)) implies (not controller_throttleOn)))    # Prohibition",
+            "refs": [
+              "controller_commandedForce",
+              "currentTime",
+              "speedSensor_lastReadingMps"
+            ],
+            "source": "Prohibition",
+            "state_refs": [
+              "controller_commandedForce",
+              "currentTime",
+              "speedSensor_lastReadingMps"
+            ],
+            "target": "status.No Throttle When Overspeeding",
+            "unresolved_raw_refs": [],
+            "unresolved_refs": []
+          },
+          {
+            "action_refs": [],
+            "constant_refs": [
+              "controller_safeFollowingDistanceMeters"
+            ],
+            "covered_by_q_and_action": true,
+            "kind": "requirement",
+            "pretty": "[requirement] status.No Throttle When Too Close = ((lastObservedGap < controller_safeFollowingDistanceMeters) implies (not controller_throttleOn))    # Prohibition",
+            "refs": [
+              "controller_commandedForce",
+              "speedSensor_lastGapMeters"
+            ],
+            "source": "Prohibition",
+            "state_refs": [
+              "controller_commandedForce",
+              "speedSensor_lastGapMeters"
+            ],
+            "target": "status.No Throttle When Too Close",
+            "unresolved_raw_refs": [],
+            "unresolved_refs": []
+          }
+        ],
+        "terminal_state": [
+          {
+            "action_refs": [],
+            "constant_refs": [
+              "controller_targetSpeedMps",
+              "controller_toleranceMps"
+            ],
+            "covered_by_q_and_action": true,
+            "kind": "terminal",
+            "pretty": "[terminal] env.completion.done = ((((controller_targetSpeedMps <= (speedSensor_speedReading_speedMps + controller_toleranceMps)) and (controller_targetSpeedMps >= (speedSensor_speedReading_speedMps - controller_toleranceMps))) and (not controller_throttleOn)) and (not controller_brakeOn))    # #Completion input binding in step",
+            "refs": [
+              "controller_commandedForce",
+              "speedSensor_speedReading_speedMps"
+            ],
+            "source": "#Completion input binding in step",
+            "state_refs": [
+              "controller_commandedForce",
+              "speedSensor_speedReading_speedMps"
+            ],
+            "target": "env.completion.done",
+            "unresolved_raw_refs": [],
+            "unresolved_refs": []
+          }
+        ]
+      },
+      "environment_formula": "phase 2: if any safety requirement status is false, reward=-1 and done=True; else if the current #Completion input is true, reward=1 and done=True; else reward=-0.01 and done=False; max-step truncation overrides reward to 0.",
+      "external_terms_not_yet_in_q": [],
+      "modeled_external_terms": [
+        "current #Completion input via terminal_state equation",
+        "environment step_count >= max_steps via augmented finite-horizon state"
+      ],
+      "status": "discharged_over_augmented_state"
+    },
+    "shield": {
+      "action_map": {},
+      "action_space": "continuous_single_real_output",
+      "clauses": [
+        {
+          "left": {
+            "left": {
+              "left": {
+                "path": [
+                  "p",
+                  "targetSpeed"
+                ],
+                "pretty": "p.targetSpeed",
+                "type": "ref"
+              },
+              "op": ">",
+              "right": {
+                "left": {
+                  "path": [
+                    "p",
+                    "currentSpeedMps"
+                  ],
+                  "pretty": "p.currentSpeedMps",
+                  "type": "ref"
+                },
+                "op": "+",
+                "right": {
+                  "path": [
+                    "toleranceMps"
+                  ],
+                  "pretty": "toleranceMps",
+                  "type": "ref"
+                },
+                "type": "binary"
+              },
+              "type": "binary"
+            },
+            "op": "and",
+            "right": {
+              "left": {
+                "path": [
+                  "p",
+                  "gapMeters"
+                ],
+                "pretty": "p.gapMeters",
+                "type": "ref"
+              },
+              "op": ">=",
+              "right": {
+                "path": [
+                  "safeFollowingDistanceMeters"
+                ],
+                "pretty": "safeFollowingDistanceMeters",
+                "type": "ref"
+              },
+              "type": "binary"
+            },
+            "type": "binary"
+          },
+          "op": "==",
+          "right": {
+            "left": {
+              "path": [
+                "p",
+                "driveForce"
+              ],
+              "pretty": "p.driveForce",
+              "type": "ref"
+            },
+            "op": ">",
+            "right": {
+              "path": [
+                "onThreshold"
+              ],
+              "pretty": "onThreshold",
+              "type": "ref"
+            },
+            "type": "binary"
+          },
+          "type": "binary"
+        },
+        {
+          "left": {
+            "left": {
+              "left": {
+                "path": [
+                  "p",
+                  "targetSpeed"
+                ],
+                "pretty": "p.targetSpeed",
+                "type": "ref"
+              },
+              "op": "<",
+              "right": {
+                "left": {
+                  "path": [
+                    "p",
+                    "currentSpeedMps"
+                  ],
+                  "pretty": "p.currentSpeedMps",
+                  "type": "ref"
+                },
+                "op": "-",
+                "right": {
+                  "path": [
+                    "toleranceMps"
+                  ],
+                  "pretty": "toleranceMps",
+                  "type": "ref"
+                },
+                "type": "binary"
+              },
+              "type": "binary"
+            },
+            "op": "or",
+            "right": {
+              "left": {
+                "path": [
+                  "p",
+                  "gapMeters"
+                ],
+                "pretty": "p.gapMeters",
+                "type": "ref"
+              },
+              "op": "<",
+              "right": {
+                "path": [
+                  "safeFollowingDistanceMeters"
+                ],
+                "pretty": "safeFollowingDistanceMeters",
+                "type": "ref"
+              },
+              "type": "binary"
+            },
+            "type": "binary"
+          },
+          "op": "==",
+          "right": {
+            "left": {
+              "path": [
+                "p",
+                "driveForce"
+              ],
+              "pretty": "p.driveForce",
+              "type": "ref"
+            },
+            "op": "<",
+            "right": {
+              "left": {
+                "type": "literal",
+                "value": 0
+              },
+              "op": "-",
+              "right": {
+                "path": [
+                  "onThreshold"
+                ],
+                "pretty": "onThreshold",
+                "type": "ref"
+              },
+              "type": "binary"
+            },
+            "type": "binary"
+          },
+          "type": "binary"
+        },
+        {
+          "left": {
+            "path": [
+              "p",
+              "driveForce"
+            ],
+            "pretty": "p.driveForce",
+            "type": "ref"
+          },
+          "op": ">=",
+          "right": {
+            "left": {
+              "type": "literal",
+              "value": 0
+            },
+            "op": "-",
+            "right": {
+              "type": "literal",
+              "value": 100
+            },
+            "type": "binary"
+          },
+          "type": "binary"
+        },
+        {
+          "left": {
+            "path": [
+              "p",
+              "driveForce"
+            ],
+            "pretty": "p.driveForce",
+            "type": "ref"
+          },
+          "op": "<=",
+          "right": {
+            "type": "literal",
+            "value": 100
+          },
+          "type": "binary"
+        }
+      ],
+      "constants": {
+        "onThreshold": 0.1,
+        "safeFollowingDistanceMeters": 10.0,
+        "targetSpeedMps": 25.0,
+        "toleranceMps": 2.0
+      },
+      "continuous_details": {
+        "epsilon": 1e-06,
+        "projection": "safe output = clamp(proposed output, interval read from the current SysML requirement); an empty interval is an error",
+        "runtime_class": "ContinuousShield",
+        "static_range": [
+          -100.0,
+          100.0
+        ]
+      },
+      "dead_actions": [],
+      "determinism_claim": "executed action is a deterministic function of covered shield inputs and the policy proposed action",
+      "executed_action_history": "buffered environments push the shielded/executed action, not the raw proposal",
+      "input_coverage": [
+        {
+          "covered_by_q_and_action": true,
+          "param": "currentSpeedMps",
+          "source_kind": "observation",
+          "source_target": "obs.currentSpeedMps"
+        },
+        {
+          "covered_by_q_and_action": true,
+          "param": "targetSpeed",
+          "source_kind": "observation",
+          "source_target": "obs.targetSpeed"
+        },
+        {
+          "covered_by_q_and_action": true,
+          "param": "gapMeters",
+          "source_kind": "observation",
+          "source_target": "obs.gapMeters"
+        },
+        {
+          "covered_by_q_and_action": true,
+          "param": "done",
+          "source_kind": "terminal_state",
+          "source_target": "env.completion.done"
+        }
+      ],
+      "interface": {
+        "completion_params": [
+          "done"
+        ],
+        "controller_part": "system::controller",
+        "input_param_types": {
+          "currentSpeedMps": "Real",
+          "done": "Boolean",
+          "gapMeters": "Real",
+          "targetSpeed": "Real"
+        },
+        "input_params": [
+          "currentSpeedMps",
+          "targetSpeed",
+          "gapMeters",
+          "done"
+        ],
+        "neural_requirement": {
+          "metadata": [
+            "NeuralRequirement"
+          ],
+          "name": "Neural Controller Soundness",
+          "raw_expression": "(p.targetSpeed > p.currentSpeedMps + toleranceMps and p.gapMeters >= safeFollowingDistanceMeters == p.driveForce > onThreshold) and\n                (p.targetSpeed < p.currentSpeedMps - toleranceMps or p.gapMeters < safeFollowingDistanceMeters == p.driveForce < (0 - onThreshold)) and\n                (p.driveForce >= (0 - 100) and p.driveForce <= 100)",
+          "subject_type": "Policy",
+          "subject_var": "p"
+        },
+        "output_action_matches": {
+          "driveForce": [
+            "controller_policyCall_driveForce"
+          ]
+        },
+        "output_param_types": {
+          "driveForce": "Real"
+        },
+        "output_params": [
+          "driveForce"
+        ],
+        "status": "recorded_not_semantically_proven"
+      },
+      "missing_input_params": [],
+      "missing_output_params": [],
+      "output_action_mapping": [
+        {
+          "action_vars": [
+            "controller_policyCall_driveForce"
+          ],
+          "param": "driveForce",
+          "type": "Real",
+          "unique_action_var": true
+        }
+      ],
+      "predicate_ast": {
+        "left": {
+          "left": {
+            "left": {
+              "left": {
+                "left": {
+                  "left": {
+                    "path": [
+                      "p",
+                      "targetSpeed"
+                    ],
+                    "pretty": "p.targetSpeed",
+                    "type": "ref"
+                  },
+                  "op": ">",
+                  "right": {
+                    "left": {
+                      "path": [
+                        "p",
+                        "currentSpeedMps"
+                      ],
+                      "pretty": "p.currentSpeedMps",
+                      "type": "ref"
+                    },
+                    "op": "+",
+                    "right": {
+                      "path": [
+                        "toleranceMps"
+                      ],
+                      "pretty": "toleranceMps",
+                      "type": "ref"
+                    },
+                    "type": "binary"
+                  },
+                  "type": "binary"
+                },
+                "op": "and",
+                "right": {
+                  "left": {
+                    "path": [
+                      "p",
+                      "gapMeters"
+                    ],
+                    "pretty": "p.gapMeters",
+                    "type": "ref"
+                  },
+                  "op": ">=",
+                  "right": {
+                    "path": [
+                      "safeFollowingDistanceMeters"
+                    ],
+                    "pretty": "safeFollowingDistanceMeters",
+                    "type": "ref"
+                  },
+                  "type": "binary"
+                },
+                "type": "binary"
+              },
+              "op": "==",
+              "right": {
+                "left": {
+                  "path": [
+                    "p",
+                    "driveForce"
+                  ],
+                  "pretty": "p.driveForce",
+                  "type": "ref"
+                },
+                "op": ">",
+                "right": {
+                  "path": [
+                    "onThreshold"
+                  ],
+                  "pretty": "onThreshold",
+                  "type": "ref"
+                },
+                "type": "binary"
+              },
+              "type": "binary"
+            },
+            "op": "and",
+            "right": {
+              "left": {
+                "left": {
+                  "left": {
+                    "path": [
+                      "p",
+                      "targetSpeed"
+                    ],
+                    "pretty": "p.targetSpeed",
+                    "type": "ref"
+                  },
+                  "op": "<",
+                  "right": {
+                    "left": {
+                      "path": [
+                        "p",
+                        "currentSpeedMps"
+                      ],
+                      "pretty": "p.currentSpeedMps",
+                      "type": "ref"
+                    },
+                    "op": "-",
+                    "right": {
+                      "path": [
+                        "toleranceMps"
+                      ],
+                      "pretty": "toleranceMps",
+                      "type": "ref"
+                    },
+                    "type": "binary"
+                  },
+                  "type": "binary"
+                },
+                "op": "or",
+                "right": {
+                  "left": {
+                    "path": [
+                      "p",
+                      "gapMeters"
+                    ],
+                    "pretty": "p.gapMeters",
+                    "type": "ref"
+                  },
+                  "op": "<",
+                  "right": {
+                    "path": [
+                      "safeFollowingDistanceMeters"
+                    ],
+                    "pretty": "safeFollowingDistanceMeters",
+                    "type": "ref"
+                  },
+                  "type": "binary"
+                },
+                "type": "binary"
+              },
+              "op": "==",
+              "right": {
+                "left": {
+                  "path": [
+                    "p",
+                    "driveForce"
+                  ],
+                  "pretty": "p.driveForce",
+                  "type": "ref"
+                },
+                "op": "<",
+                "right": {
+                  "left": {
+                    "type": "literal",
+                    "value": 0
+                  },
+                  "op": "-",
+                  "right": {
+                    "path": [
+                      "onThreshold"
+                    ],
+                    "pretty": "onThreshold",
+                    "type": "ref"
+                  },
+                  "type": "binary"
+                },
+                "type": "binary"
+              },
+              "type": "binary"
+            },
+            "type": "binary"
+          },
+          "op": "and",
+          "right": {
+            "left": {
+              "path": [
+                "p",
+                "driveForce"
+              ],
+              "pretty": "p.driveForce",
+              "type": "ref"
+            },
+            "op": ">=",
+            "right": {
+              "left": {
+                "type": "literal",
+                "value": 0
+              },
+              "op": "-",
+              "right": {
+                "type": "literal",
+                "value": 100
+              },
+              "type": "binary"
+            },
+            "type": "binary"
+          },
+          "type": "binary"
+        },
+        "op": "and",
+        "right": {
+          "left": {
+            "path": [
+              "p",
+              "driveForce"
+            ],
+            "pretty": "p.driveForce",
+            "type": "ref"
+          },
+          "op": "<=",
+          "right": {
+            "type": "literal",
+            "value": 100
+          },
+          "type": "binary"
+        },
+        "type": "binary"
+      },
+      "runtime_class": "ContinuousShield",
+      "semantic_status": "discharged_continuous_interval_projection",
+      "status": "discharged",
+      "subject_var": "p",
+      "unknown_requirement_refs": []
+    },
+    "terminal_state": {
+      "equations": [
+        {
+          "action_refs": [],
+          "constant_refs": [
+            "controller_targetSpeedMps",
+            "controller_toleranceMps"
+          ],
+          "covered_by_q_and_action": true,
+          "kind": "terminal",
+          "pretty": "[terminal] env.completion.done = ((((controller_targetSpeedMps <= (speedSensor_speedReading_speedMps + controller_toleranceMps)) and (controller_targetSpeedMps >= (speedSensor_speedReading_speedMps - controller_toleranceMps))) and (not controller_throttleOn)) and (not controller_brakeOn))    # #Completion input binding in step",
+          "refs": [
+            "controller_commandedForce",
+            "speedSensor_speedReading_speedMps"
+          ],
+          "source": "#Completion input binding in step",
+          "state_refs": [
+            "controller_commandedForce",
+            "speedSensor_speedReading_speedMps"
+          ],
+          "target": "env.completion.done",
+          "unresolved_raw_refs": [],
+          "unresolved_refs": []
+        }
+      ],
+      "runtime_source": "SysMLEnv reads the current #Completion input",
+      "status": "covered_by_q_and_action"
+    },
+    "truncation": {
+      "augmented_state_variable": "env.step_count",
+      "reset": "env.step_count := 0 on reset after warmup calls",
+      "reward_override": "if truncated and not already done: done=True, reward=0.0",
+      "status": "discharged_as_finite_horizon_augmented_state",
+      "terminal_condition": "env.step_count >= env.max_steps",
+      "transition": "env.step_count' := env.step_count + 1 after every env.step"
+    }
+  },
+  "model": {
+    "path": "/home/csned/Documents/Codex-Docs/projects/automated-writing/fitter_artifact/bundle/sysml-models/cruise-continuous-model/model.sysml",
+    "sha256": "868c380ab7a5acb2e91a98fe5ddd9795379a518c444f3b0b19190c9e6a59055e"
+  },
+  "proof": {
+    "b_act": 2,
+    "b_obs": 1,
+    "facts": [
+      {
+        "detail": {},
+        "key": "currentTime@-14",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -14,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-13",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -13,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-12",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -12,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-11",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -11,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-10",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -10,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-9",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -9,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-8",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -8,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-7",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -7,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-6",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -6,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-5",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -5,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-4",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -4,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-3",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -3,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-2",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -2,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-1",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -1,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@0",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": 0,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "speedSensor_speedReading_gapMeters@-1",
+        "premises": [],
+        "rule": "observation_buffer",
+        "tau": -1,
+        "var": "speedSensor_speedReading_gapMeters"
+      },
+      {
+        "detail": {},
+        "key": "speedSensor_speedReading_gapMeters@0",
+        "premises": [],
+        "rule": "observation_buffer",
+        "tau": 0,
+        "var": "speedSensor_speedReading_gapMeters"
+      },
+      {
+        "detail": {},
+        "key": "speedSensor_speedReading_speedMps@-1",
+        "premises": [],
+        "rule": "observation_buffer",
+        "tau": -1,
+        "var": "speedSensor_speedReading_speedMps"
+      },
+      {
+        "detail": {},
+        "key": "speedSensor_speedReading_speedMps@0",
+        "premises": [],
+        "rule": "observation_buffer",
+        "tau": 0,
+        "var": "speedSensor_speedReading_speedMps"
+      },
+      {
+        "detail": {},
+        "key": "controller_policyCall_driveForce@-2",
+        "premises": [],
+        "rule": "executed_action_history",
+        "tau": -2,
+        "var": "controller_policyCall_driveForce"
+      },
+      {
+        "detail": {},
+        "key": "controller_policyCall_driveForce@-1",
+        "premises": [],
+        "rule": "executed_action_history",
+        "tau": -1,
+        "var": "controller_policyCall_driveForce"
+      },
+      {
+        "detail": {
+          "from_tau": -2,
+          "support": [
+            "controller_policyCall_driveForce"
+          ],
+          "transition_var": "controller_commandedForce"
+        },
+        "key": "controller_commandedForce@-1",
+        "premises": [
+          "controller_policyCall_driveForce@-2"
+        ],
+        "rule": "forward_transition",
+        "tau": -1,
+        "var": "controller_commandedForce"
+      },
+      {
+        "detail": {
+          "from_tau": -1,
+          "support": [
+            "controller_policyCall_driveForce"
+          ],
+          "transition_var": "controller_commandedForce"
+        },
+        "key": "controller_commandedForce@0",
+        "premises": [
+          "controller_policyCall_driveForce@-1"
+        ],
+        "rule": "forward_transition",
+        "tau": 0,
+        "var": "controller_commandedForce"
+      },
+      {
+        "detail": {
+          "from_tau": -1,
+          "support": [
+            "speedSensor_speedReading_gapMeters"
+          ],
+          "transition_var": "speedSensor_lastGapMeters"
+        },
+        "key": "speedSensor_lastGapMeters@0",
+        "premises": [
+          "speedSensor_speedReading_gapMeters@-1"
+        ],
+        "rule": "forward_transition",
+        "tau": 0,
+        "var": "speedSensor_lastGapMeters"
+      },
+      {
+        "detail": {
+          "from_tau": -1,
+          "support": [
+            "speedSensor_speedReading_speedMps"
+          ],
+          "transition_var": "speedSensor_lastReadingMps"
+        },
+        "key": "speedSensor_lastReadingMps@0",
+        "premises": [
+          "speedSensor_speedReading_speedMps@-1"
+        ],
+        "rule": "forward_transition",
+        "tau": 0,
+        "var": "speedSensor_lastReadingMps"
+      },
+      {
+        "detail": {
+          "known_transition_tau": -1,
+          "source": "vehicle_gapMeters",
+          "transition_var": "speedSensor_speedReading_gapMeters"
+        },
+        "key": "vehicle_gapMeters@-2",
+        "premises": [
+          "speedSensor_speedReading_gapMeters@-1"
+        ],
+        "rule": "copy_inversion",
+        "tau": -2,
+        "var": "vehicle_gapMeters"
+      },
+      {
+        "detail": {
+          "known_transition_tau": 0,
+          "source": "vehicle_gapMeters",
+          "transition_var": "speedSensor_speedReading_gapMeters"
+        },
+        "key": "vehicle_gapMeters@-1",
+        "premises": [
+          "speedSensor_speedReading_gapMeters@0"
+        ],
+        "rule": "copy_inversion",
+        "tau": -1,
+        "var": "vehicle_gapMeters"
+      },
+      {
+        "detail": {
+          "known_transition_tau": -1,
+          "source": "vehicle_speedMps",
+          "transition_var": "speedSensor_speedReading_speedMps"
+        },
+        "key": "vehicle_speedMps@-2",
+        "premises": [
+          "speedSensor_speedReading_speedMps@-1"
+        ],
+        "rule": "copy_inversion",
+        "tau": -2,
+        "var": "vehicle_speedMps"
+      },
+      {
+        "detail": {
+          "known_transition_tau": 0,
+          "source": "vehicle_speedMps",
+          "transition_var": "speedSensor_speedReading_speedMps"
+        },
+        "key": "vehicle_speedMps@-1",
+        "premises": [
+          "speedSensor_speedReading_speedMps@0"
+        ],
+        "rule": "copy_inversion",
+        "tau": -1,
+        "var": "vehicle_speedMps"
+      },
+      {
+        "detail": {
+          "from_tau": -1,
+          "support": [
+            "vehicle_gapMeters",
+            "vehicle_speedMps"
+          ],
+          "transition_var": "vehicle_gapMeters"
+        },
+        "key": "vehicle_gapMeters@0",
+        "premises": [
+          "vehicle_gapMeters@-1",
+          "vehicle_speedMps@-1"
+        ],
+        "rule": "forward_transition",
+        "tau": 0,
+        "var": "vehicle_gapMeters"
+      },
+      {
+        "detail": {
+          "from_tau": -1,
+          "support": [
+            "controller_commandedForce",
+            "vehicle_speedMps"
+          ],
+          "transition_var": "vehicle_speedMps"
+        },
+        "key": "vehicle_speedMps@0",
+        "premises": [
+          "controller_commandedForce@-1",
+          "vehicle_speedMps@-1"
+        ],
+        "rule": "forward_transition",
+        "tau": 0,
+        "var": "vehicle_speedMps"
+      }
+    ],
+    "horizon": 14,
+    "missing_target_facts": [],
+    "passes": true,
+    "target_facts": [
+      "controller_commandedForce@0",
+      "currentTime@0",
+      "speedSensor_lastGapMeters@0",
+      "speedSensor_lastReadingMps@0",
+      "speedSensor_speedReading_gapMeters@0",
+      "speedSensor_speedReading_speedMps@0",
+      "vehicle_gapMeters@0",
+      "vehicle_speedMps@0"
+    ]
+  },
+  "proof_mode": {
+    "blocking_diagnostic_codes": [
+      "legacy_dependency_fallback"
+    ],
+    "blocking_diagnostic_severities": [
+      "error",
+      "warning"
+    ],
+    "pass_requires": [
+      "selected buffer reconstructs every q variable at tau=0",
+      "equation-IR proof trace reconstructs every q variable at tau=0",
+      "no warning/error diagnostics",
+      "no legacy dependency fallback transitions",
+      "reward and done obligations discharged over the augmented state",
+      "shield semantics discharged as deterministic function of covered inputs",
+      "solver-backed one-step transition closure is discharged",
+      "independent checker can replay every proof fact"
+    ],
+    "strict_no_legacy_fallback": true
+  },
+  "proof_profile": "strict_q_syntactic_reconstructibility_v1",
+  "result": "PASS",
+  "schema_version": 2,
+  "search": {
+    "attempts": [
+      {
+        "b_act": 0,
+        "b_obs": 0,
+        "missing": [
+          "controller_commandedForce",
+          "speedSensor_lastGapMeters",
+          "speedSensor_lastReadingMps",
+          "vehicle_speedMps"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 1,
+        "b_obs": 0,
+        "missing": [
+          "speedSensor_lastGapMeters",
+          "speedSensor_lastReadingMps",
+          "vehicle_speedMps"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 2,
+        "b_obs": 0,
+        "missing": [
+          "speedSensor_lastGapMeters",
+          "speedSensor_lastReadingMps"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 3,
+        "b_obs": 0,
+        "missing": [
+          "speedSensor_lastGapMeters",
+          "speedSensor_lastReadingMps"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 4,
+        "b_obs": 0,
+        "missing": [
+          "speedSensor_lastGapMeters",
+          "speedSensor_lastReadingMps"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 0,
+        "b_obs": 1,
+        "missing": [
+          "controller_commandedForce",
+          "vehicle_speedMps"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 1,
+        "b_obs": 1,
+        "missing": [
+          "vehicle_speedMps"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 2,
+        "b_obs": 1,
+        "missing": [],
+        "passes": true
+      },
+      {
+        "b_act": 3,
+        "b_obs": 1,
+        "missing": [],
+        "passes": true
+      },
+      {
+        "b_act": 4,
+        "b_obs": 1,
+        "missing": [],
+        "passes": true
+      },
+      {
+        "b_act": 0,
+        "b_obs": 2,
+        "missing": [
+          "controller_commandedForce",
+          "vehicle_speedMps"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 1,
+        "b_obs": 2,
+        "missing": [
+          "vehicle_speedMps"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 2,
+        "b_obs": 2,
+        "missing": [],
+        "passes": true
+      },
+      {
+        "b_act": 3,
+        "b_obs": 2,
+        "missing": [],
+        "passes": true
+      },
+      {
+        "b_act": 4,
+        "b_obs": 2,
+        "missing": [],
+        "passes": true
+      }
+    ],
+    "equation_ir_attempts": [
+      {
+        "b_act": 0,
+        "b_obs": 0,
+        "blocked_unsafe_inversions": 0,
+        "missing": [
+          "controller_commandedForce",
+          "speedSensor_lastGapMeters",
+          "speedSensor_lastReadingMps",
+          "vehicle_speedMps"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 1,
+        "b_obs": 0,
+        "blocked_unsafe_inversions": 0,
+        "missing": [
+          "speedSensor_lastGapMeters",
+          "speedSensor_lastReadingMps",
+          "vehicle_speedMps"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 2,
+        "b_obs": 0,
+        "blocked_unsafe_inversions": 0,
+        "missing": [
+          "speedSensor_lastGapMeters",
+          "speedSensor_lastReadingMps"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 3,
+        "b_obs": 0,
+        "blocked_unsafe_inversions": 0,
+        "missing": [
+          "speedSensor_lastGapMeters",
+          "speedSensor_lastReadingMps"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 4,
+        "b_obs": 0,
+        "blocked_unsafe_inversions": 0,
+        "missing": [
+          "speedSensor_lastGapMeters",
+          "speedSensor_lastReadingMps"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 0,
+        "b_obs": 1,
+        "blocked_unsafe_inversions": 0,
+        "missing": [
+          "controller_commandedForce",
+          "vehicle_speedMps"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 1,
+        "b_obs": 1,
+        "blocked_unsafe_inversions": 0,
+        "missing": [
+          "vehicle_speedMps"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 2,
+        "b_obs": 1,
+        "blocked_unsafe_inversions": 0,
+        "missing": [],
+        "passes": true
+      },
+      {
+        "b_act": 3,
+        "b_obs": 1,
+        "blocked_unsafe_inversions": 0,
+        "missing": [],
+        "passes": true
+      },
+      {
+        "b_act": 4,
+        "b_obs": 1,
+        "blocked_unsafe_inversions": 0,
+        "missing": [],
+        "passes": true
+      },
+      {
+        "b_act": 0,
+        "b_obs": 2,
+        "blocked_unsafe_inversions": 0,
+        "missing": [
+          "controller_commandedForce",
+          "vehicle_speedMps"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 1,
+        "b_obs": 2,
+        "blocked_unsafe_inversions": 0,
+        "missing": [
+          "vehicle_speedMps"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 2,
+        "b_obs": 2,
+        "blocked_unsafe_inversions": 0,
+        "missing": [],
+        "passes": true
+      },
+      {
+        "b_act": 3,
+        "b_obs": 2,
+        "blocked_unsafe_inversions": 0,
+        "missing": [],
+        "passes": true
+      },
+      {
+        "b_act": 4,
+        "b_obs": 2,
+        "blocked_unsafe_inversions": 0,
+        "missing": [],
+        "passes": true
+      }
+    ],
+    "equation_ir_selected_first_passing": {
+      "b_act": 2,
+      "b_obs": 1
+    },
+    "legacy_and_equation_search_agree": true,
+    "minimality_claim": "first passing pair in stated bounded lexicographic scan",
+    "selected_first_passing": {
+      "b_act": 2,
+      "b_obs": 1
+    }
+  },
+  "sets": {
+    "action_deps": [
+      "controller_policyCall_driveForce"
+    ],
+    "actions": [
+      "controller_policyCall_driveForce"
+    ],
+    "constants": [
+      "controller_dt",
+      "controller_onThreshold",
+      "controller_safeFollowingDistanceMeters",
+      "controller_targetSpeedMps",
+      "controller_toleranceMps",
+      "drive_maxBrakeForceNewtons",
+      "drive_maxEngineForceNewtons",
+      "dt",
+      "speedSensor_dt",
+      "vehicle_dragCoefficient",
+      "vehicle_dt",
+      "vehicle_leadSpeedMps",
+      "vehicle_massKg",
+      "vehicle_roadGradePercent"
+    ],
+    "ignored_state": [],
+    "ignored_state_reasons": {},
+    "initial_values": {
+      "currentTime": 0.0,
+      "vehicle_gapMeters": 100.0,
+      "vehicle_speedMps": 0.0
+    },
+    "observed_state_vars": [
+      "speedSensor_speedReading_gapMeters",
+      "speedSensor_speedReading_speedMps"
+    ],
+    "q": [
+      "controller_commandedForce",
+      "currentTime",
+      "speedSensor_lastGapMeters",
+      "speedSensor_lastReadingMps",
+      "speedSensor_speedReading_gapMeters",
+      "speedSensor_speedReading_speedMps",
+      "vehicle_gapMeters",
+      "vehicle_speedMps"
+    ],
+    "q_seeds": [
+      "controller_commandedForce",
+      "currentTime",
+      "speedSensor_lastGapMeters",
+      "speedSensor_lastReadingMps",
+      "speedSensor_speedReading_gapMeters",
+      "speedSensor_speedReading_speedMps"
+    ],
+    "seed_equations": {
+      "env.completion.done": [
+        "controller_commandedForce",
+        "speedSensor_speedReading_speedMps"
+      ],
+      "obs.currentSpeedMps": [
+        "speedSensor_speedReading_speedMps"
+      ],
+      "obs.gapMeters": [
+        "speedSensor_speedReading_gapMeters"
+      ],
+      "obs.targetSpeed": [],
+      "status.Accelerate When Below Target": [
+        "controller_commandedForce",
+        "currentTime",
+        "speedSensor_lastGapMeters",
+        "speedSensor_lastReadingMps"
+      ],
+      "status.Brake When Above Target Or Too Close": [
+        "controller_commandedForce",
+        "currentTime",
+        "speedSensor_lastGapMeters",
+        "speedSensor_lastReadingMps"
+      ],
+      "status.No Simultaneous Throttle and Brake": [
+        "controller_commandedForce"
+      ],
+      "status.No Throttle When Overspeeding": [
+        "controller_commandedForce",
+        "currentTime",
+        "speedSensor_lastReadingMps"
+      ],
+      "status.No Throttle When Too Close": [
+        "controller_commandedForce",
+        "speedSensor_lastGapMeters"
+      ]
+    },
+    "state": [
+      "controller_commandedForce",
+      "currentTime",
+      "speedSensor_lastGapMeters",
+      "speedSensor_lastReadingMps",
+      "speedSensor_speedReading_gapMeters",
+      "speedSensor_speedReading_speedMps",
+      "vehicle_gapMeters",
+      "vehicle_speedMps"
+    ],
+    "time_vars": [
+      "currentTime"
+    ]
+  },
+  "settings": {
+    "dt": 0.1,
+    "enable_sampled_memory": true,
+    "horizon": 14,
+    "max_act": 4,
+    "max_obs": 2,
+    "search_order": "lexicographic b_obs then b_act within stated bounds"
+  },
+  "solver_advisory": {
+    "one_step_transition_closure": {
+      "actions_size": 1,
+      "claim": "one_step_transition_closure",
+      "logic": "QF_UFNRA",
+      "max_polynomial_degree": 2,
+      "q_size": 8,
+      "solver": "z3",
+      "status": "discharged",
+      "timeout_ms": 1000,
+      "visible_terms_checked": [
+        "next_q.controller_commandedForce",
+        "next_q.currentTime",
+        "next_q.speedSensor_lastGapMeters",
+        "next_q.speedSensor_lastReadingMps",
+        "next_q.speedSensor_speedReading_gapMeters",
+        "next_q.speedSensor_speedReading_speedMps",
+        "next_q.vehicle_gapMeters",
+        "next_q.vehicle_speedMps",
+        "next_observation.currentSpeedMps",
+        "next_observation.gapMeters",
+        "next_observation.targetSpeed",
+        "next_terminal.env.completion.done",
+        "next_requirement.status.Accelerate When Below Target",
+        "next_requirement.status.Brake When Above Target Or Too Close",
+        "next_requirement.status.No Simultaneous Throttle and Brake",
+        "next_requirement.status.No Throttle When Overspeeding",
+        "next_requirement.status.No Throttle When Too Close"
+      ]
+    }
+  },
+  "theorem_gate": {
+    "claim_policy": "claim.profile_mdp_theorem, claim.solver_backed_mdp_theorem, and claim.mdp_theorem may be discharged only when profile obligations and solver-backed one-step uniqueness are both discharged.",
+    "full_mdp_theorem_blockers": [],
+    "full_mdp_theorem_claim_allowed": true,
+    "profile": "strict_q_profile_mdp_v1",
+    "profile_mdp_theorem": "discharged",
+    "profile_obligations_discharged": true,
+    "profile_requires": [
+      "strict proof trace reconstructs every q variable at tau=0",
+      "equation-IR proof trace reconstructs every q variable at tau=0",
+      "no blocking extraction diagnostics",
+      "no legacy dependency fallback transitions",
+      "observation obligations discharged",
+      "requirement-status obligations discharged",
+      "reward and done obligations discharged over augmented state",
+      "shield semantics discharged from covered inputs and mapped outputs",
+      "solver proves one-step transition closure over extracted equations"
+    ],
+    "profile_scope": [
+      "extracted equation/dependency semantics",
+      "finite-horizon augmented env.step_count",
+      "deterministic exact shield semantics",
+      "selected bounded buffer and replayed proof trace",
+      "solver-backed one-step self-composition over q and executed action"
+    ],
+    "profile_theorem_statement": "Within the extracted strict-Q syntactic semantics, the selected finite buffer reconstructs q and determines observations, requirement statuses, reward, done, and exact shield execution as recorded in mdp_obligations.",
+    "solver_backed_mdp_theorem": "discharged",
+    "solver_backed_profile": "strict_q_solver_backed_mdp_v1",
+    "solver_backed_theorem_statement": "Within the extracted equation semantics and stated solver fragment, the selected buffer is a sufficient Markov state for the transition-closed relevant state, visible outputs, reward, done, and shielded executed action.",
+    "solver_backed_uniqueness": {
+      "actions_size": 1,
+      "claim": "one_step_transition_closure",
+      "logic": "QF_UFNRA",
+      "max_polynomial_degree": 2,
+      "q_size": 8,
+      "result_status": "discharged",
+      "solver": "z3",
+      "source": "solver_advisory.one_step_transition_closure",
+      "status": "discharged",
+      "theorem_statement": "No two one-step executions of the extracted equation model can agree on current q and executed action while disagreeing on next q, next observations, next terminal equations, or next requirement status equations.",
+      "timeout_ms": 1000,
+      "visible_terms_checked": [
+        "next_q.controller_commandedForce",
+        "next_q.currentTime",
+        "next_q.speedSensor_lastGapMeters",
+        "next_q.speedSensor_lastReadingMps",
+        "next_q.speedSensor_speedReading_gapMeters",
+        "next_q.speedSensor_speedReading_speedMps",
+        "next_q.vehicle_gapMeters",
+        "next_q.vehicle_speedMps",
+        "next_observation.currentSpeedMps",
+        "next_observation.gapMeters",
+        "next_observation.targetSpeed",
+        "next_terminal.env.completion.done",
+        "next_requirement.status.Accelerate When Below Target",
+        "next_requirement.status.Brake When Above Target Or Too Close",
+        "next_requirement.status.No Simultaneous Throttle and Brake",
+        "next_requirement.status.No Throttle When Overspeeding",
+        "next_requirement.status.No Throttle When Too Close"
+      ]
+    }
+  }
+}

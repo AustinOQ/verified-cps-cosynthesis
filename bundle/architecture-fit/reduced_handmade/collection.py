@@ -236,7 +236,7 @@ class _PolicyWorkerContext:
                 f"worker action count changed: "
                 f"{self.env.n_actions} != {runtime.n_actions}"
             )
-        iface = extract_interface(runtime.model_path, dt=runtime.dt)
+        iface = extract_interface(runtime.model_path)
         self.policy = MLPActorCritic(
             runtime.obs_dim,
             runtime.n_actions,
@@ -343,7 +343,7 @@ def build_episode_collector(settings: CollectionSettings,
 class _OracleWorkerContext:
     def __init__(self, runtime: DiscreteRuntime):
         self.env = _make_env(runtime)
-        self.iface = extract_interface(runtime.model_path, dt=runtime.dt)
+        self.iface = extract_interface(runtime.model_path)
         self.max_steps = runtime.max_steps
 
     def close(self) -> None:

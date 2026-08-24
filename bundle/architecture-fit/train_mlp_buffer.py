@@ -15,8 +15,10 @@ import torch
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _RL = os.path.join(_HERE, "..", "rl")
+_MODELS = os.path.join(_HERE, "..", "sysml-models")
 sys.path.insert(0, _RL)
 sys.path.insert(0, _HERE)
+sys.path.insert(0, _MODELS)
 
 from train_continuous import (ContinuousEpisodeBuffer, ppo_update,
                               collect_episode, evaluate)
@@ -26,6 +28,7 @@ from certification.reduced_mdp_spec import (
     check_reduced_mdp_spec,
     load_reduced_mdp_spec,
 )
+from runtime_settings import DEFAULT_DT, validate_dt
 
 
 def main():
@@ -36,7 +39,7 @@ def main():
     ap.add_argument("--eval-interval", type=int, default=200)
     ap.add_argument("--eval-episodes", type=int, default=100)
     ap.add_argument("--max-steps", type=int, default=1200)
-    ap.add_argument("--dt", type=float, default=0.1)
+    ap.add_argument("--dt", type=validate_dt, default=DEFAULT_DT)
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--lr", type=float, default=3e-4)
     ap.add_argument("--anneal-lr", action="store_true")
@@ -64,6 +67,11 @@ def main():
         )
     if os.path.abspath(reduced_spec["model"]["path"]) != os.path.abspath(args.model):
         raise RuntimeError("reduced-MDP spec is for a different model")
+    spec_dt = validate_dt(reduced_spec["model"].get("dt"))
+    if args.dt != spec_dt:
+        raise RuntimeError(
+            f"training dt does not match reduced-MDP spec: {args.dt} != {spec_dt}"
+        )
     action_space = reduced_spec["action_space"]
     if action_space["type"] != "continuous_single_real_output":
         raise RuntimeError("continuous trainer received a non-continuous reduced-MDP spec")
@@ -218,6 +226,7 @@ def main():
         tot_overrides = sum(r["overrides"] for r in test_res)
         summary = {
             "model_path": os.path.abspath(args.model),
+            "dt": args.dt,
             "seed": args.seed,
             "training_stack": "torch_continuous_reduced_mdp_mlp",
             "device": "cpu",

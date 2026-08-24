@@ -75,7 +75,7 @@ class BufferedContinuousEnv(SysMLContinuousEnv):
     The shield path is unaffected (it reads env._twin._model_inputs).
     """
 
-    def __init__(self, model_path, dt: float = 0.1, max_steps: int = 1200,
+    def __init__(self, model_path, dt: float, max_steps: int = 1200,
                  phase: int = 1, rng_seed: int = None,
                  n_act: int = 2, n_obs: int = 1, action_scale: float = 100.0):
         super().__init__(model_path, dt=dt, max_steps=max_steps,
@@ -156,7 +156,7 @@ class BufferedDiscreteEnv(SysMLEnv):
     """Augments the obs with the last n_act actions (one-hot) and n_obs past
     observations. Shield path unchanged (reads env._twin._model_inputs)."""
 
-    def __init__(self, model_path, dt: float = 0.1, max_steps: int = 1200,
+    def __init__(self, model_path, dt: float, max_steps: int = 1200,
                  phase: int = 2, rng_seed: int = None, n_act: int = 3, n_obs: int = 1):
         super().__init__(model_path, dt=dt, max_steps=max_steps,
                          phase=phase, rng_seed=rng_seed)

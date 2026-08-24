@@ -1,0 +1,2989 @@
+{
+  "assumptions": [
+    "deterministic_schedule_known: verifier treats these state values as known schedule counters because their equations depend only on themselves: ['currentTime']"
+  ],
+  "buffer": {
+    "b_act": 2,
+    "b_obs": 1
+  },
+  "claim": {
+    "description": "Proof that the selected finite buffer reconstructs the transition-closed relevant state q under the extracted equation/dependency semantics, and that Z3 discharges the one-step self-composed uniqueness obligation over q, executed actions, observations, terminal equations, and requirement status equations. Reward and done obligations are discharged over the finite-horizon augmented state when mdp_obligations says so. Shield obligations are discharged as deterministic exact-shield semantics when mdp_obligations says so.",
+    "level": "strict_q_solver_backed_mdp_v1",
+    "mdp_theorem": "discharged",
+    "profile_mdp_theorem": "discharged",
+    "solver_backed_mdp_theorem": "discharged"
+  },
+  "dependency_model": {
+    "copies": [
+      "thermometer_lastReadingCelcius",
+      "thermometer_temperatureReading_temperatureCelcius"
+    ],
+    "nsupp": {
+      "ac_heatOut_heat_rateWatts": [
+        "controller_policyCall_acState"
+      ],
+      "ac_state": [
+        "controller_policyCall_acState"
+      ],
+      "controller_acOn": [
+        "controller_policyCall_acState"
+      ],
+      "controller_heaterOn": [
+        "controller_policyCall_heaterState"
+      ],
+      "currentTime": [
+        "currentTime"
+      ],
+      "environment_temperatureCelcius": [
+        "ac_heatOut_heat_rateWatts",
+        "environment_temperatureCelcius",
+        "heater_heatOut_heat_rateWatts"
+      ],
+      "heater_heatOut_heat_rateWatts": [
+        "controller_policyCall_heaterState"
+      ],
+      "heater_state": [
+        "controller_policyCall_heaterState"
+      ],
+      "thermometer_lastReadingCelcius": [
+        "thermometer_temperatureReading_temperatureCelcius"
+      ],
+      "thermometer_temperatureReading_temperatureCelcius": [
+        "environment_temperatureCelcius"
+      ]
+    },
+    "sampled_memories": []
+  },
+  "diagnostics": {
+    "all": [
+      {
+        "code": "policy_latch_state_equation",
+        "message": "two-state actuator state coupled to controller policy output",
+        "pretty": "INFO policy_latch_state_equation (ac_state): two-state actuator state coupled to controller policy output",
+        "severity": "info",
+        "subject": "ac_state"
+      },
+      {
+        "code": "policy_latch_output_equation",
+        "message": "two-state output derived from initial and alternate state assignments",
+        "pretty": "INFO policy_latch_output_equation (ac_heatOut_heat_rateWatts): two-state output derived from initial and alternate state assignments",
+        "severity": "info",
+        "subject": "ac_heatOut_heat_rateWatts"
+      },
+      {
+        "code": "policy_latch_state_equation",
+        "message": "two-state actuator state coupled to controller policy output",
+        "pretty": "INFO policy_latch_state_equation (heater_state): two-state actuator state coupled to controller policy output",
+        "severity": "info",
+        "subject": "heater_state"
+      },
+      {
+        "code": "policy_latch_output_equation",
+        "message": "two-state output derived from initial and alternate state assignments",
+        "pretty": "INFO policy_latch_output_equation (heater_heatOut_heat_rateWatts): two-state output derived from initial and alternate state assignments",
+        "severity": "info",
+        "subject": "heater_heatOut_heat_rateWatts"
+      }
+    ],
+    "blocking": [],
+    "legacy_dependency_fallback_transitions": []
+  },
+  "equation_proof": {
+    "b_act": 2,
+    "b_obs": 1,
+    "blocked_unsafe_inversions": [],
+    "facts": [
+      {
+        "detail": {},
+        "key": "currentTime@-14",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -14,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-13",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -13,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-12",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -12,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-11",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -11,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-10",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -10,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-9",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -9,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-8",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -8,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-7",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -7,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-6",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -6,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-5",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -5,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-4",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -4,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-3",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -3,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-2",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -2,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-1",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -1,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@0",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": 0,
+        "var": "currentTime"
+      },
+      {
+        "detail": {
+          "equation_kind": "observation",
+          "equation_pretty": "[observation] obs.temperatureCelcius = thermometer_temperatureReading_temperatureCelcius    # Neural input binding",
+          "equation_source": "Neural input binding",
+          "equation_target": "obs.temperatureCelcius",
+          "observation": "temperatureCelcius",
+          "source": "thermometer_temperatureReading_temperatureCelcius"
+        },
+        "key": "thermometer_temperatureReading_temperatureCelcius@-1",
+        "premises": [],
+        "rule": "equation_observation_direct_copy",
+        "tau": -1,
+        "var": "thermometer_temperatureReading_temperatureCelcius"
+      },
+      {
+        "detail": {
+          "equation_kind": "observation",
+          "equation_pretty": "[observation] obs.temperatureCelcius = thermometer_temperatureReading_temperatureCelcius    # Neural input binding",
+          "equation_source": "Neural input binding",
+          "equation_target": "obs.temperatureCelcius",
+          "observation": "temperatureCelcius",
+          "source": "thermometer_temperatureReading_temperatureCelcius"
+        },
+        "key": "thermometer_temperatureReading_temperatureCelcius@0",
+        "premises": [],
+        "rule": "equation_observation_direct_copy",
+        "tau": 0,
+        "var": "thermometer_temperatureReading_temperatureCelcius"
+      },
+      {
+        "detail": {},
+        "key": "controller_policyCall_acState@-2",
+        "premises": [],
+        "rule": "executed_action_history",
+        "tau": -2,
+        "var": "controller_policyCall_acState"
+      },
+      {
+        "detail": {},
+        "key": "controller_policyCall_acState@-1",
+        "premises": [],
+        "rule": "executed_action_history",
+        "tau": -1,
+        "var": "controller_policyCall_acState"
+      },
+      {
+        "detail": {},
+        "key": "controller_policyCall_heaterState@-2",
+        "premises": [],
+        "rule": "executed_action_history",
+        "tau": -2,
+        "var": "controller_policyCall_heaterState"
+      },
+      {
+        "detail": {},
+        "key": "controller_policyCall_heaterState@-1",
+        "premises": [],
+        "rule": "executed_action_history",
+        "tau": -1,
+        "var": "controller_policyCall_heaterState"
+      },
+      {
+        "detail": {
+          "equation_kind": "state_machine_transition",
+          "equation_pretty": "[state_machine_transition] ac_heatOut_heat_rateWatts' = ite(controller_policyCall_acState, ac_heatOutputWatts, 0.0)    # ac.HeaterBehavior: policy latch output",
+          "equation_source": "ac.HeaterBehavior: policy latch output",
+          "equation_target": "ac_heatOut_heat_rateWatts",
+          "from_tau": -2,
+          "support": [
+            "controller_policyCall_acState"
+          ],
+          "unknown_refs": []
+        },
+        "key": "ac_heatOut_heat_rateWatts@-1",
+        "premises": [
+          "controller_policyCall_acState@-2"
+        ],
+        "rule": "equation_forward_transition",
+        "tau": -1,
+        "var": "ac_heatOut_heat_rateWatts"
+      },
+      {
+        "detail": {
+          "equation_kind": "state_machine_transition",
+          "equation_pretty": "[state_machine_transition] ac_heatOut_heat_rateWatts' = ite(controller_policyCall_acState, ac_heatOutputWatts, 0.0)    # ac.HeaterBehavior: policy latch output",
+          "equation_source": "ac.HeaterBehavior: policy latch output",
+          "equation_target": "ac_heatOut_heat_rateWatts",
+          "from_tau": -1,
+          "support": [
+            "controller_policyCall_acState"
+          ],
+          "unknown_refs": []
+        },
+        "key": "ac_heatOut_heat_rateWatts@0",
+        "premises": [
+          "controller_policyCall_acState@-1"
+        ],
+        "rule": "equation_forward_transition",
+        "tau": 0,
+        "var": "ac_heatOut_heat_rateWatts"
+      },
+      {
+        "detail": {
+          "equation_kind": "state_machine_transition",
+          "equation_pretty": "[state_machine_transition] ac_state' = controller_policyCall_acState    # ac.HeaterBehavior: policy latch state",
+          "equation_source": "ac.HeaterBehavior: policy latch state",
+          "equation_target": "ac_state",
+          "from_tau": -2,
+          "support": [
+            "controller_policyCall_acState"
+          ],
+          "unknown_refs": []
+        },
+        "key": "ac_state@-1",
+        "premises": [
+          "controller_policyCall_acState@-2"
+        ],
+        "rule": "equation_forward_transition",
+        "tau": -1,
+        "var": "ac_state"
+      },
+      {
+        "detail": {
+          "equation_kind": "state_machine_transition",
+          "equation_pretty": "[state_machine_transition] ac_state' = controller_policyCall_acState    # ac.HeaterBehavior: policy latch state",
+          "equation_source": "ac.HeaterBehavior: policy latch state",
+          "equation_target": "ac_state",
+          "from_tau": -1,
+          "support": [
+            "controller_policyCall_acState"
+          ],
+          "unknown_refs": []
+        },
+        "key": "ac_state@0",
+        "premises": [
+          "controller_policyCall_acState@-1"
+        ],
+        "rule": "equation_forward_transition",
+        "tau": 0,
+        "var": "ac_state"
+      },
+      {
+        "detail": {
+          "equation_kind": "transition",
+          "equation_pretty": "[transition] controller_acOn' = controller_policyCall_acState    # step:step",
+          "equation_source": "step:step",
+          "equation_target": "controller_acOn",
+          "from_tau": -2,
+          "support": [
+            "controller_policyCall_acState"
+          ],
+          "unknown_refs": []
+        },
+        "key": "controller_acOn@-1",
+        "premises": [
+          "controller_policyCall_acState@-2"
+        ],
+        "rule": "equation_forward_transition",
+        "tau": -1,
+        "var": "controller_acOn"
+      },
+      {
+        "detail": {
+          "equation_kind": "transition",
+          "equation_pretty": "[transition] controller_acOn' = controller_policyCall_acState    # step:step",
+          "equation_source": "step:step",
+          "equation_target": "controller_acOn",
+          "from_tau": -1,
+          "support": [
+            "controller_policyCall_acState"
+          ],
+          "unknown_refs": []
+        },
+        "key": "controller_acOn@0",
+        "premises": [
+          "controller_policyCall_acState@-1"
+        ],
+        "rule": "equation_forward_transition",
+        "tau": 0,
+        "var": "controller_acOn"
+      },
+      {
+        "detail": {
+          "equation_kind": "transition",
+          "equation_pretty": "[transition] controller_heaterOn' = controller_policyCall_heaterState    # step:step",
+          "equation_source": "step:step",
+          "equation_target": "controller_heaterOn",
+          "from_tau": -2,
+          "support": [
+            "controller_policyCall_heaterState"
+          ],
+          "unknown_refs": []
+        },
+        "key": "controller_heaterOn@-1",
+        "premises": [
+          "controller_policyCall_heaterState@-2"
+        ],
+        "rule": "equation_forward_transition",
+        "tau": -1,
+        "var": "controller_heaterOn"
+      },
+      {
+        "detail": {
+          "equation_kind": "transition",
+          "equation_pretty": "[transition] controller_heaterOn' = controller_policyCall_heaterState    # step:step",
+          "equation_source": "step:step",
+          "equation_target": "controller_heaterOn",
+          "from_tau": -1,
+          "support": [
+            "controller_policyCall_heaterState"
+          ],
+          "unknown_refs": []
+        },
+        "key": "controller_heaterOn@0",
+        "premises": [
+          "controller_policyCall_heaterState@-1"
+        ],
+        "rule": "equation_forward_transition",
+        "tau": 0,
+        "var": "controller_heaterOn"
+      },
+      {
+        "detail": {
+          "equation_kind": "state_machine_transition",
+          "equation_pretty": "[state_machine_transition] heater_heatOut_heat_rateWatts' = ite(controller_policyCall_heaterState, heater_heatOutputWatts, 0.0)    # heater.HeaterBehavior: policy latch output",
+          "equation_source": "heater.HeaterBehavior: policy latch output",
+          "equation_target": "heater_heatOut_heat_rateWatts",
+          "from_tau": -2,
+          "support": [
+            "controller_policyCall_heaterState"
+          ],
+          "unknown_refs": []
+        },
+        "key": "heater_heatOut_heat_rateWatts@-1",
+        "premises": [
+          "controller_policyCall_heaterState@-2"
+        ],
+        "rule": "equation_forward_transition",
+        "tau": -1,
+        "var": "heater_heatOut_heat_rateWatts"
+      },
+      {
+        "detail": {
+          "equation_kind": "state_machine_transition",
+          "equation_pretty": "[state_machine_transition] heater_heatOut_heat_rateWatts' = ite(controller_policyCall_heaterState, heater_heatOutputWatts, 0.0)    # heater.HeaterBehavior: policy latch output",
+          "equation_source": "heater.HeaterBehavior: policy latch output",
+          "equation_target": "heater_heatOut_heat_rateWatts",
+          "from_tau": -1,
+          "support": [
+            "controller_policyCall_heaterState"
+          ],
+          "unknown_refs": []
+        },
+        "key": "heater_heatOut_heat_rateWatts@0",
+        "premises": [
+          "controller_policyCall_heaterState@-1"
+        ],
+        "rule": "equation_forward_transition",
+        "tau": 0,
+        "var": "heater_heatOut_heat_rateWatts"
+      },
+      {
+        "detail": {
+          "equation_kind": "state_machine_transition",
+          "equation_pretty": "[state_machine_transition] heater_state' = controller_policyCall_heaterState    # heater.HeaterBehavior: policy latch state",
+          "equation_source": "heater.HeaterBehavior: policy latch state",
+          "equation_target": "heater_state",
+          "from_tau": -2,
+          "support": [
+            "controller_policyCall_heaterState"
+          ],
+          "unknown_refs": []
+        },
+        "key": "heater_state@-1",
+        "premises": [
+          "controller_policyCall_heaterState@-2"
+        ],
+        "rule": "equation_forward_transition",
+        "tau": -1,
+        "var": "heater_state"
+      },
+      {
+        "detail": {
+          "equation_kind": "state_machine_transition",
+          "equation_pretty": "[state_machine_transition] heater_state' = controller_policyCall_heaterState    # heater.HeaterBehavior: policy latch state",
+          "equation_source": "heater.HeaterBehavior: policy latch state",
+          "equation_target": "heater_state",
+          "from_tau": -1,
+          "support": [
+            "controller_policyCall_heaterState"
+          ],
+          "unknown_refs": []
+        },
+        "key": "heater_state@0",
+        "premises": [
+          "controller_policyCall_heaterState@-1"
+        ],
+        "rule": "equation_forward_transition",
+        "tau": 0,
+        "var": "heater_state"
+      },
+      {
+        "detail": {
+          "equation_kind": "transition",
+          "equation_pretty": "[transition] thermometer_lastReadingCelcius' = thermometer_temperatureReading_temperatureCelcius    # step:step",
+          "equation_source": "step:step",
+          "equation_target": "thermometer_lastReadingCelcius",
+          "from_tau": -1,
+          "support": [
+            "thermometer_temperatureReading_temperatureCelcius"
+          ],
+          "unknown_refs": []
+        },
+        "key": "thermometer_lastReadingCelcius@0",
+        "premises": [
+          "thermometer_temperatureReading_temperatureCelcius@-1"
+        ],
+        "rule": "equation_forward_transition",
+        "tau": 0,
+        "var": "thermometer_lastReadingCelcius"
+      },
+      {
+        "detail": {
+          "equation_kind": "transition",
+          "equation_pretty": "[transition] thermometer_temperatureReading_temperatureCelcius' = thermometer_environmentPort_reading_temperatureCelcius    # step:step",
+          "equation_source": "step:step",
+          "equation_target": "thermometer_temperatureReading_temperatureCelcius",
+          "inversion": "direct_transition_copy",
+          "known_transition_tau": -1,
+          "source": "environment_temperatureCelcius"
+        },
+        "key": "environment_temperatureCelcius@-2",
+        "premises": [
+          "thermometer_temperatureReading_temperatureCelcius@-1"
+        ],
+        "rule": "equation_direct_copy_inversion",
+        "tau": -2,
+        "var": "environment_temperatureCelcius"
+      },
+      {
+        "detail": {
+          "equation_kind": "transition",
+          "equation_pretty": "[transition] thermometer_temperatureReading_temperatureCelcius' = thermometer_environmentPort_reading_temperatureCelcius    # step:step",
+          "equation_source": "step:step",
+          "equation_target": "thermometer_temperatureReading_temperatureCelcius",
+          "inversion": "direct_transition_copy",
+          "known_transition_tau": 0,
+          "source": "environment_temperatureCelcius"
+        },
+        "key": "environment_temperatureCelcius@-1",
+        "premises": [
+          "thermometer_temperatureReading_temperatureCelcius@0"
+        ],
+        "rule": "equation_direct_copy_inversion",
+        "tau": -1,
+        "var": "environment_temperatureCelcius"
+      },
+      {
+        "detail": {
+          "equation_kind": "transition",
+          "equation_pretty": "[transition] environment_temperatureCelcius' = (environment_temperatureCelcius + ((((environment_heaterPort_heat_rateWatts + environment_acPort_heat_rateWatts) - (environment_heatLossCoefficientWattsPerCelcius * (environment_temperatureCelcius - environment_outsideTemperatureCelcius))) * environment_dt) / ((environment_volumeMetersCubed * 1.2) * 1005)))    # step:step",
+          "equation_source": "step:step",
+          "equation_target": "environment_temperatureCelcius",
+          "from_tau": -1,
+          "support": [
+            "ac_heatOut_heat_rateWatts",
+            "environment_temperatureCelcius",
+            "heater_heatOut_heat_rateWatts"
+          ],
+          "unknown_refs": []
+        },
+        "key": "environment_temperatureCelcius@0",
+        "premises": [
+          "ac_heatOut_heat_rateWatts@-1",
+          "environment_temperatureCelcius@-1",
+          "heater_heatOut_heat_rateWatts@-1"
+        ],
+        "rule": "equation_forward_transition",
+        "tau": 0,
+        "var": "environment_temperatureCelcius"
+      }
+    ],
+    "horizon": 14,
+    "missing_target_facts": [],
+    "observation_sources": {
+      "temperatureCelcius": "thermometer_temperatureReading_temperatureCelcius"
+    },
+    "passes": true,
+    "proof_engine": "equation_ir_syntactic_v1",
+    "sampled_memory_assumptions": [],
+    "target_facts": [
+      "ac_heatOut_heat_rateWatts@0",
+      "controller_acOn@0",
+      "controller_heaterOn@0",
+      "currentTime@0",
+      "environment_temperatureCelcius@0",
+      "heater_heatOut_heat_rateWatts@0",
+      "thermometer_lastReadingCelcius@0",
+      "thermometer_temperatureReading_temperatureCelcius@0"
+    ]
+  },
+  "equations": {
+    "definitions": [
+      {
+        "constant_refs": [],
+        "expr": {
+          "pretty": "3",
+          "type": "const",
+          "value": 3
+        },
+        "kind": "definition",
+        "pretty": "[definition] controller_propagationDelay = 3    # derived attribute",
+        "raw_refs": [],
+        "refs": [],
+        "source": "derived attribute",
+        "target": "controller_propagationDelay",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "ac_heatOut_heat_rateWatts",
+          "pretty": "ac_heatOut_heat_rateWatts",
+          "type": "var"
+        },
+        "kind": "definition",
+        "pretty": "[definition] environment_acPort_heat_rateWatts = ac_heatOut_heat_rateWatts    # flow copy",
+        "raw_refs": [],
+        "refs": [
+          "ac_heatOut_heat_rateWatts"
+        ],
+        "source": "flow copy",
+        "target": "environment_acPort_heat_rateWatts",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "heater_heatOut_heat_rateWatts",
+          "pretty": "heater_heatOut_heat_rateWatts",
+          "type": "var"
+        },
+        "kind": "definition",
+        "pretty": "[definition] environment_heaterPort_heat_rateWatts = heater_heatOut_heat_rateWatts    # flow copy",
+        "raw_refs": [],
+        "refs": [
+          "heater_heatOut_heat_rateWatts"
+        ],
+        "source": "flow copy",
+        "target": "environment_heaterPort_heat_rateWatts",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "environment_temperatureCelcius",
+          "pretty": "environment_temperatureCelcius",
+          "type": "var"
+        },
+        "kind": "definition",
+        "pretty": "[definition] environment_temperaturePort_reading_temperatureCelcius = environment_temperatureCelcius    # bind",
+        "raw_refs": [],
+        "refs": [
+          "environment_temperatureCelcius"
+        ],
+        "source": "bind",
+        "target": "environment_temperaturePort_reading_temperatureCelcius",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "thermometer_lastReadingCelcius",
+          "pretty": "thermometer_lastReadingCelcius",
+          "type": "var"
+        },
+        "kind": "definition",
+        "pretty": "[definition] lastObservedTemperature = thermometer_lastReadingCelcius    # derived attribute",
+        "raw_refs": [],
+        "refs": [
+          "thermometer_lastReadingCelcius"
+        ],
+        "source": "derived attribute",
+        "target": "lastObservedTemperature",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "environment_temperaturePort_reading_temperatureCelcius",
+          "pretty": "environment_temperaturePort_reading_temperatureCelcius",
+          "type": "var"
+        },
+        "kind": "definition",
+        "pretty": "[definition] thermometer_environmentPort_reading_temperatureCelcius = environment_temperaturePort_reading_temperatureCelcius    # flow copy",
+        "raw_refs": [],
+        "refs": [
+          "environment_temperaturePort_reading_temperatureCelcius"
+        ],
+        "source": "flow copy",
+        "target": "thermometer_environmentPort_reading_temperatureCelcius",
+        "unresolved_raw_refs": []
+      }
+    ],
+    "observations": [
+      {
+        "constant_refs": [
+          "controller_setPointCelcius"
+        ],
+        "expr": {
+          "path": "controller_setPointCelcius",
+          "pretty": "controller_setPointCelcius",
+          "type": "raw_ref"
+        },
+        "kind": "observation",
+        "pretty": "[observation] obs.setPoint = controller_setPointCelcius    # Neural input binding",
+        "raw_refs": [
+          "controller_setPointCelcius"
+        ],
+        "refs": [],
+        "source": "Neural input binding",
+        "target": "obs.setPoint",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "thermometer_temperatureReading_temperatureCelcius",
+          "pretty": "thermometer_temperatureReading_temperatureCelcius",
+          "type": "var"
+        },
+        "kind": "observation",
+        "pretty": "[observation] obs.temperatureCelcius = thermometer_temperatureReading_temperatureCelcius    # Neural input binding",
+        "raw_refs": [],
+        "refs": [
+          "thermometer_temperatureReading_temperatureCelcius"
+        ],
+        "source": "Neural input binding",
+        "target": "obs.temperatureCelcius",
+        "unresolved_raw_refs": []
+      }
+    ],
+    "requirements": [
+      {
+        "constant_refs": [
+          "controller_setPointCelcius",
+          "controller_toleranceCelcius"
+        ],
+        "expr": {
+          "args": [
+            {
+              "args": [
+                {
+                  "name": "currentTime",
+                  "pretty": "currentTime",
+                  "type": "var"
+                },
+                {
+                  "pretty": "0",
+                  "type": "const",
+                  "value": 0
+                }
+              ],
+              "op": ">",
+              "pretty": "(currentTime > 0)",
+              "type": "op"
+            },
+            {
+              "args": [
+                {
+                  "args": [
+                    {
+                      "name": "lastObservedTemperature",
+                      "pretty": "lastObservedTemperature",
+                      "type": "var"
+                    },
+                    {
+                      "args": [
+                        {
+                          "path": "controller_setPointCelcius",
+                          "pretty": "controller_setPointCelcius",
+                          "type": "raw_ref"
+                        },
+                        {
+                          "path": "controller_toleranceCelcius",
+                          "pretty": "controller_toleranceCelcius",
+                          "type": "raw_ref"
+                        }
+                      ],
+                      "op": "+",
+                      "pretty": "(controller_setPointCelcius + controller_toleranceCelcius)",
+                      "type": "op"
+                    }
+                  ],
+                  "op": ">",
+                  "pretty": "(lastObservedTemperature > (controller_setPointCelcius + controller_toleranceCelcius))",
+                  "type": "op"
+                },
+                {
+                  "name": "controller_acOn",
+                  "pretty": "controller_acOn",
+                  "type": "var"
+                }
+              ],
+              "op": "implies",
+              "pretty": "((lastObservedTemperature > (controller_setPointCelcius + controller_toleranceCelcius)) implies controller_acOn)",
+              "type": "op"
+            }
+          ],
+          "op": "implies",
+          "pretty": "((currentTime > 0) implies ((lastObservedTemperature > (controller_setPointCelcius + controller_toleranceCelcius)) implies controller_acOn))",
+          "type": "op"
+        },
+        "kind": "requirement",
+        "pretty": "[requirement] status.Cool When Hot = ((currentTime > 0) implies ((lastObservedTemperature > (controller_setPointCelcius + controller_toleranceCelcius)) implies controller_acOn))    # Obligation",
+        "raw_refs": [
+          "controller_setPointCelcius",
+          "controller_toleranceCelcius"
+        ],
+        "refs": [
+          "controller_acOn",
+          "currentTime",
+          "lastObservedTemperature"
+        ],
+        "source": "Obligation",
+        "target": "status.Cool When Hot",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [
+          "controller_setPointCelcius",
+          "controller_toleranceCelcius"
+        ],
+        "expr": {
+          "args": [
+            {
+              "args": [
+                {
+                  "name": "currentTime",
+                  "pretty": "currentTime",
+                  "type": "var"
+                },
+                {
+                  "pretty": "0",
+                  "type": "const",
+                  "value": 0
+                }
+              ],
+              "op": ">",
+              "pretty": "(currentTime > 0)",
+              "type": "op"
+            },
+            {
+              "args": [
+                {
+                  "args": [
+                    {
+                      "name": "lastObservedTemperature",
+                      "pretty": "lastObservedTemperature",
+                      "type": "var"
+                    },
+                    {
+                      "args": [
+                        {
+                          "path": "controller_setPointCelcius",
+                          "pretty": "controller_setPointCelcius",
+                          "type": "raw_ref"
+                        },
+                        {
+                          "path": "controller_toleranceCelcius",
+                          "pretty": "controller_toleranceCelcius",
+                          "type": "raw_ref"
+                        }
+                      ],
+                      "op": "-",
+                      "pretty": "(controller_setPointCelcius - controller_toleranceCelcius)",
+                      "type": "op"
+                    }
+                  ],
+                  "op": "<",
+                  "pretty": "(lastObservedTemperature < (controller_setPointCelcius - controller_toleranceCelcius))",
+                  "type": "op"
+                },
+                {
+                  "name": "controller_heaterOn",
+                  "pretty": "controller_heaterOn",
+                  "type": "var"
+                }
+              ],
+              "op": "implies",
+              "pretty": "((lastObservedTemperature < (controller_setPointCelcius - controller_toleranceCelcius)) implies controller_heaterOn)",
+              "type": "op"
+            }
+          ],
+          "op": "implies",
+          "pretty": "((currentTime > 0) implies ((lastObservedTemperature < (controller_setPointCelcius - controller_toleranceCelcius)) implies controller_heaterOn))",
+          "type": "op"
+        },
+        "kind": "requirement",
+        "pretty": "[requirement] status.Heat When Cold = ((currentTime > 0) implies ((lastObservedTemperature < (controller_setPointCelcius - controller_toleranceCelcius)) implies controller_heaterOn))    # Obligation",
+        "raw_refs": [
+          "controller_setPointCelcius",
+          "controller_toleranceCelcius"
+        ],
+        "refs": [
+          "controller_heaterOn",
+          "currentTime",
+          "lastObservedTemperature"
+        ],
+        "source": "Obligation",
+        "target": "status.Heat When Cold",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "args": [
+            {
+              "args": [
+                {
+                  "name": "controller_heaterOn",
+                  "pretty": "controller_heaterOn",
+                  "type": "var"
+                },
+                {
+                  "name": "controller_acOn",
+                  "pretty": "controller_acOn",
+                  "type": "var"
+                }
+              ],
+              "op": "and",
+              "pretty": "(controller_heaterOn and controller_acOn)",
+              "type": "op"
+            }
+          ],
+          "op": "not",
+          "pretty": "(not (controller_heaterOn and controller_acOn))",
+          "type": "op"
+        },
+        "kind": "requirement",
+        "pretty": "[requirement] status.No Simultaneous Heating and Cooling = (not (controller_heaterOn and controller_acOn))    # Prohibition",
+        "raw_refs": [],
+        "refs": [
+          "controller_acOn",
+          "controller_heaterOn"
+        ],
+        "source": "Prohibition",
+        "target": "status.No Simultaneous Heating and Cooling",
+        "unresolved_raw_refs": []
+      }
+    ],
+    "terminals": [
+      {
+        "constant_refs": [
+          "controller_setPointCelcius",
+          "controller_toleranceCelcius"
+        ],
+        "expr": {
+          "args": [
+            {
+              "args": [
+                {
+                  "args": [
+                    {
+                      "args": [
+                        {
+                          "path": "controller_setPointCelcius",
+                          "pretty": "controller_setPointCelcius",
+                          "type": "raw_ref"
+                        },
+                        {
+                          "args": [
+                            {
+                              "name": "thermometer_temperatureReading_temperatureCelcius",
+                              "pretty": "thermometer_temperatureReading_temperatureCelcius",
+                              "type": "var"
+                            },
+                            {
+                              "path": "controller_toleranceCelcius",
+                              "pretty": "controller_toleranceCelcius",
+                              "type": "raw_ref"
+                            }
+                          ],
+                          "op": "+",
+                          "pretty": "(thermometer_temperatureReading_temperatureCelcius + controller_toleranceCelcius)",
+                          "type": "op"
+                        }
+                      ],
+                      "op": "<=",
+                      "pretty": "(controller_setPointCelcius <= (thermometer_temperatureReading_temperatureCelcius + controller_toleranceCelcius))",
+                      "type": "op"
+                    },
+                    {
+                      "args": [
+                        {
+                          "path": "controller_setPointCelcius",
+                          "pretty": "controller_setPointCelcius",
+                          "type": "raw_ref"
+                        },
+                        {
+                          "args": [
+                            {
+                              "name": "thermometer_temperatureReading_temperatureCelcius",
+                              "pretty": "thermometer_temperatureReading_temperatureCelcius",
+                              "type": "var"
+                            },
+                            {
+                              "path": "controller_toleranceCelcius",
+                              "pretty": "controller_toleranceCelcius",
+                              "type": "raw_ref"
+                            }
+                          ],
+                          "op": "-",
+                          "pretty": "(thermometer_temperatureReading_temperatureCelcius - controller_toleranceCelcius)",
+                          "type": "op"
+                        }
+                      ],
+                      "op": ">=",
+                      "pretty": "(controller_setPointCelcius >= (thermometer_temperatureReading_temperatureCelcius - controller_toleranceCelcius))",
+                      "type": "op"
+                    }
+                  ],
+                  "op": "and",
+                  "pretty": "((controller_setPointCelcius <= (thermometer_temperatureReading_temperatureCelcius + controller_toleranceCelcius)) and (controller_setPointCelcius >= (thermometer_temperatureReading_temperatureCelcius - controller_toleranceCelcius)))",
+                  "type": "op"
+                },
+                {
+                  "args": [
+                    {
+                      "name": "controller_heaterOn",
+                      "pretty": "controller_heaterOn",
+                      "type": "var"
+                    }
+                  ],
+                  "op": "not",
+                  "pretty": "(not controller_heaterOn)",
+                  "type": "op"
+                }
+              ],
+              "op": "and",
+              "pretty": "(((controller_setPointCelcius <= (thermometer_temperatureReading_temperatureCelcius + controller_toleranceCelcius)) and (controller_setPointCelcius >= (thermometer_temperatureReading_temperatureCelcius - controller_toleranceCelcius))) and (not controller_heaterOn))",
+              "type": "op"
+            },
+            {
+              "args": [
+                {
+                  "name": "controller_acOn",
+                  "pretty": "controller_acOn",
+                  "type": "var"
+                }
+              ],
+              "op": "not",
+              "pretty": "(not controller_acOn)",
+              "type": "op"
+            }
+          ],
+          "op": "and",
+          "pretty": "((((controller_setPointCelcius <= (thermometer_temperatureReading_temperatureCelcius + controller_toleranceCelcius)) and (controller_setPointCelcius >= (thermometer_temperatureReading_temperatureCelcius - controller_toleranceCelcius))) and (not controller_heaterOn)) and (not controller_acOn))",
+          "type": "op"
+        },
+        "kind": "terminal",
+        "pretty": "[terminal] env.completion.done = ((((controller_setPointCelcius <= (thermometer_temperatureReading_temperatureCelcius + controller_toleranceCelcius)) and (controller_setPointCelcius >= (thermometer_temperatureReading_temperatureCelcius - controller_toleranceCelcius))) and (not controller_heaterOn)) and (not controller_acOn))    # #Completion input binding in step",
+        "raw_refs": [
+          "controller_setPointCelcius",
+          "controller_toleranceCelcius"
+        ],
+        "refs": [
+          "controller_acOn",
+          "controller_heaterOn",
+          "thermometer_temperatureReading_temperatureCelcius"
+        ],
+        "source": "#Completion input binding in step",
+        "target": "env.completion.done",
+        "unresolved_raw_refs": []
+      }
+    ],
+    "transitions": [
+      {
+        "constant_refs": [
+          "ac_heatOutputWatts"
+        ],
+        "expr": {
+          "cond": {
+            "name": "controller_policyCall_acState",
+            "pretty": "controller_policyCall_acState",
+            "type": "var"
+          },
+          "else": {
+            "pretty": "0.0",
+            "type": "const",
+            "value": 0.0
+          },
+          "pretty": "ite(controller_policyCall_acState, ac_heatOutputWatts, 0.0)",
+          "then": {
+            "path": "ac_heatOutputWatts",
+            "pretty": "ac_heatOutputWatts",
+            "type": "raw_ref"
+          },
+          "type": "ite"
+        },
+        "kind": "state_machine_transition",
+        "pretty": "[state_machine_transition] ac_heatOut_heat_rateWatts' = ite(controller_policyCall_acState, ac_heatOutputWatts, 0.0)    # ac.HeaterBehavior: policy latch output",
+        "raw_refs": [
+          "ac_heatOutputWatts"
+        ],
+        "refs": [
+          "controller_policyCall_acState"
+        ],
+        "source": "ac.HeaterBehavior: policy latch output",
+        "target": "ac_heatOut_heat_rateWatts",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "controller_policyCall_acState",
+          "pretty": "controller_policyCall_acState",
+          "type": "var"
+        },
+        "kind": "state_machine_transition",
+        "pretty": "[state_machine_transition] ac_state' = controller_policyCall_acState    # ac.HeaterBehavior: policy latch state",
+        "raw_refs": [],
+        "refs": [
+          "controller_policyCall_acState"
+        ],
+        "source": "ac.HeaterBehavior: policy latch state",
+        "target": "ac_state",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "controller_policyCall_acState",
+          "pretty": "controller_policyCall_acState",
+          "type": "var"
+        },
+        "kind": "transition",
+        "pretty": "[transition] controller_acOn' = controller_policyCall_acState    # step:step",
+        "raw_refs": [],
+        "refs": [
+          "controller_policyCall_acState"
+        ],
+        "source": "step:step",
+        "target": "controller_acOn",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "controller_policyCall_heaterState",
+          "pretty": "controller_policyCall_heaterState",
+          "type": "var"
+        },
+        "kind": "transition",
+        "pretty": "[transition] controller_heaterOn' = controller_policyCall_heaterState    # step:step",
+        "raw_refs": [],
+        "refs": [
+          "controller_policyCall_heaterState"
+        ],
+        "source": "step:step",
+        "target": "controller_heaterOn",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [
+          "dt"
+        ],
+        "expr": {
+          "args": [
+            {
+              "name": "currentTime",
+              "pretty": "currentTime",
+              "type": "var"
+            },
+            {
+              "path": "dt",
+              "pretty": "dt",
+              "type": "raw_ref"
+            }
+          ],
+          "op": "+",
+          "pretty": "(currentTime + dt)",
+          "type": "op"
+        },
+        "kind": "transition",
+        "pretty": "[transition] currentTime' = (currentTime + dt)    # step:step",
+        "raw_refs": [
+          "dt"
+        ],
+        "refs": [
+          "currentTime"
+        ],
+        "source": "step:step",
+        "target": "currentTime",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [
+          "environment_dt",
+          "environment_heatLossCoefficientWattsPerCelcius",
+          "environment_outsideTemperatureCelcius",
+          "environment_volumeMetersCubed"
+        ],
+        "expr": {
+          "args": [
+            {
+              "name": "environment_temperatureCelcius",
+              "pretty": "environment_temperatureCelcius",
+              "type": "var"
+            },
+            {
+              "args": [
+                {
+                  "args": [
+                    {
+                      "args": [
+                        {
+                          "args": [
+                            {
+                              "name": "environment_heaterPort_heat_rateWatts",
+                              "pretty": "environment_heaterPort_heat_rateWatts",
+                              "type": "var"
+                            },
+                            {
+                              "name": "environment_acPort_heat_rateWatts",
+                              "pretty": "environment_acPort_heat_rateWatts",
+                              "type": "var"
+                            }
+                          ],
+                          "op": "+",
+                          "pretty": "(environment_heaterPort_heat_rateWatts + environment_acPort_heat_rateWatts)",
+                          "type": "op"
+                        },
+                        {
+                          "args": [
+                            {
+                              "path": "environment_heatLossCoefficientWattsPerCelcius",
+                              "pretty": "environment_heatLossCoefficientWattsPerCelcius",
+                              "type": "raw_ref"
+                            },
+                            {
+                              "args": [
+                                {
+                                  "name": "environment_temperatureCelcius",
+                                  "pretty": "environment_temperatureCelcius",
+                                  "type": "var"
+                                },
+                                {
+                                  "path": "environment_outsideTemperatureCelcius",
+                                  "pretty": "environment_outsideTemperatureCelcius",
+                                  "type": "raw_ref"
+                                }
+                              ],
+                              "op": "-",
+                              "pretty": "(environment_temperatureCelcius - environment_outsideTemperatureCelcius)",
+                              "type": "op"
+                            }
+                          ],
+                          "op": "*",
+                          "pretty": "(environment_heatLossCoefficientWattsPerCelcius * (environment_temperatureCelcius - environment_outsideTemperatureCelcius))",
+                          "type": "op"
+                        }
+                      ],
+                      "op": "-",
+                      "pretty": "((environment_heaterPort_heat_rateWatts + environment_acPort_heat_rateWatts) - (environment_heatLossCoefficientWattsPerCelcius * (environment_temperatureCelcius - environment_outsideTemperatureCelcius)))",
+                      "type": "op"
+                    },
+                    {
+                      "path": "environment_dt",
+                      "pretty": "environment_dt",
+                      "type": "raw_ref"
+                    }
+                  ],
+                  "op": "*",
+                  "pretty": "(((environment_heaterPort_heat_rateWatts + environment_acPort_heat_rateWatts) - (environment_heatLossCoefficientWattsPerCelcius * (environment_temperatureCelcius - environment_outsideTemperatureCelcius))) * environment_dt)",
+                  "type": "op"
+                },
+                {
+                  "args": [
+                    {
+                      "args": [
+                        {
+                          "path": "environment_volumeMetersCubed",
+                          "pretty": "environment_volumeMetersCubed",
+                          "type": "raw_ref"
+                        },
+                        {
+                          "pretty": "1.2",
+                          "type": "const",
+                          "value": 1.2
+                        }
+                      ],
+                      "op": "*",
+                      "pretty": "(environment_volumeMetersCubed * 1.2)",
+                      "type": "op"
+                    },
+                    {
+                      "pretty": "1005",
+                      "type": "const",
+                      "value": 1005
+                    }
+                  ],
+                  "op": "*",
+                  "pretty": "((environment_volumeMetersCubed * 1.2) * 1005)",
+                  "type": "op"
+                }
+              ],
+              "op": "/",
+              "pretty": "((((environment_heaterPort_heat_rateWatts + environment_acPort_heat_rateWatts) - (environment_heatLossCoefficientWattsPerCelcius * (environment_temperatureCelcius - environment_outsideTemperatureCelcius))) * environment_dt) / ((environment_volumeMetersCubed * 1.2) * 1005))",
+              "type": "op"
+            }
+          ],
+          "op": "+",
+          "pretty": "(environment_temperatureCelcius + ((((environment_heaterPort_heat_rateWatts + environment_acPort_heat_rateWatts) - (environment_heatLossCoefficientWattsPerCelcius * (environment_temperatureCelcius - environment_outsideTemperatureCelcius))) * environment_dt) / ((environment_volumeMetersCubed * 1.2) * 1005)))",
+          "type": "op"
+        },
+        "kind": "transition",
+        "pretty": "[transition] environment_temperatureCelcius' = (environment_temperatureCelcius + ((((environment_heaterPort_heat_rateWatts + environment_acPort_heat_rateWatts) - (environment_heatLossCoefficientWattsPerCelcius * (environment_temperatureCelcius - environment_outsideTemperatureCelcius))) * environment_dt) / ((environment_volumeMetersCubed * 1.2) * 1005)))    # step:step",
+        "raw_refs": [
+          "environment_dt",
+          "environment_heatLossCoefficientWattsPerCelcius",
+          "environment_outsideTemperatureCelcius",
+          "environment_volumeMetersCubed"
+        ],
+        "refs": [
+          "environment_acPort_heat_rateWatts",
+          "environment_heaterPort_heat_rateWatts",
+          "environment_temperatureCelcius"
+        ],
+        "source": "step:step",
+        "target": "environment_temperatureCelcius",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [
+          "heater_heatOutputWatts"
+        ],
+        "expr": {
+          "cond": {
+            "name": "controller_policyCall_heaterState",
+            "pretty": "controller_policyCall_heaterState",
+            "type": "var"
+          },
+          "else": {
+            "pretty": "0.0",
+            "type": "const",
+            "value": 0.0
+          },
+          "pretty": "ite(controller_policyCall_heaterState, heater_heatOutputWatts, 0.0)",
+          "then": {
+            "path": "heater_heatOutputWatts",
+            "pretty": "heater_heatOutputWatts",
+            "type": "raw_ref"
+          },
+          "type": "ite"
+        },
+        "kind": "state_machine_transition",
+        "pretty": "[state_machine_transition] heater_heatOut_heat_rateWatts' = ite(controller_policyCall_heaterState, heater_heatOutputWatts, 0.0)    # heater.HeaterBehavior: policy latch output",
+        "raw_refs": [
+          "heater_heatOutputWatts"
+        ],
+        "refs": [
+          "controller_policyCall_heaterState"
+        ],
+        "source": "heater.HeaterBehavior: policy latch output",
+        "target": "heater_heatOut_heat_rateWatts",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "controller_policyCall_heaterState",
+          "pretty": "controller_policyCall_heaterState",
+          "type": "var"
+        },
+        "kind": "state_machine_transition",
+        "pretty": "[state_machine_transition] heater_state' = controller_policyCall_heaterState    # heater.HeaterBehavior: policy latch state",
+        "raw_refs": [],
+        "refs": [
+          "controller_policyCall_heaterState"
+        ],
+        "source": "heater.HeaterBehavior: policy latch state",
+        "target": "heater_state",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "thermometer_temperatureReading_temperatureCelcius",
+          "pretty": "thermometer_temperatureReading_temperatureCelcius",
+          "type": "var"
+        },
+        "kind": "transition",
+        "pretty": "[transition] thermometer_lastReadingCelcius' = thermometer_temperatureReading_temperatureCelcius    # step:step",
+        "raw_refs": [],
+        "refs": [
+          "thermometer_temperatureReading_temperatureCelcius"
+        ],
+        "source": "step:step",
+        "target": "thermometer_lastReadingCelcius",
+        "unresolved_raw_refs": []
+      },
+      {
+        "constant_refs": [],
+        "expr": {
+          "name": "thermometer_environmentPort_reading_temperatureCelcius",
+          "pretty": "thermometer_environmentPort_reading_temperatureCelcius",
+          "type": "var"
+        },
+        "kind": "transition",
+        "pretty": "[transition] thermometer_temperatureReading_temperatureCelcius' = thermometer_environmentPort_reading_temperatureCelcius    # step:step",
+        "raw_refs": [],
+        "refs": [
+          "thermometer_environmentPort_reading_temperatureCelcius"
+        ],
+        "source": "step:step",
+        "target": "thermometer_temperatureReading_temperatureCelcius",
+        "unresolved_raw_refs": []
+      }
+    ]
+  },
+  "mdp_obligations": {
+    "done": {
+      "covered": true,
+      "depends_on": [
+        "safety requirement violation",
+        "current #Completion input",
+        "environment step_count >= max_steps"
+      ],
+      "status": "discharged_over_augmented_state"
+    },
+    "observation": {
+      "equations": [
+        {
+          "action_refs": [],
+          "constant_refs": [
+            "controller_setPointCelcius"
+          ],
+          "covered_by_q_and_action": true,
+          "kind": "observation",
+          "pretty": "[observation] obs.setPoint = controller_setPointCelcius    # Neural input binding",
+          "refs": [],
+          "source": "Neural input binding",
+          "state_refs": [],
+          "target": "obs.setPoint",
+          "unresolved_raw_refs": [],
+          "unresolved_refs": []
+        },
+        {
+          "action_refs": [],
+          "constant_refs": [],
+          "covered_by_q_and_action": true,
+          "kind": "observation",
+          "pretty": "[observation] obs.temperatureCelcius = thermometer_temperatureReading_temperatureCelcius    # Neural input binding",
+          "refs": [
+            "thermometer_temperatureReading_temperatureCelcius"
+          ],
+          "source": "Neural input binding",
+          "state_refs": [
+            "thermometer_temperatureReading_temperatureCelcius"
+          ],
+          "target": "obs.temperatureCelcius",
+          "unresolved_raw_refs": [],
+          "unresolved_refs": []
+        }
+      ],
+      "status": "covered_by_q"
+    },
+    "overall_mdp_theorem_status": "profile_obligations_discharged_solver_gate_required",
+    "requirement_status": {
+      "equations": [
+        {
+          "action_refs": [],
+          "constant_refs": [
+            "controller_setPointCelcius",
+            "controller_toleranceCelcius"
+          ],
+          "covered_by_q_and_action": true,
+          "kind": "requirement",
+          "pretty": "[requirement] status.Cool When Hot = ((currentTime > 0) implies ((lastObservedTemperature > (controller_setPointCelcius + controller_toleranceCelcius)) implies controller_acOn))    # Obligation",
+          "refs": [
+            "controller_acOn",
+            "currentTime",
+            "thermometer_lastReadingCelcius"
+          ],
+          "source": "Obligation",
+          "state_refs": [
+            "controller_acOn",
+            "currentTime",
+            "thermometer_lastReadingCelcius"
+          ],
+          "target": "status.Cool When Hot",
+          "unresolved_raw_refs": [],
+          "unresolved_refs": []
+        },
+        {
+          "action_refs": [],
+          "constant_refs": [
+            "controller_setPointCelcius",
+            "controller_toleranceCelcius"
+          ],
+          "covered_by_q_and_action": true,
+          "kind": "requirement",
+          "pretty": "[requirement] status.Heat When Cold = ((currentTime > 0) implies ((lastObservedTemperature < (controller_setPointCelcius - controller_toleranceCelcius)) implies controller_heaterOn))    # Obligation",
+          "refs": [
+            "controller_heaterOn",
+            "currentTime",
+            "thermometer_lastReadingCelcius"
+          ],
+          "source": "Obligation",
+          "state_refs": [
+            "controller_heaterOn",
+            "currentTime",
+            "thermometer_lastReadingCelcius"
+          ],
+          "target": "status.Heat When Cold",
+          "unresolved_raw_refs": [],
+          "unresolved_refs": []
+        },
+        {
+          "action_refs": [],
+          "constant_refs": [],
+          "covered_by_q_and_action": true,
+          "kind": "requirement",
+          "pretty": "[requirement] status.No Simultaneous Heating and Cooling = (not (controller_heaterOn and controller_acOn))    # Prohibition",
+          "refs": [
+            "controller_acOn",
+            "controller_heaterOn"
+          ],
+          "source": "Prohibition",
+          "state_refs": [
+            "controller_acOn",
+            "controller_heaterOn"
+          ],
+          "target": "status.No Simultaneous Heating and Cooling",
+          "unresolved_raw_refs": [],
+          "unresolved_refs": []
+        }
+      ],
+      "status": "covered_by_q_and_action"
+    },
+    "reward": {
+      "covered_terms": {
+        "all_safety_statuses_covered": true,
+        "all_terminal_state_terms_covered": true,
+        "finite_horizon_truncation_covered": true,
+        "safety_requirement_statuses": [
+          {
+            "action_refs": [],
+            "constant_refs": [
+              "controller_setPointCelcius",
+              "controller_toleranceCelcius"
+            ],
+            "covered_by_q_and_action": true,
+            "kind": "requirement",
+            "pretty": "[requirement] status.Cool When Hot = ((currentTime > 0) implies ((lastObservedTemperature > (controller_setPointCelcius + controller_toleranceCelcius)) implies controller_acOn))    # Obligation",
+            "refs": [
+              "controller_acOn",
+              "currentTime",
+              "thermometer_lastReadingCelcius"
+            ],
+            "source": "Obligation",
+            "state_refs": [
+              "controller_acOn",
+              "currentTime",
+              "thermometer_lastReadingCelcius"
+            ],
+            "target": "status.Cool When Hot",
+            "unresolved_raw_refs": [],
+            "unresolved_refs": []
+          },
+          {
+            "action_refs": [],
+            "constant_refs": [
+              "controller_setPointCelcius",
+              "controller_toleranceCelcius"
+            ],
+            "covered_by_q_and_action": true,
+            "kind": "requirement",
+            "pretty": "[requirement] status.Heat When Cold = ((currentTime > 0) implies ((lastObservedTemperature < (controller_setPointCelcius - controller_toleranceCelcius)) implies controller_heaterOn))    # Obligation",
+            "refs": [
+              "controller_heaterOn",
+              "currentTime",
+              "thermometer_lastReadingCelcius"
+            ],
+            "source": "Obligation",
+            "state_refs": [
+              "controller_heaterOn",
+              "currentTime",
+              "thermometer_lastReadingCelcius"
+            ],
+            "target": "status.Heat When Cold",
+            "unresolved_raw_refs": [],
+            "unresolved_refs": []
+          },
+          {
+            "action_refs": [],
+            "constant_refs": [],
+            "covered_by_q_and_action": true,
+            "kind": "requirement",
+            "pretty": "[requirement] status.No Simultaneous Heating and Cooling = (not (controller_heaterOn and controller_acOn))    # Prohibition",
+            "refs": [
+              "controller_acOn",
+              "controller_heaterOn"
+            ],
+            "source": "Prohibition",
+            "state_refs": [
+              "controller_acOn",
+              "controller_heaterOn"
+            ],
+            "target": "status.No Simultaneous Heating and Cooling",
+            "unresolved_raw_refs": [],
+            "unresolved_refs": []
+          }
+        ],
+        "terminal_state": [
+          {
+            "action_refs": [],
+            "constant_refs": [
+              "controller_setPointCelcius",
+              "controller_toleranceCelcius"
+            ],
+            "covered_by_q_and_action": true,
+            "kind": "terminal",
+            "pretty": "[terminal] env.completion.done = ((((controller_setPointCelcius <= (thermometer_temperatureReading_temperatureCelcius + controller_toleranceCelcius)) and (controller_setPointCelcius >= (thermometer_temperatureReading_temperatureCelcius - controller_toleranceCelcius))) and (not controller_heaterOn)) and (not controller_acOn))    # #Completion input binding in step",
+            "refs": [
+              "controller_acOn",
+              "controller_heaterOn",
+              "thermometer_temperatureReading_temperatureCelcius"
+            ],
+            "source": "#Completion input binding in step",
+            "state_refs": [
+              "controller_acOn",
+              "controller_heaterOn",
+              "thermometer_temperatureReading_temperatureCelcius"
+            ],
+            "target": "env.completion.done",
+            "unresolved_raw_refs": [],
+            "unresolved_refs": []
+          }
+        ]
+      },
+      "environment_formula": "phase 2: if any safety requirement status is false, reward=-1 and done=True; else if the current #Completion input is true, reward=1 and done=True; else reward=-0.01 and done=False; max-step truncation overrides reward to 0.",
+      "external_terms_not_yet_in_q": [],
+      "modeled_external_terms": [
+        "current #Completion input via terminal_state equation",
+        "environment step_count >= max_steps via augmented finite-horizon state"
+      ],
+      "status": "discharged_over_augmented_state"
+    },
+    "shield": {
+      "action_map": {
+        "0": {
+          "acState": false,
+          "heaterState": false
+        },
+        "1": {
+          "acState": false,
+          "heaterState": true
+        },
+        "2": {
+          "acState": true,
+          "heaterState": false
+        },
+        "3": {
+          "acState": true,
+          "heaterState": true
+        }
+      },
+      "action_space": "discrete_boolean_output_bitvector",
+      "clauses": [
+        {
+          "left": {
+            "left": {
+              "path": [
+                "p",
+                "setPoint"
+              ],
+              "pretty": "p.setPoint",
+              "type": "ref"
+            },
+            "op": ">=",
+            "right": {
+              "left": {
+                "path": [
+                  "p",
+                  "temperatureCelcius"
+                ],
+                "pretty": "p.temperatureCelcius",
+                "type": "ref"
+              },
+              "op": "+",
+              "right": {
+                "path": [
+                  "toleranceCelcius"
+                ],
+                "pretty": "toleranceCelcius",
+                "type": "ref"
+              },
+              "type": "binary"
+            },
+            "type": "binary"
+          },
+          "op": "==",
+          "right": {
+            "path": [
+              "p",
+              "heaterState"
+            ],
+            "pretty": "p.heaterState",
+            "type": "ref"
+          },
+          "type": "binary"
+        },
+        {
+          "left": {
+            "left": {
+              "path": [
+                "p",
+                "setPoint"
+              ],
+              "pretty": "p.setPoint",
+              "type": "ref"
+            },
+            "op": "<=",
+            "right": {
+              "left": {
+                "path": [
+                  "p",
+                  "temperatureCelcius"
+                ],
+                "pretty": "p.temperatureCelcius",
+                "type": "ref"
+              },
+              "op": "-",
+              "right": {
+                "path": [
+                  "toleranceCelcius"
+                ],
+                "pretty": "toleranceCelcius",
+                "type": "ref"
+              },
+              "type": "binary"
+            },
+            "type": "binary"
+          },
+          "op": "==",
+          "right": {
+            "path": [
+              "p",
+              "acState"
+            ],
+            "pretty": "p.acState",
+            "type": "ref"
+          },
+          "type": "binary"
+        },
+        {
+          "op": "not",
+          "operand": {
+            "left": {
+              "path": [
+                "p",
+                "heaterState"
+              ],
+              "pretty": "p.heaterState",
+              "type": "ref"
+            },
+            "op": "and",
+            "right": {
+              "path": [
+                "p",
+                "acState"
+              ],
+              "pretty": "p.acState",
+              "type": "ref"
+            },
+            "type": "binary"
+          },
+          "type": "unary"
+        }
+      ],
+      "constants": {
+        "setPointCelcius": 18.3,
+        "toleranceCelcius": 1.0
+      },
+      "continuous_details": {},
+      "dead_actions": [
+        3
+      ],
+      "determinism_claim": "executed action is a deterministic function of covered shield inputs and the policy proposed action",
+      "executed_action_history": "buffered environments push the shielded/executed action, not the raw proposal",
+      "input_coverage": [
+        {
+          "covered_by_q_and_action": true,
+          "param": "setPoint",
+          "source_kind": "observation",
+          "source_target": "obs.setPoint"
+        },
+        {
+          "covered_by_q_and_action": true,
+          "param": "temperatureCelcius",
+          "source_kind": "observation",
+          "source_target": "obs.temperatureCelcius"
+        },
+        {
+          "covered_by_q_and_action": true,
+          "param": "done",
+          "source_kind": "terminal_state",
+          "source_target": "env.completion.done"
+        }
+      ],
+      "interface": {
+        "completion_params": [
+          "done"
+        ],
+        "controller_part": "system::controller",
+        "input_param_types": {
+          "done": "Boolean",
+          "setPoint": "Real",
+          "temperatureCelcius": "Real"
+        },
+        "input_params": [
+          "setPoint",
+          "temperatureCelcius",
+          "done"
+        ],
+        "neural_requirement": {
+          "metadata": [
+            "NeuralRequirement"
+          ],
+          "name": "Neural Controller Soundness",
+          "raw_expression": "(p.setPoint >= p.temperatureCelcius + toleranceCelcius == p.heaterState) and \n                (p.setPoint <= p.temperatureCelcius - toleranceCelcius == p.acState) and \n                (not (p.heaterState and p.acState))",
+          "subject_type": "Policy",
+          "subject_var": "p"
+        },
+        "output_action_matches": {
+          "acState": [
+            "controller_policyCall_acState"
+          ],
+          "heaterState": [
+            "controller_policyCall_heaterState"
+          ]
+        },
+        "output_param_types": {
+          "acState": "Boolean",
+          "heaterState": "Boolean"
+        },
+        "output_params": [
+          "heaterState",
+          "acState"
+        ],
+        "status": "recorded_not_semantically_proven"
+      },
+      "missing_input_params": [],
+      "missing_output_params": [],
+      "output_action_mapping": [
+        {
+          "action_vars": [
+            "controller_policyCall_heaterState"
+          ],
+          "param": "heaterState",
+          "type": "Boolean",
+          "unique_action_var": true
+        },
+        {
+          "action_vars": [
+            "controller_policyCall_acState"
+          ],
+          "param": "acState",
+          "type": "Boolean",
+          "unique_action_var": true
+        }
+      ],
+      "predicate_ast": {
+        "left": {
+          "left": {
+            "left": {
+              "left": {
+                "path": [
+                  "p",
+                  "setPoint"
+                ],
+                "pretty": "p.setPoint",
+                "type": "ref"
+              },
+              "op": ">=",
+              "right": {
+                "left": {
+                  "path": [
+                    "p",
+                    "temperatureCelcius"
+                  ],
+                  "pretty": "p.temperatureCelcius",
+                  "type": "ref"
+                },
+                "op": "+",
+                "right": {
+                  "path": [
+                    "toleranceCelcius"
+                  ],
+                  "pretty": "toleranceCelcius",
+                  "type": "ref"
+                },
+                "type": "binary"
+              },
+              "type": "binary"
+            },
+            "op": "==",
+            "right": {
+              "path": [
+                "p",
+                "heaterState"
+              ],
+              "pretty": "p.heaterState",
+              "type": "ref"
+            },
+            "type": "binary"
+          },
+          "op": "and",
+          "right": {
+            "left": {
+              "left": {
+                "path": [
+                  "p",
+                  "setPoint"
+                ],
+                "pretty": "p.setPoint",
+                "type": "ref"
+              },
+              "op": "<=",
+              "right": {
+                "left": {
+                  "path": [
+                    "p",
+                    "temperatureCelcius"
+                  ],
+                  "pretty": "p.temperatureCelcius",
+                  "type": "ref"
+                },
+                "op": "-",
+                "right": {
+                  "path": [
+                    "toleranceCelcius"
+                  ],
+                  "pretty": "toleranceCelcius",
+                  "type": "ref"
+                },
+                "type": "binary"
+              },
+              "type": "binary"
+            },
+            "op": "==",
+            "right": {
+              "path": [
+                "p",
+                "acState"
+              ],
+              "pretty": "p.acState",
+              "type": "ref"
+            },
+            "type": "binary"
+          },
+          "type": "binary"
+        },
+        "op": "and",
+        "right": {
+          "op": "not",
+          "operand": {
+            "left": {
+              "path": [
+                "p",
+                "heaterState"
+              ],
+              "pretty": "p.heaterState",
+              "type": "ref"
+            },
+            "op": "and",
+            "right": {
+              "path": [
+                "p",
+                "acState"
+              ],
+              "pretty": "p.acState",
+              "type": "ref"
+            },
+            "type": "binary"
+          },
+          "type": "unary"
+        },
+        "type": "binary"
+      },
+      "runtime_class": "SpecShield",
+      "semantic_status": "discharged_discrete_exact_ast",
+      "status": "discharged",
+      "subject_var": "p",
+      "unknown_requirement_refs": []
+    },
+    "terminal_state": {
+      "equations": [
+        {
+          "action_refs": [],
+          "constant_refs": [
+            "controller_setPointCelcius",
+            "controller_toleranceCelcius"
+          ],
+          "covered_by_q_and_action": true,
+          "kind": "terminal",
+          "pretty": "[terminal] env.completion.done = ((((controller_setPointCelcius <= (thermometer_temperatureReading_temperatureCelcius + controller_toleranceCelcius)) and (controller_setPointCelcius >= (thermometer_temperatureReading_temperatureCelcius - controller_toleranceCelcius))) and (not controller_heaterOn)) and (not controller_acOn))    # #Completion input binding in step",
+          "refs": [
+            "controller_acOn",
+            "controller_heaterOn",
+            "thermometer_temperatureReading_temperatureCelcius"
+          ],
+          "source": "#Completion input binding in step",
+          "state_refs": [
+            "controller_acOn",
+            "controller_heaterOn",
+            "thermometer_temperatureReading_temperatureCelcius"
+          ],
+          "target": "env.completion.done",
+          "unresolved_raw_refs": [],
+          "unresolved_refs": []
+        }
+      ],
+      "runtime_source": "SysMLEnv reads the current #Completion input",
+      "status": "covered_by_q_and_action"
+    },
+    "truncation": {
+      "augmented_state_variable": "env.step_count",
+      "reset": "env.step_count := 0 on reset after warmup calls",
+      "reward_override": "if truncated and not already done: done=True, reward=0.0",
+      "status": "discharged_as_finite_horizon_augmented_state",
+      "terminal_condition": "env.step_count >= env.max_steps",
+      "transition": "env.step_count' := env.step_count + 1 after every env.step"
+    }
+  },
+  "model": {
+    "path": "/home/csned/Documents/Codex-Docs/projects/automated-writing/fitter_artifact/bundle/sysml-models/thermostat/model.sysml",
+    "sha256": "44dec2333511c5cf7a40ad1828b612a043f9c7c71f6b960c276ce866f4a521aa"
+  },
+  "proof": {
+    "b_act": 2,
+    "b_obs": 1,
+    "facts": [
+      {
+        "detail": {},
+        "key": "currentTime@-14",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -14,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-13",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -13,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-12",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -12,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-11",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -11,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-10",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -10,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-9",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -9,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-8",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -8,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-7",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -7,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-6",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -6,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-5",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -5,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-4",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -4,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-3",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -3,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-2",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -2,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@-1",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": -1,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "currentTime@0",
+        "premises": [],
+        "rule": "deterministic_time_known",
+        "tau": 0,
+        "var": "currentTime"
+      },
+      {
+        "detail": {},
+        "key": "thermometer_temperatureReading_temperatureCelcius@-1",
+        "premises": [],
+        "rule": "observation_buffer",
+        "tau": -1,
+        "var": "thermometer_temperatureReading_temperatureCelcius"
+      },
+      {
+        "detail": {},
+        "key": "thermometer_temperatureReading_temperatureCelcius@0",
+        "premises": [],
+        "rule": "observation_buffer",
+        "tau": 0,
+        "var": "thermometer_temperatureReading_temperatureCelcius"
+      },
+      {
+        "detail": {},
+        "key": "controller_policyCall_acState@-2",
+        "premises": [],
+        "rule": "executed_action_history",
+        "tau": -2,
+        "var": "controller_policyCall_acState"
+      },
+      {
+        "detail": {},
+        "key": "controller_policyCall_acState@-1",
+        "premises": [],
+        "rule": "executed_action_history",
+        "tau": -1,
+        "var": "controller_policyCall_acState"
+      },
+      {
+        "detail": {},
+        "key": "controller_policyCall_heaterState@-2",
+        "premises": [],
+        "rule": "executed_action_history",
+        "tau": -2,
+        "var": "controller_policyCall_heaterState"
+      },
+      {
+        "detail": {},
+        "key": "controller_policyCall_heaterState@-1",
+        "premises": [],
+        "rule": "executed_action_history",
+        "tau": -1,
+        "var": "controller_policyCall_heaterState"
+      },
+      {
+        "detail": {
+          "from_tau": -2,
+          "support": [
+            "controller_policyCall_acState"
+          ],
+          "transition_var": "ac_heatOut_heat_rateWatts"
+        },
+        "key": "ac_heatOut_heat_rateWatts@-1",
+        "premises": [
+          "controller_policyCall_acState@-2"
+        ],
+        "rule": "forward_transition",
+        "tau": -1,
+        "var": "ac_heatOut_heat_rateWatts"
+      },
+      {
+        "detail": {
+          "from_tau": -1,
+          "support": [
+            "controller_policyCall_acState"
+          ],
+          "transition_var": "ac_heatOut_heat_rateWatts"
+        },
+        "key": "ac_heatOut_heat_rateWatts@0",
+        "premises": [
+          "controller_policyCall_acState@-1"
+        ],
+        "rule": "forward_transition",
+        "tau": 0,
+        "var": "ac_heatOut_heat_rateWatts"
+      },
+      {
+        "detail": {
+          "from_tau": -2,
+          "support": [
+            "controller_policyCall_acState"
+          ],
+          "transition_var": "ac_state"
+        },
+        "key": "ac_state@-1",
+        "premises": [
+          "controller_policyCall_acState@-2"
+        ],
+        "rule": "forward_transition",
+        "tau": -1,
+        "var": "ac_state"
+      },
+      {
+        "detail": {
+          "from_tau": -1,
+          "support": [
+            "controller_policyCall_acState"
+          ],
+          "transition_var": "ac_state"
+        },
+        "key": "ac_state@0",
+        "premises": [
+          "controller_policyCall_acState@-1"
+        ],
+        "rule": "forward_transition",
+        "tau": 0,
+        "var": "ac_state"
+      },
+      {
+        "detail": {
+          "from_tau": -2,
+          "support": [
+            "controller_policyCall_acState"
+          ],
+          "transition_var": "controller_acOn"
+        },
+        "key": "controller_acOn@-1",
+        "premises": [
+          "controller_policyCall_acState@-2"
+        ],
+        "rule": "forward_transition",
+        "tau": -1,
+        "var": "controller_acOn"
+      },
+      {
+        "detail": {
+          "from_tau": -1,
+          "support": [
+            "controller_policyCall_acState"
+          ],
+          "transition_var": "controller_acOn"
+        },
+        "key": "controller_acOn@0",
+        "premises": [
+          "controller_policyCall_acState@-1"
+        ],
+        "rule": "forward_transition",
+        "tau": 0,
+        "var": "controller_acOn"
+      },
+      {
+        "detail": {
+          "from_tau": -2,
+          "support": [
+            "controller_policyCall_heaterState"
+          ],
+          "transition_var": "controller_heaterOn"
+        },
+        "key": "controller_heaterOn@-1",
+        "premises": [
+          "controller_policyCall_heaterState@-2"
+        ],
+        "rule": "forward_transition",
+        "tau": -1,
+        "var": "controller_heaterOn"
+      },
+      {
+        "detail": {
+          "from_tau": -1,
+          "support": [
+            "controller_policyCall_heaterState"
+          ],
+          "transition_var": "controller_heaterOn"
+        },
+        "key": "controller_heaterOn@0",
+        "premises": [
+          "controller_policyCall_heaterState@-1"
+        ],
+        "rule": "forward_transition",
+        "tau": 0,
+        "var": "controller_heaterOn"
+      },
+      {
+        "detail": {
+          "from_tau": -2,
+          "support": [
+            "controller_policyCall_heaterState"
+          ],
+          "transition_var": "heater_heatOut_heat_rateWatts"
+        },
+        "key": "heater_heatOut_heat_rateWatts@-1",
+        "premises": [
+          "controller_policyCall_heaterState@-2"
+        ],
+        "rule": "forward_transition",
+        "tau": -1,
+        "var": "heater_heatOut_heat_rateWatts"
+      },
+      {
+        "detail": {
+          "from_tau": -1,
+          "support": [
+            "controller_policyCall_heaterState"
+          ],
+          "transition_var": "heater_heatOut_heat_rateWatts"
+        },
+        "key": "heater_heatOut_heat_rateWatts@0",
+        "premises": [
+          "controller_policyCall_heaterState@-1"
+        ],
+        "rule": "forward_transition",
+        "tau": 0,
+        "var": "heater_heatOut_heat_rateWatts"
+      },
+      {
+        "detail": {
+          "from_tau": -2,
+          "support": [
+            "controller_policyCall_heaterState"
+          ],
+          "transition_var": "heater_state"
+        },
+        "key": "heater_state@-1",
+        "premises": [
+          "controller_policyCall_heaterState@-2"
+        ],
+        "rule": "forward_transition",
+        "tau": -1,
+        "var": "heater_state"
+      },
+      {
+        "detail": {
+          "from_tau": -1,
+          "support": [
+            "controller_policyCall_heaterState"
+          ],
+          "transition_var": "heater_state"
+        },
+        "key": "heater_state@0",
+        "premises": [
+          "controller_policyCall_heaterState@-1"
+        ],
+        "rule": "forward_transition",
+        "tau": 0,
+        "var": "heater_state"
+      },
+      {
+        "detail": {
+          "from_tau": -1,
+          "support": [
+            "thermometer_temperatureReading_temperatureCelcius"
+          ],
+          "transition_var": "thermometer_lastReadingCelcius"
+        },
+        "key": "thermometer_lastReadingCelcius@0",
+        "premises": [
+          "thermometer_temperatureReading_temperatureCelcius@-1"
+        ],
+        "rule": "forward_transition",
+        "tau": 0,
+        "var": "thermometer_lastReadingCelcius"
+      },
+      {
+        "detail": {
+          "known_transition_tau": -1,
+          "source": "environment_temperatureCelcius",
+          "transition_var": "thermometer_temperatureReading_temperatureCelcius"
+        },
+        "key": "environment_temperatureCelcius@-2",
+        "premises": [
+          "thermometer_temperatureReading_temperatureCelcius@-1"
+        ],
+        "rule": "copy_inversion",
+        "tau": -2,
+        "var": "environment_temperatureCelcius"
+      },
+      {
+        "detail": {
+          "known_transition_tau": 0,
+          "source": "environment_temperatureCelcius",
+          "transition_var": "thermometer_temperatureReading_temperatureCelcius"
+        },
+        "key": "environment_temperatureCelcius@-1",
+        "premises": [
+          "thermometer_temperatureReading_temperatureCelcius@0"
+        ],
+        "rule": "copy_inversion",
+        "tau": -1,
+        "var": "environment_temperatureCelcius"
+      },
+      {
+        "detail": {
+          "from_tau": -1,
+          "support": [
+            "ac_heatOut_heat_rateWatts",
+            "environment_temperatureCelcius",
+            "heater_heatOut_heat_rateWatts"
+          ],
+          "transition_var": "environment_temperatureCelcius"
+        },
+        "key": "environment_temperatureCelcius@0",
+        "premises": [
+          "ac_heatOut_heat_rateWatts@-1",
+          "environment_temperatureCelcius@-1",
+          "heater_heatOut_heat_rateWatts@-1"
+        ],
+        "rule": "forward_transition",
+        "tau": 0,
+        "var": "environment_temperatureCelcius"
+      }
+    ],
+    "horizon": 14,
+    "missing_target_facts": [],
+    "passes": true,
+    "target_facts": [
+      "ac_heatOut_heat_rateWatts@0",
+      "controller_acOn@0",
+      "controller_heaterOn@0",
+      "currentTime@0",
+      "environment_temperatureCelcius@0",
+      "heater_heatOut_heat_rateWatts@0",
+      "thermometer_lastReadingCelcius@0",
+      "thermometer_temperatureReading_temperatureCelcius@0"
+    ]
+  },
+  "proof_mode": {
+    "blocking_diagnostic_codes": [
+      "legacy_dependency_fallback"
+    ],
+    "blocking_diagnostic_severities": [
+      "error",
+      "warning"
+    ],
+    "pass_requires": [
+      "selected buffer reconstructs every q variable at tau=0",
+      "equation-IR proof trace reconstructs every q variable at tau=0",
+      "no warning/error diagnostics",
+      "no legacy dependency fallback transitions",
+      "reward and done obligations discharged over the augmented state",
+      "shield semantics discharged as deterministic function of covered inputs",
+      "solver-backed one-step transition closure is discharged",
+      "independent checker can replay every proof fact"
+    ],
+    "strict_no_legacy_fallback": true
+  },
+  "proof_profile": "strict_q_syntactic_reconstructibility_v1",
+  "result": "PASS",
+  "schema_version": 2,
+  "search": {
+    "attempts": [
+      {
+        "b_act": 0,
+        "b_obs": 0,
+        "missing": [
+          "ac_heatOut_heat_rateWatts",
+          "controller_acOn",
+          "controller_heaterOn",
+          "environment_temperatureCelcius",
+          "heater_heatOut_heat_rateWatts",
+          "thermometer_lastReadingCelcius"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 1,
+        "b_obs": 0,
+        "missing": [
+          "environment_temperatureCelcius",
+          "thermometer_lastReadingCelcius"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 2,
+        "b_obs": 0,
+        "missing": [
+          "thermometer_lastReadingCelcius"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 3,
+        "b_obs": 0,
+        "missing": [
+          "thermometer_lastReadingCelcius"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 4,
+        "b_obs": 0,
+        "missing": [
+          "thermometer_lastReadingCelcius"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 0,
+        "b_obs": 1,
+        "missing": [
+          "ac_heatOut_heat_rateWatts",
+          "controller_acOn",
+          "controller_heaterOn",
+          "environment_temperatureCelcius",
+          "heater_heatOut_heat_rateWatts"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 1,
+        "b_obs": 1,
+        "missing": [
+          "environment_temperatureCelcius"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 2,
+        "b_obs": 1,
+        "missing": [],
+        "passes": true
+      },
+      {
+        "b_act": 3,
+        "b_obs": 1,
+        "missing": [],
+        "passes": true
+      },
+      {
+        "b_act": 4,
+        "b_obs": 1,
+        "missing": [],
+        "passes": true
+      },
+      {
+        "b_act": 0,
+        "b_obs": 2,
+        "missing": [
+          "ac_heatOut_heat_rateWatts",
+          "controller_acOn",
+          "controller_heaterOn",
+          "environment_temperatureCelcius",
+          "heater_heatOut_heat_rateWatts"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 1,
+        "b_obs": 2,
+        "missing": [
+          "environment_temperatureCelcius"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 2,
+        "b_obs": 2,
+        "missing": [],
+        "passes": true
+      },
+      {
+        "b_act": 3,
+        "b_obs": 2,
+        "missing": [],
+        "passes": true
+      },
+      {
+        "b_act": 4,
+        "b_obs": 2,
+        "missing": [],
+        "passes": true
+      }
+    ],
+    "equation_ir_attempts": [
+      {
+        "b_act": 0,
+        "b_obs": 0,
+        "blocked_unsafe_inversions": 0,
+        "missing": [
+          "ac_heatOut_heat_rateWatts",
+          "controller_acOn",
+          "controller_heaterOn",
+          "environment_temperatureCelcius",
+          "heater_heatOut_heat_rateWatts",
+          "thermometer_lastReadingCelcius"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 1,
+        "b_obs": 0,
+        "blocked_unsafe_inversions": 0,
+        "missing": [
+          "environment_temperatureCelcius",
+          "thermometer_lastReadingCelcius"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 2,
+        "b_obs": 0,
+        "blocked_unsafe_inversions": 0,
+        "missing": [
+          "thermometer_lastReadingCelcius"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 3,
+        "b_obs": 0,
+        "blocked_unsafe_inversions": 0,
+        "missing": [
+          "thermometer_lastReadingCelcius"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 4,
+        "b_obs": 0,
+        "blocked_unsafe_inversions": 0,
+        "missing": [
+          "thermometer_lastReadingCelcius"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 0,
+        "b_obs": 1,
+        "blocked_unsafe_inversions": 0,
+        "missing": [
+          "ac_heatOut_heat_rateWatts",
+          "controller_acOn",
+          "controller_heaterOn",
+          "environment_temperatureCelcius",
+          "heater_heatOut_heat_rateWatts"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 1,
+        "b_obs": 1,
+        "blocked_unsafe_inversions": 0,
+        "missing": [
+          "environment_temperatureCelcius"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 2,
+        "b_obs": 1,
+        "blocked_unsafe_inversions": 0,
+        "missing": [],
+        "passes": true
+      },
+      {
+        "b_act": 3,
+        "b_obs": 1,
+        "blocked_unsafe_inversions": 0,
+        "missing": [],
+        "passes": true
+      },
+      {
+        "b_act": 4,
+        "b_obs": 1,
+        "blocked_unsafe_inversions": 0,
+        "missing": [],
+        "passes": true
+      },
+      {
+        "b_act": 0,
+        "b_obs": 2,
+        "blocked_unsafe_inversions": 0,
+        "missing": [
+          "ac_heatOut_heat_rateWatts",
+          "controller_acOn",
+          "controller_heaterOn",
+          "environment_temperatureCelcius",
+          "heater_heatOut_heat_rateWatts"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 1,
+        "b_obs": 2,
+        "blocked_unsafe_inversions": 0,
+        "missing": [
+          "environment_temperatureCelcius"
+        ],
+        "passes": false
+      },
+      {
+        "b_act": 2,
+        "b_obs": 2,
+        "blocked_unsafe_inversions": 0,
+        "missing": [],
+        "passes": true
+      },
+      {
+        "b_act": 3,
+        "b_obs": 2,
+        "blocked_unsafe_inversions": 0,
+        "missing": [],
+        "passes": true
+      },
+      {
+        "b_act": 4,
+        "b_obs": 2,
+        "blocked_unsafe_inversions": 0,
+        "missing": [],
+        "passes": true
+      }
+    ],
+    "equation_ir_selected_first_passing": {
+      "b_act": 2,
+      "b_obs": 1
+    },
+    "legacy_and_equation_search_agree": true,
+    "minimality_claim": "first passing pair in stated bounded lexicographic scan",
+    "selected_first_passing": {
+      "b_act": 2,
+      "b_obs": 1
+    }
+  },
+  "sets": {
+    "action_deps": [
+      "controller_policyCall_acState",
+      "controller_policyCall_heaterState"
+    ],
+    "actions": [
+      "controller_policyCall_acState",
+      "controller_policyCall_heaterState"
+    ],
+    "constants": [
+      "ac_heatOutputWatts",
+      "controller_dt",
+      "controller_setPointCelcius",
+      "controller_toleranceCelcius",
+      "dt",
+      "environment_dt",
+      "environment_heatLossCoefficientWattsPerCelcius",
+      "environment_outsideTemperatureCelcius",
+      "environment_volumeMetersCubed",
+      "heater_heatOutputWatts",
+      "thermometer_dt"
+    ],
+    "ignored_state": [
+      "ac_state",
+      "heater_state"
+    ],
+    "ignored_state_reasons": {
+      "ac_state": "outside the backward cone of observation, terminal, requirement, reward/done, shield-input, and transition-closed q-next equations under the extracted equation model",
+      "heater_state": "outside the backward cone of observation, terminal, requirement, reward/done, shield-input, and transition-closed q-next equations under the extracted equation model"
+    },
+    "initial_values": {
+      "currentTime": 0.0,
+      "environment_temperatureCelcius": 23.9
+    },
+    "observed_state_vars": [
+      "thermometer_temperatureReading_temperatureCelcius"
+    ],
+    "q": [
+      "ac_heatOut_heat_rateWatts",
+      "controller_acOn",
+      "controller_heaterOn",
+      "currentTime",
+      "environment_temperatureCelcius",
+      "heater_heatOut_heat_rateWatts",
+      "thermometer_lastReadingCelcius",
+      "thermometer_temperatureReading_temperatureCelcius"
+    ],
+    "q_seeds": [
+      "controller_acOn",
+      "controller_heaterOn",
+      "currentTime",
+      "thermometer_lastReadingCelcius",
+      "thermometer_temperatureReading_temperatureCelcius"
+    ],
+    "seed_equations": {
+      "env.completion.done": [
+        "controller_acOn",
+        "controller_heaterOn",
+        "thermometer_temperatureReading_temperatureCelcius"
+      ],
+      "obs.setPoint": [],
+      "obs.temperatureCelcius": [
+        "thermometer_temperatureReading_temperatureCelcius"
+      ],
+      "status.Cool When Hot": [
+        "controller_acOn",
+        "currentTime",
+        "thermometer_lastReadingCelcius"
+      ],
+      "status.Heat When Cold": [
+        "controller_heaterOn",
+        "currentTime",
+        "thermometer_lastReadingCelcius"
+      ],
+      "status.No Simultaneous Heating and Cooling": [
+        "controller_acOn",
+        "controller_heaterOn"
+      ]
+    },
+    "state": [
+      "ac_heatOut_heat_rateWatts",
+      "ac_state",
+      "controller_acOn",
+      "controller_heaterOn",
+      "currentTime",
+      "environment_temperatureCelcius",
+      "heater_heatOut_heat_rateWatts",
+      "heater_state",
+      "thermometer_lastReadingCelcius",
+      "thermometer_temperatureReading_temperatureCelcius"
+    ],
+    "time_vars": [
+      "currentTime"
+    ]
+  },
+  "settings": {
+    "dt": 0.1,
+    "enable_sampled_memory": true,
+    "horizon": 14,
+    "max_act": 4,
+    "max_obs": 2,
+    "search_order": "lexicographic b_obs then b_act within stated bounds"
+  },
+  "solver_advisory": {
+    "one_step_transition_closure": {
+      "actions_size": 2,
+      "claim": "one_step_transition_closure",
+      "logic": "QF_UFLRA",
+      "max_polynomial_degree": 1,
+      "q_size": 8,
+      "solver": "z3",
+      "status": "discharged",
+      "timeout_ms": 1000,
+      "visible_terms_checked": [
+        "next_q.ac_heatOut_heat_rateWatts",
+        "next_q.controller_acOn",
+        "next_q.controller_heaterOn",
+        "next_q.currentTime",
+        "next_q.environment_temperatureCelcius",
+        "next_q.heater_heatOut_heat_rateWatts",
+        "next_q.thermometer_lastReadingCelcius",
+        "next_q.thermometer_temperatureReading_temperatureCelcius",
+        "next_observation.setPoint",
+        "next_observation.temperatureCelcius",
+        "next_terminal.env.completion.done",
+        "next_requirement.status.Cool When Hot",
+        "next_requirement.status.Heat When Cold",
+        "next_requirement.status.No Simultaneous Heating and Cooling"
+      ]
+    }
+  },
+  "theorem_gate": {
+    "claim_policy": "claim.profile_mdp_theorem, claim.solver_backed_mdp_theorem, and claim.mdp_theorem may be discharged only when profile obligations and solver-backed one-step uniqueness are both discharged.",
+    "full_mdp_theorem_blockers": [],
+    "full_mdp_theorem_claim_allowed": true,
+    "profile": "strict_q_profile_mdp_v1",
+    "profile_mdp_theorem": "discharged",
+    "profile_obligations_discharged": true,
+    "profile_requires": [
+      "strict proof trace reconstructs every q variable at tau=0",
+      "equation-IR proof trace reconstructs every q variable at tau=0",
+      "no blocking extraction diagnostics",
+      "no legacy dependency fallback transitions",
+      "observation obligations discharged",
+      "requirement-status obligations discharged",
+      "reward and done obligations discharged over augmented state",
+      "shield semantics discharged from covered inputs and mapped outputs",
+      "solver proves one-step transition closure over extracted equations"
+    ],
+    "profile_scope": [
+      "extracted equation/dependency semantics",
+      "finite-horizon augmented env.step_count",
+      "deterministic exact shield semantics",
+      "selected bounded buffer and replayed proof trace",
+      "solver-backed one-step self-composition over q and executed action"
+    ],
+    "profile_theorem_statement": "Within the extracted strict-Q syntactic semantics, the selected finite buffer reconstructs q and determines observations, requirement statuses, reward, done, and exact shield execution as recorded in mdp_obligations.",
+    "solver_backed_mdp_theorem": "discharged",
+    "solver_backed_profile": "strict_q_solver_backed_mdp_v1",
+    "solver_backed_theorem_statement": "Within the extracted equation semantics and stated solver fragment, the selected buffer is a sufficient Markov state for the transition-closed relevant state, visible outputs, reward, done, and shielded executed action.",
+    "solver_backed_uniqueness": {
+      "actions_size": 2,
+      "claim": "one_step_transition_closure",
+      "logic": "QF_UFLRA",
+      "max_polynomial_degree": 1,
+      "q_size": 8,
+      "result_status": "discharged",
+      "solver": "z3",
+      "source": "solver_advisory.one_step_transition_closure",
+      "status": "discharged",
+      "theorem_statement": "No two one-step executions of the extracted equation model can agree on current q and executed action while disagreeing on next q, next observations, next terminal equations, or next requirement status equations.",
+      "timeout_ms": 1000,
+      "visible_terms_checked": [
+        "next_q.ac_heatOut_heat_rateWatts",
+        "next_q.controller_acOn",
+        "next_q.controller_heaterOn",
+        "next_q.currentTime",
+        "next_q.environment_temperatureCelcius",
+        "next_q.heater_heatOut_heat_rateWatts",
+        "next_q.thermometer_lastReadingCelcius",
+        "next_q.thermometer_temperatureReading_temperatureCelcius",
+        "next_observation.setPoint",
+        "next_observation.temperatureCelcius",
+        "next_terminal.env.completion.done",
+        "next_requirement.status.Cool When Hot",
+        "next_requirement.status.Heat When Cold",
+        "next_requirement.status.No Simultaneous Heating and Cooling"
+      ]
+    }
+  }
+}

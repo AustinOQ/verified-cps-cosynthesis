@@ -116,7 +116,7 @@ package TankFillingSystem {
         // Timestep update: advance currentLevel by net flow * dt
         action step {
             in dt : Real;
-            assign currentLevelMl := currentLevelMl + (inlet.flowRateMl - outlet.flowRateMl) * dt;
+            #ContinuousRate assign currentLevelMl := currentLevelMl + (inlet.flowRateMl - outlet.flowRateMl) * dt;
         }
 
         bind volumeSensorPort.reading.volumeMl = currentLevelMl;
@@ -424,7 +424,7 @@ package TankFillingSystem {
         action step {
             in dt : Real;
 
-            assign currentTimeSeconds := currentTimeSeconds + dt;
+            #ContinuousRate assign currentTimeSeconds := currentTimeSeconds + dt;
             if currentTimeSeconds - lastScanTimeSeconds >= 1.0 / scanCycleFrequencyHz {
                 assign lastScanTimeSeconds := currentTimeSeconds;
                 perform action ScanCycle;

@@ -55,6 +55,7 @@ from handmade.optim import Adam
 from handmade.ppo_update import ppo_update
 from handmade.train_oracle import train_oracle
 from oracle import extract_interface
+from runtime_settings import DEFAULT_DT, validate_dt
 
 from reduced_handmade.buffered_env import BufferedDiscreteEnv
 from reduced_handmade.collection import (
@@ -128,7 +129,7 @@ def certify_minimal_buffer(model_path: str, *, dt: float, max_obs: int,
 
 
 def train_one_seed(model_path: str, seed: int, out_dir: str | Path,
-                   *, dt: float = 0.1, max_steps: int = 5000,
+                   *, dt: float, max_steps: int = 5000,
                    max_obs: int = 2, max_act: int = 6, horizon: int = 14,
                    hidden_dim: int | None = None,
                    ensure_class_coverage: int = 200,
@@ -139,6 +140,7 @@ def train_one_seed(model_path: str, seed: int, out_dir: str | Path,
                    collection_workers: int = 1,
                    collection_start_method: str = "spawn",
                    config: dict | None = None) -> dict:
+    dt = validate_dt(dt)
     cfg = dict(DEFAULT_CONFIG)
     if config:
         cfg.update(config)
@@ -164,6 +166,11 @@ def train_one_seed(model_path: str, seed: int, out_dir: str | Path,
             raise RuntimeError(
                 "reduced-MDP spec is for a different model: "
                 f"{spec_model} != {os.path.abspath(model_path)}"
+            )
+        spec_dt = validate_dt(reduced_spec["model"].get("dt"))
+        if spec_dt != dt:
+            raise RuntimeError(
+                f"training dt does not match reduced-MDP spec: {dt} != {spec_dt}"
             )
         b_obs = int(reduced_spec["certified_buffer"]["b_obs"])
         b_act = int(reduced_spec["certified_buffer"]["b_act"])
@@ -257,7 +264,7 @@ def train_one_seed(model_path: str, seed: int, out_dir: str | Path,
                 f"env={n_actions}, spec={spec_actions['n_actions']}"
             )
 
-    iface = extract_interface(model_path, dt=dt)
+    iface = extract_interface(model_path)
     policy = MLPActorCritic(obs_dim, n_actions, hidden_dim, seed=seed)
     composite = ProgramShieldComposite(
         policy, iface["spec_shield"], iface["obs_names"])
@@ -456,6 +463,7 @@ def train_one_seed(model_path: str, seed: int, out_dir: str | Path,
     train_seconds = time.time() - t0
     result = {
         "model_path": model_path,
+        "dt": dt,
         "seed": seed,
         "training_stack": "handmade_numpy_reduced_mdp",
         "device": "cpu",
@@ -546,7 +554,7 @@ def main() -> int:
         default=None,
         help="override the SysML-derived hidden size",
     )
-    ap.add_argument("--dt", type=float, default=0.1)
+    ap.add_argument("--dt", type=validate_dt, default=DEFAULT_DT)
     ap.add_argument("--max-steps", type=int, default=5000)
     ap.add_argument("--max-obs", type=int, default=2)
     ap.add_argument("--max-act", type=int, default=6)

@@ -19,7 +19,10 @@ Cost: linear in (#vars * horizon).
 """
 import argparse
 import os, sys
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_REPO = os.path.dirname(_HERE)
+sys.path.insert(0, _HERE)
+sys.path.insert(0, os.path.join(_REPO, "sysml-models"))
 from certification.equations import Var
 from certification.equation_reconstruct import (
     deterministic_state_variables,
@@ -27,6 +30,7 @@ from certification.equation_reconstruct import (
 )
 from certification.relevance import compute_transition_closed_relevance, equation_refs
 from certification.strict_extract import extract_equation_model
+from runtime_settings import DEFAULT_DT, validate_dt
 
 
 def _copy_source(eq_model, expr, seen=None):
@@ -41,7 +45,8 @@ def _copy_source(eq_model, expr, seen=None):
     return _copy_source(eq_model, eq_model.definitions[expr.name].expr, seen)
 
 
-def get_strict_model(path, dt=0.1, enable_sampled_memory=True):
+def get_strict_model(path, *, dt, enable_sampled_memory=True):
+    dt = validate_dt(dt)
     eq_model = extract_equation_model(path)
     relevance = compute_transition_closed_relevance(eq_model)
     nsupp = {}
@@ -136,7 +141,7 @@ def reconstruct(model, b_obs, b_act, horizon=8, target=None):
     return missing, sorted(STATE)
 
 
-def sweep(path, max_obs=2, max_act=4, dt=0.1, enable_sampled_memory=True):
+def sweep(path, max_obs=2, max_act=4, *, dt, enable_sampled_memory=True):
     model = get_strict_model(path, dt=dt, enable_sampled_memory=enable_sampled_memory)
     relevant = set(model.get("R", set()))
 
@@ -188,7 +193,7 @@ if __name__ == "__main__":
     ap.add_argument("model", nargs="*", help="SysML file path")
     ap.add_argument("--max-obs", type=int, default=2)
     ap.add_argument("--max-act", type=int, default=4)
-    ap.add_argument("--dt", type=float, default=0.1)
+    ap.add_argument("--dt", type=validate_dt, default=DEFAULT_DT)
     ap.add_argument("--no-sampled-memory", action="store_true",
                     help="disable bounded sampled-memory reconstruction rules")
     ns = ap.parse_args()

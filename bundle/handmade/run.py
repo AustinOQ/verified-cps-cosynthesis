@@ -18,6 +18,9 @@ import sys
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _REPO_ROOT = os.path.dirname(_HERE)
 sys.path.insert(0, _REPO_ROOT)
+sys.path.insert(0, os.path.join(_REPO_ROOT, "sysml-models"))
+
+from runtime_settings import DEFAULT_DT, validate_dt
 
 
 def main(argv=None):
@@ -29,6 +32,7 @@ def main(argv=None):
                    help="Output directory (default: experiments/handmade/"
                         "<model>/seed<seed>)")
     p.add_argument("--max-steps", type=int, default=5000)
+    p.add_argument("--dt", type=validate_dt, default=DEFAULT_DT)
     p.add_argument("--ensure-class-coverage", type=int, default=0)
     p.add_argument("--balance-oracle-classes", action="store_true")
     p.add_argument("--eval-episodes", type=int, default=100)
@@ -66,7 +70,7 @@ def main(argv=None):
         model_path=model_path,
         seed=args.seed,
         seed_dir=out_dir,
-        dt=spec.dt,
+        dt=args.dt,
         max_steps=args.max_steps,
         ensure_class_coverage=args.ensure_class_coverage,
         balance_oracle_classes=args.balance_oracle_classes,

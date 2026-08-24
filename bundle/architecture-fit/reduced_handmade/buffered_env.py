@@ -31,7 +31,7 @@ from env import SysMLEnv
 class BufferedDiscreteEnv(SysMLEnv):
     """Discrete SysML env with finite history in the policy observation."""
 
-    def __init__(self, model_path: str, dt: float = 0.1, max_steps: int = 5000,
+    def __init__(self, model_path: str, dt: float, max_steps: int = 5000,
                  phase: int = 2, rng_seed: int | None = None,
                  n_act: int = 1, n_obs: int = 0):
         super().__init__(model_path, dt=dt, max_steps=max_steps,

@@ -34,11 +34,14 @@ from typing import List
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _REPO_ROOT = os.path.dirname(_HERE)
+sys.path.insert(0, os.path.join(_REPO_ROOT, "sysml-models"))
+
+from runtime_settings import DEFAULT_DT, validate_dt
 
 
 def _train_worker(args_tuple):
     """One seed: train + save checkpoint. NO inference here."""
-    (seed, model_name, run_dir, max_steps, ensure_class_coverage,
+    (seed, model_name, run_dir, dt, max_steps, ensure_class_coverage,
      balance_oracle_classes, eval_episodes, test_episodes,
      oracle_samples, oracle_epochs, ppo_episodes,
      minibatch_size, bptt_chunk_size, bc_aux_coeff) = args_tuple
@@ -66,7 +69,7 @@ def _train_worker(args_tuple):
     try:
         train_summary = train_one_seed(
             model_path=model_path, seed=seed, seed_dir=seed_dir,
-            dt=spec.dt, max_steps=max_steps,
+            dt=dt, max_steps=max_steps,
             ensure_class_coverage=ensure_class_coverage,
             balance_oracle_classes=balance_oracle_classes,
             eval_episodes=eval_episodes, test_episodes=test_episodes,
@@ -116,6 +119,7 @@ def main(argv=None) -> int:
                         "Inference is always sequential.")
     p.add_argument("--run-dir", required=True)
     p.add_argument("--max-steps", type=int, default=5000)
+    p.add_argument("--dt", type=validate_dt, default=DEFAULT_DT)
     p.add_argument("--ensure-class-coverage", type=int, default=200)
     p.add_argument("--balance-oracle-classes", action="store_true")
     p.add_argument("--eval-episodes", type=int, default=100)
@@ -139,6 +143,7 @@ def main(argv=None) -> int:
         json.dump({
             "model": args.model, "seeds": seeds,
             "train_jobs": args.jobs,
+            "dt": args.dt,
             "max_steps": args.max_steps,
             "ensure_class_coverage": args.ensure_class_coverage,
             "balance_oracle_classes": args.balance_oracle_classes,
@@ -153,7 +158,7 @@ def main(argv=None) -> int:
             "started_at": _dt.datetime.now().isoformat(),
         }, f, indent=2, sort_keys=True)
 
-    work = [(s, args.model, args.run_dir, args.max_steps,
+    work = [(s, args.model, args.run_dir, args.dt, args.max_steps,
               args.ensure_class_coverage, args.balance_oracle_classes,
               args.eval_episodes, args.test_episodes,
               args.oracle_samples, args.oracle_epochs, args.ppo_episodes,
@@ -198,7 +203,7 @@ def main(argv=None) -> int:
           f"(clean latency) for {len(train_results)} seeds", flush=True)
     for seed in sorted(train_by_seed):
         seed_dir = os.path.join(args.run_dir, f"seed_{seed}")
-        inf = _run_inference(seed, model_path, spec.dt, args.max_steps,
+        inf = _run_inference(seed, model_path, args.dt, args.max_steps,
                               args.eval_episodes, args.test_episodes,
                               seed_dir)
         inf_results.append((seed, inf))
@@ -245,6 +250,7 @@ def main(argv=None) -> int:
     per_seed.sort(key=lambda x: x["seed"])
     summary = {
         "model": args.model,
+        "dt": args.dt,
         "n_seeds": len(per_seed),
         "n_errors": len(errors),
         "train_wall_seconds": train_seconds,

@@ -32,6 +32,7 @@ for import_path in (ARCH, REPO / "sysml-models", REPO / "rl"):
         sys.path.insert(0, str(import_path))
 
 from sysml_inputs import SysMLInput, discover_sysml
+from runtime_settings import DEFAULT_DT, validate_dt
 from shield import SpecShield, _collect_refs
 
 
@@ -200,6 +201,7 @@ def stage_affine(
     out_dir: Path,
     py: str,
     models: list[SysMLInput],
+    dt: float,
 ) -> dict[str, Any]:
     stage_dir = out_dir / "01_affine_rule"
     log_dir = out_dir / "logs"
@@ -216,6 +218,8 @@ def stage_affine(
             str(model.path),
             "--episodes",
             "20",
+            "--dt",
+            str(dt),
             "--out-json",
             str(report_path),
         ]
@@ -224,10 +228,17 @@ def stage_affine(
         if run["returncode"] != 0 or not report_path.exists():
             raise RuntimeError(f"{model.key} rule extraction failed; see {log_path}")
         report = read_json(report_path)
+        report_dt = validate_dt(report.get("dt"))
+        if report_dt != dt:
+            raise RuntimeError(
+                f"{model.key} affine-stage dt does not match run dt: "
+                f"{report_dt} != {dt}"
+            )
         row = {
             "model": model.key,
             "model_name": model.name,
             "action_kind": model.action_kind,
+            "dt": report_dt,
             "status": report.get("status", ""),
             "method": report.get("method", ""),
             "learned_params": report.get("learned_params", ""),
@@ -263,6 +274,7 @@ def stage_affine(
         "model",
         "model_name",
         "action_kind",
+        "dt",
         "status",
         "method",
         "learned_params",
@@ -276,6 +288,7 @@ def stage_affine(
     ]
     write_csv(stage_dir / "summary.csv", rows, fields)
     write_json(stage_dir / "summary.json", {
+        "settings": {"dt": dt},
         "rule_runs": rule_runs,
         "rows": rows,
     })
@@ -346,6 +359,7 @@ def stage_strict(
     out_dir: Path,
     py: str,
     models: list[SysMLInput],
+    dt: float,
 ) -> dict[str, Any]:
     stage_dir = out_dir / "03_markov_mdp"
     log_dir = out_dir / "logs"
@@ -360,10 +374,14 @@ def stage_strict(
         "2",
         "--max-act",
         "4",
+        "--dt",
+        str(dt),
         *[str(model.path) for model in models],
     ]
     closure_run, closure_text = run_command(cmd, closure_log, out_dir)
     closure_rows = parse_closure_text(closure_text, "markov_mdp", models)
+    for row in closure_rows:
+        row["dt"] = dt
     if closure_run["returncode"] != 0 or len(closure_rows) != len(models):
         raise RuntimeError(
             "Markov/MDP buffer extraction did not produce one result for every "
@@ -383,6 +401,8 @@ def stage_strict(
         "2",
         "--max-act",
         "4",
+        "--dt",
+        str(dt),
         *[str(model.path) for model in models],
     ]
     generation_run, generation_text = run_command(
@@ -395,12 +415,24 @@ def stage_strict(
     generation_summary = (
         read_json(generation_json) if generation_json.exists() else {"rows": []}
     )
+    generation_dt = validate_dt(generation_summary.get("settings", {}).get("dt"))
+    if generation_dt != dt:
+        raise RuntimeError(
+            f"Markov/MDP generation dt does not match run dt: {generation_dt} != {dt}"
+        )
     rows = generation_summary.get("rows", [])
     if len(rows) != len(models):
         raise RuntimeError(
             "Markov/MDP proof generation did not produce one result for every SysML file"
         )
     order = _model_order(models)
+    for row in rows:
+        row_dt = validate_dt(row.get("dt"))
+        if row_dt != dt:
+            raise RuntimeError(
+                f"{row.get('model')} Markov/MDP row dt does not match run dt: "
+                f"{row_dt} != {dt}"
+            )
     rows = sorted(rows, key=lambda row: order[row["model"]])
     write_command_summary_log(
         generation_log,
@@ -420,6 +452,7 @@ def stage_strict(
     )
     fields = [
         "model",
+        "dt",
         "b_obs",
         "b_act",
         "claim",
@@ -437,6 +470,7 @@ def stage_strict(
     ]
     write_csv(stage_dir / "summary.csv", rows, fields)
     write_json(stage_dir / "summary.json", {
+        "settings": {"dt": dt},
         "closure_run": closure_run,
         "generation_run": generation_run,
         "closure_rows": closure_rows,
@@ -456,8 +490,113 @@ def _spec_path(out_dir: Path, name: str) -> Path:
     return out_dir / "03_markov_mdp" / "reduced_mdp_specs" / f"{name}.reduced_mdp_spec.json"
 
 
-def _feedforward_architecture_from_spec(spec_path: Path) -> dict[str, Any]:
+def stage_discretization(
+    out_dir: Path,
+    py: str,
+    models: list[SysMLInput],
+    dt: float,
+    *,
+    dt_text: str,
+    optimization_timeout_ms: int,
+    smt_timeout_ms: int,
+) -> dict[str, Any]:
+    stage_dir = out_dir / "04_discretization_safety"
+    log_dir = out_dir / "logs"
+    stage_dir.mkdir(parents=True, exist_ok=True)
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_path = log_dir / "04_discretization_safety.txt"
+    summary_path = stage_dir / "generation.json"
+    cmd = [
+        py,
+        str(ARTIFACT / "src" / "generate_discretization_safety.py"),
+        "--out-json",
+        str(summary_path),
+        "--artifact-dir",
+        str(stage_dir),
+        "--mdp-dir",
+        str(out_dir / "03_markov_mdp"),
+        "--dt",
+        dt_text,
+        "--optimization-timeout-ms",
+        str(optimization_timeout_ms),
+        "--smt-timeout-ms",
+        str(smt_timeout_ms),
+        *[str(model.path) for model in models],
+    ]
+    run, raw_text = run_command(cmd, log_path, out_dir)
+    generated = read_json(summary_path) if summary_path.exists() else {"rows": []}
+    rows = generated.get("rows", [])
+    write_command_summary_log(
+        log_path,
+        run,
+        [
+            "discretization-safety certificate generation:",
+            *[
+                f"- {row['model']}: result={row['result']}, "
+                f"checker={row['checker']}, properties="
+                f"{row['properties_certified']}/{row['properties_checked']}, "
+                f"seconds={float(row['elapsed_seconds']):.6f}"
+                for row in rows
+            ],
+            "- every certificate is replayed by the independent checker",
+        ],
+        raw_text,
+    )
+    if run["returncode"] != 0 or not summary_path.exists():
+        raise RuntimeError(
+            f"discretization-safety certification failed; see {log_path}"
+        )
+    generated_dt = validate_dt(generated.get("settings", {}).get("dt"))
+    if generated_dt != dt:
+        raise RuntimeError(
+            "discretization-safety dt does not match run dt: "
+            f"{generated_dt} != {dt}"
+        )
+    if len(rows) != len(models):
+        raise RuntimeError(
+            "discretization-safety generation did not produce one result for every model"
+        )
+    if any(
+        row.get("result") != "CERTIFIED" or row.get("checker") != "passed"
+        for row in rows
+    ):
+        raise RuntimeError(
+            f"one or more discretization-safety certificates failed; see {log_path}"
+        )
+    order = _model_order(models)
+    rows = sorted(rows, key=lambda row: order[row["model"]])
+    fields = [
+        "model",
+        "dt",
+        "result",
+        "checker",
+        "properties_checked",
+        "properties_certified",
+        "elapsed_seconds",
+        "certificate_path",
+    ]
+    write_csv(stage_dir / "summary.csv", rows, fields)
+    write_json(stage_dir / "summary.json", {
+        "settings": generated.get("settings", {}),
+        "run": run,
+        "rows": rows,
+        "result": generated.get("result"),
+    })
+    return {"run": run, "rows": rows, "fields": fields}
+
+
+def _feedforward_architecture_from_spec(
+    spec_path: Path,
+    *,
+    dt: float,
+) -> dict[str, Any]:
     spec = read_json(spec_path)
+    spec_dt = validate_dt(spec.get("model", {}).get("dt"))
+    if spec_dt != dt:
+        raise RuntimeError(
+            f"reduced-MDP spec dt does not match run dt: {spec_dt} != {dt}: "
+            f"{spec_path}"
+        )
     architecture = spec.get("feedforward_architecture")
     if not isinstance(architecture, dict):
         raise RuntimeError(
@@ -477,6 +616,7 @@ def _read_training_summary(path: Path) -> dict[str, Any]:
     selected = data.get("selected_checkpoint", {})
     buffer = data.get("certified_buffer", {})
     return {
+        "dt": data.get("dt", data.get("config", {}).get("dt", "")),
         "hidden_dim": data.get("hidden_dim", ""),
         "params": data.get("parameter_count", ""),
         "b_obs": buffer.get("b_obs", ""),
@@ -525,6 +665,8 @@ def _run_training_job(job: dict[str, Any], py: str, out_dir: Path) -> dict[str, 
             "2",
             "--max-act",
             "4",
+            "--dt",
+            str(job["dt"]),
             "--reduced-mdp-spec",
             str(job["spec_path"]),
             "--collection-backend",
@@ -550,6 +692,8 @@ def _run_training_job(job: dict[str, Any], py: str, out_dir: Path) -> dict[str, 
             str(job["spec_path"]),
             "--seed",
             str(job["seed"]),
+            "--dt",
+            str(job["dt"]),
             "--hidden-dim",
             str(hidden_dim),
             "--episodes",
@@ -569,12 +713,23 @@ def _run_training_job(job: dict[str, Any], py: str, out_dir: Path) -> dict[str, 
     started = time.time()
     run, raw_text = run_command(cmd, log_path, out_dir)
     seconds = time.time() - started
+    write_command_summary_log(
+        log_path,
+        run,
+        [
+            f"{name} reduced training:",
+            f"- dt={job['dt']}",
+            f"- elapsed_seconds={seconds:.6f}",
+        ],
+        raw_text,
+    )
     summary_json = run_dir / "summary.json"
     if run["returncode"] != 0 or not summary_json.exists():
         return {
             "model": name,
             "kind": kind,
             "status": "failed",
+            "dt": job["dt"],
             "hidden_dim": hidden_dim,
             "seconds": seconds,
             "command_log": str(log_path.relative_to(out_dir)),
@@ -583,6 +738,12 @@ def _run_training_job(job: dict[str, Any], py: str, out_dir: Path) -> dict[str, 
             "returncode": run["returncode"],
         }
     row = _read_training_summary(summary_json)
+    trained_dt = validate_dt(row.get("dt"))
+    if trained_dt != job["dt"]:
+        raise RuntimeError(
+            f"{name} training result dt does not match run dt: "
+            f"{trained_dt} != {job['dt']}"
+        )
     row.update({
         "model": name,
         "kind": kind,
@@ -657,13 +818,14 @@ def _select_models(
     return selected
 
 
-def stage_training(out_dir: Path, py: str, models: list[SysMLInput], *, smoke: bool = False,
+def stage_training(out_dir: Path, py: str, models: list[SysMLInput], *, dt: float,
+                   smoke: bool = False,
                    jobs: int | None = None,
                    override_tolerance: float = 0.01,
                    collection_backend: str = "auto",
                    collection_workers_per_job: int | None = None,
                    collection_start_method: str = "spawn") -> dict[str, Any]:
-    stage_dir = out_dir / "04_reduced_training"
+    stage_dir = out_dir / "05_reduced_training"
     log_dir = out_dir / "logs"
     stage_dir.mkdir(parents=True, exist_ok=True)
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -724,7 +886,7 @@ def stage_training(out_dir: Path, py: str, models: list[SysMLInput], *, smoke: b
             raise RuntimeError(
                 f"current run did not generate a reduced-MDP spec for {name}"
             )
-        architecture = _feedforward_architecture_from_spec(spec_path)
+        architecture = _feedforward_architecture_from_spec(spec_path, dt=dt)
         architectures[name] = architecture
         hidden_dim = int(architecture["hidden_dim"])
         run_dir = stage_dir / "runs" / name / f"h{hidden_dim}" / "seed_0"
@@ -732,10 +894,11 @@ def stage_training(out_dir: Path, py: str, models: list[SysMLInput], *, smoke: b
             "model": name,
             "model_path": model.path,
             "kind": "discrete",
+            "dt": dt,
             "hidden_dim": hidden_dim,
             "seed": 0,
             "run_dir": run_dir,
-            "log_path": log_dir / f"04_train_{name}_h{hidden_dim}.txt",
+            "log_path": log_dir / f"05_train_{name}_h{hidden_dim}.txt",
             "spec_path": spec_path,
             "overrides": discrete_overrides,
             "collection_backend": collection_backend,
@@ -750,7 +913,7 @@ def stage_training(out_dir: Path, py: str, models: list[SysMLInput], *, smoke: b
             raise RuntimeError(
                 f"current run did not generate a reduced-MDP spec for {name}"
             )
-        architecture = _feedforward_architecture_from_spec(spec_path)
+        architecture = _feedforward_architecture_from_spec(spec_path, dt=dt)
         architectures[name] = architecture
         hidden_dim = int(architecture["hidden_dim"])
         run_dir = stage_dir / "runs" / name / f"h{hidden_dim}" / "seed_0"
@@ -758,10 +921,11 @@ def stage_training(out_dir: Path, py: str, models: list[SysMLInput], *, smoke: b
             "model": name,
             "model_path": model.path,
             "kind": "continuous",
+            "dt": dt,
             "hidden_dim": hidden_dim,
             "seed": 0,
             "run_dir": run_dir,
-            "log_path": log_dir / f"04_train_{name}_h{hidden_dim}.txt",
+            "log_path": log_dir / f"05_train_{name}_h{hidden_dim}.txt",
             "spec_path": spec_path,
             "continuous_episodes": continuous_settings["episodes"],
             "continuous_episodes_per_update": continuous_settings["episodes_per_update"],
@@ -771,6 +935,7 @@ def stage_training(out_dir: Path, py: str, models: list[SysMLInput], *, smoke: b
         })
 
     manifest = {
+        "dt": dt,
         "mode": "smoke" if smoke else "full",
         "architecture_selection": "SysML-derived; one architecture per model",
         "architectures": architectures,
@@ -813,7 +978,7 @@ def stage_training(out_dir: Path, py: str, models: list[SysMLInput], *, smoke: b
                     "returncode": row.get("returncode", ""),
                 })
                 write_csv(stage_dir / "all_runs.csv", rows, [
-                    "model", "kind", "status", "hidden_dim", "params",
+                    "model", "kind", "status", "dt", "hidden_dim", "params",
                     "b_obs", "b_act", "device", "shield", "policy",
                     "train_seconds", "peak_rss_mb", "test_safety",
                     "test_success", "test_override", "summary_json",
@@ -836,6 +1001,7 @@ def stage_training(out_dir: Path, py: str, models: list[SysMLInput], *, smoke: b
         "model",
         "kind",
         "status",
+        "dt",
         "hidden_dim",
         "params",
         "b_obs",
@@ -886,11 +1052,13 @@ def write_report(out_dir: Path, summary: dict[str, Any]) -> None:
     lines.append("NeuralRequirement affine/rule fit")
     lines.append("  -> memoryless controller check")
     lines.append("    -> provable Markov/MDP controller check")
-    lines.append("      -> reduced feedforward training")
+    lines.append("      -> discretization safety certification")
+    if "reduced_training" in summary["stages"]:
+        lines.append("        -> reduced feedforward training")
     lines.append("```")
     lines.append("")
-    lines.append("The run overwrites generated outputs and rebuilds certificates, specs,")
-    lines.append("proof files, and trained weights from the SysML files supplied to this run.")
+    lines.append("The run overwrites generated outputs and rebuilds each selected stage")
+    lines.append("from the SysML files supplied to this run.")
     lines.append("")
 
     affine = summary["stages"]["affine_rule"]
@@ -938,27 +1106,40 @@ def write_report(out_dir: Path, summary: dict[str, Any]) -> None:
     lines.append(f"Z3 generation log: `{strict['generation_run']['log']}`")
     lines.append("")
 
-    training = summary["stages"]["reduced_training"]
-    lines.append("## 4. Reduced Feedforward Training")
+    discretization = summary["stages"]["discretization_safety"]
+    lines.append("## 4. Discretization Safety Certification")
     lines.append("")
-    lines.append("Claim: the run-local certified specs can be consumed by non-recurrent")
-    lines.append("feedforward trainers. For each model, the SysML requirement determines")
-    lines.append("one hidden size from its comparison boundaries and outputs.")
-    lines.append("Discrete models use the handmade NumPy PPO stack.")
-    lines.append("Real-valued actions use the bundled continuous MLP PPO stack.")
-    lines.append("All training runs on CPU and checks actions against the requirement")
-    lines.append("read from the current SysML file.")
+    lines.append("Claim: the checked controller contract implies every extracted safety")
+    lines.append("property throughout each interval between controller updates.")
+    lines.append("The stage consumes the Stage 3 certificate and the run-wide dt value.")
     lines.append("")
-    lines.append("Selection rule: train and evaluate the sole SysML-derived size.")
+    lines.append(markdown_table(discretization["rows"], discretization["fields"]))
     lines.append("")
-    lines.append("### Selected Models")
+    lines.append(f"Certificate log: `{discretization['run']['log']}`")
     lines.append("")
-    lines.append(markdown_table(training["selected_rows"], training["selected_fields"]))
-    lines.append("")
-    lines.append("### All Training Runs")
-    lines.append("")
-    lines.append(markdown_table(training["rows"], training["fields"]))
-    lines.append("")
+
+    training = summary["stages"].get("reduced_training")
+    if training is not None:
+        lines.append("## 5. Reduced Feedforward Training")
+        lines.append("")
+        lines.append("Claim: the run-local certified specs can be consumed by non-recurrent")
+        lines.append("feedforward trainers. For each model, the SysML requirement determines")
+        lines.append("one hidden size from its comparison boundaries and outputs.")
+        lines.append("Discrete models use the handmade NumPy PPO stack.")
+        lines.append("Real-valued actions use the bundled continuous MLP PPO stack.")
+        lines.append("All training runs on CPU and checks actions against the requirement")
+        lines.append("read from the current SysML file.")
+        lines.append("")
+        lines.append("Selection rule: train and evaluate the sole SysML-derived size.")
+        lines.append("")
+        lines.append("### Selected Models")
+        lines.append("")
+        lines.append(markdown_table(training["selected_rows"], training["selected_fields"]))
+        lines.append("")
+        lines.append("### All Training Runs")
+        lines.append("")
+        lines.append(markdown_table(training["rows"], training["fields"]))
+        lines.append("")
 
     lines.append("## Interpretation")
     lines.append("")
@@ -966,10 +1147,12 @@ def write_report(out_dir: Path, summary: dict[str, Any]) -> None:
     lines.append("  already defines the controller.")
     lines.append("- Stage 2 removes controller recurrence for the current decision.")
     lines.append("- Stage 3 is the stronger provable Markov/MDP claim.")
-    lines.append("- Stage 4 trains small feedforward policies from the Stage 3 specs.")
-    lines.append("")
-    lines.append("Training and evaluation check each action against the requirement")
-    lines.append("read from the current SysML file.")
+    lines.append("- Stage 4 certifies safety throughout each discretized interval.")
+    if training is not None:
+        lines.append("- Stage 5 trains small feedforward policies from the Stage 3 specs.")
+        lines.append("")
+        lines.append("Training and evaluation check each action against the requirement")
+        lines.append("read from the current SysML file.")
     lines.append("")
     (out_dir / "fitting_sequence_report.md").write_text("\n".join(lines), encoding="utf-8")
 
@@ -984,10 +1167,32 @@ def main() -> int:
     )
     parser.add_argument("--out-dir", default=str(ARTIFACT / "outputs" / "latest"))
     parser.add_argument("--python-bin", default=sys.executable)
+    parser.add_argument(
+        "--dt",
+        default=str(DEFAULT_DT),
+        help=f"simulation time step used by every applicable stage; default={DEFAULT_DT}",
+    )
     parser.add_argument("--smoke-training", action="store_true",
-                        help="run a short Stage 4 wiring test instead of full training")
+                        help="run a short Stage 5 wiring test instead of full training")
     parser.add_argument("--training-jobs", type=int, default=None,
-                        help="parallel Stage 4 training jobs; default=min(6,cpu_count)")
+                        help="parallel Stage 5 training jobs; default=min(6,cpu_count)")
+    parser.add_argument(
+        "--preprocessing-only",
+        action="store_true",
+        help="run Stages 1 through 4 and stop before training",
+    )
+    parser.add_argument(
+        "--discretization-optimization-timeout-ms",
+        type=int,
+        default=250,
+        help="solver timeout for the linear and convex checkers in Stage 4",
+    )
+    parser.add_argument(
+        "--discretization-smt-timeout-ms",
+        type=int,
+        default=2000,
+        help="solver timeout for the final fallback in Stage 4",
+    )
     parser.add_argument(
         "--collection-backend",
         choices=("auto", "serial", "process"),
@@ -1008,6 +1213,12 @@ def main() -> int:
     parser.add_argument("--override-tolerance", type=float, default=0.01,
                         help="absolute override slack for selecting a smaller max-accuracy model")
     args = parser.parse_args()
+    dt_text = str(args.dt)
+    args.dt = validate_dt(args.dt)
+    if args.discretization_smt_timeout_ms <= 0:
+        parser.error("--discretization-smt-timeout-ms must be positive")
+    if args.discretization_optimization_timeout_ms <= 0:
+        parser.error("--discretization-optimization-timeout-ms must be positive")
     models = discover_sysml(args.models, models_root=args.models_root)
 
     out_dir = Path(args.out_dir).resolve()
@@ -1019,30 +1230,42 @@ def main() -> int:
         "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "architecture_fit_root": str(ARCH),
         "python_bin": args.python_bin,
+        "settings": {"dt": args.dt, "dt_input": dt_text},
         "sysml_inputs": [model.to_dict() for model in models],
         "stages": {},
     }
     write_json(out_dir / "sysml_inputs.json", summary["sysml_inputs"])
     summary["stages"]["affine_rule"] = stage_affine(
-        out_dir, args.python_bin, models
+        out_dir, args.python_bin, models, args.dt
     )
     summary["stages"]["memoryless"] = stage_weak(
         out_dir, models
     )
     summary["stages"]["markov_mdp"] = stage_strict(
-        out_dir, args.python_bin, models
+        out_dir, args.python_bin, models, args.dt
     )
-    summary["stages"]["reduced_training"] = stage_training(
+    summary["stages"]["discretization_safety"] = stage_discretization(
         out_dir,
         args.python_bin,
         models,
-        smoke=args.smoke_training,
-        jobs=args.training_jobs,
-        override_tolerance=args.override_tolerance,
-        collection_backend=args.collection_backend,
-        collection_workers_per_job=args.collection_workers_per_job,
-        collection_start_method=args.collection_start_method,
+        args.dt,
+        dt_text=dt_text,
+        optimization_timeout_ms=args.discretization_optimization_timeout_ms,
+        smt_timeout_ms=args.discretization_smt_timeout_ms,
     )
+    if not args.preprocessing_only:
+        summary["stages"]["reduced_training"] = stage_training(
+            out_dir,
+            args.python_bin,
+            models,
+            dt=args.dt,
+            smoke=args.smoke_training,
+            jobs=args.training_jobs,
+            override_tolerance=args.override_tolerance,
+            collection_backend=args.collection_backend,
+            collection_workers_per_job=args.collection_workers_per_job,
+            collection_start_method=args.collection_start_method,
+        )
 
     write_json(out_dir / "fitting_sequence_summary.json", summary)
     write_report(out_dir, summary)

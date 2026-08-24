@@ -21,7 +21,7 @@ from env import SysMLEnv
 class SysMLContinuousEnv(SysMLEnv):
     """RL environment with a continuous (real-valued) action space."""
 
-    def __init__(self, model_path, dt: float = 0.1, max_steps: int = 1200,
+    def __init__(self, model_path, dt: float, max_steps: int = 1200,
                  phase: int = 1, rng_seed: int = None):
         # super() builds the parser/twin, scenario bounds, obs scale, and a
         # (now-unused) discrete action map. We override the action handling.

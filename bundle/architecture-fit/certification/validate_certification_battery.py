@@ -35,6 +35,7 @@ from .relevance import compute_transition_closed_relevance, equation_refs
 from .solver import MAX_SOLVER_POLYNOMIAL_DEGREE, one_step_transition_closure
 from .strict_extract import extract_equation_model
 from reconstruct_closure import get_strict_model, reconstruct
+from runtime_settings import DEFAULT_DT
 
 
 _DISCOVERED = {
@@ -49,6 +50,7 @@ MODELS = {
     "cruise-continuous": _DISCOVERED["cruise-control-continuous"],
     "cruise-discrete": _DISCOVERED["cruise-control"],
 }
+TEST_DT = DEFAULT_DT
 
 
 EXPECTED = {
@@ -203,7 +205,7 @@ def _assert_positive_model(battery: Battery, name: str, cert_dir: Path) -> dict[
         ),
     )
 
-    strict_model = get_strict_model(MODELS[name])
+    strict_model = get_strict_model(MODELS[name], dt=TEST_DT)
     observed_buffer = _first_closure(strict_model)
     battery.require(
         f"{name}/first_closure",
@@ -227,7 +229,7 @@ def _assert_positive_model(battery: Battery, name: str, cert_dir: Path) -> dict[
         f"unexpected earlier passing buffers={prior_failures}",
     )
 
-    cert = build_certificate_for_path(MODELS[name])
+    cert = build_certificate_for_path(MODELS[name], dt=TEST_DT)
     cert_path = cert_dir / f"{name}.certificate.json"
     write_certificate(cert, cert_path)
     disk_cert = load_certificate(cert_path)
@@ -559,6 +561,7 @@ def _assert_equation_reconstructibility_units(battery: Battery) -> None:
         direct,
         b_obs=0,
         b_act=0,
+        dt=TEST_DT,
         horizon=2,
         target={"x"},
         enable_sampled_memory=False,
@@ -594,6 +597,7 @@ def _assert_equation_reconstructibility_units(battery: Battery) -> None:
         guarded,
         b_obs=0,
         b_act=0,
+        dt=TEST_DT,
         horizon=2,
         target={"x"},
         enable_sampled_memory=False,
@@ -634,6 +638,7 @@ def _assert_equation_reconstructibility_units(battery: Battery) -> None:
         proven_guarded,
         b_obs=0,
         b_act=0,
+        dt=TEST_DT,
         horizon=2,
         target={"x"},
         enable_sampled_memory=False,
@@ -677,7 +682,7 @@ def _assert_negative_models(battery: Battery) -> None:
         thermostat_no_done_path = _write_temp_model(
             MODELS["thermostat"], thermostat_no_done, tmp, "thermostat-no-done"
         )
-        cert = build_certificate_for_path(thermostat_no_done_path)
+        cert = build_certificate_for_path(thermostat_no_done_path, dt=TEST_DT)
         errors = check_certificate(cert, check_hash=False)
         blocking_codes = {d["code"] for d in cert["diagnostics"]["blocking"]}
         battery.require(
@@ -701,7 +706,7 @@ def _assert_negative_models(battery: Battery) -> None:
         hidden_done_path = _write_temp_model(
             MODELS["mixing"], hidden_done, tmp, "mixing-hidden-terminal"
         )
-        cert = build_certificate_for_path(hidden_done_path)
+        cert = build_certificate_for_path(hidden_done_path, dt=TEST_DT)
         errors = check_certificate(cert, check_hash=False)
         battery.require(
             "negative_model/hidden_terminal_dependency",
@@ -721,7 +726,7 @@ def _assert_negative_models(battery: Battery) -> None:
             tmp,
             "thermostat-no-neural-requirement",
         )
-        cert = build_certificate_for_path(thermostat_no_neural_req_path)
+        cert = build_certificate_for_path(thermostat_no_neural_req_path, dt=TEST_DT)
         errors = check_certificate(cert, check_hash=False)
         shield = cert["mdp_obligations"]["shield"]
         battery.require(
@@ -744,7 +749,9 @@ def _assert_negative_models(battery: Battery) -> None:
             tmp,
             "thermostat-unknown-shield-ref",
         )
-        cert = build_certificate_for_path(thermostat_unknown_shield_ref_path)
+        cert = build_certificate_for_path(
+            thermostat_unknown_shield_ref_path, dt=TEST_DT
+        )
         errors = check_certificate(cert, check_hash=False)
         shield = cert["mdp_obligations"]["shield"]
         battery.require(
@@ -771,7 +778,9 @@ def _assert_negative_models(battery: Battery) -> None:
             tmp,
             "thermostat-unparsed-requirement",
         )
-        cert = build_certificate_for_path(thermostat_unparsed_requirement_path)
+        cert = build_certificate_for_path(
+            thermostat_unparsed_requirement_path, dt=TEST_DT
+        )
         errors = check_certificate(cert, check_hash=False)
         blocking_codes = {d["code"] for d in cert["diagnostics"]["blocking"]}
         battery.require(
@@ -782,7 +791,9 @@ def _assert_negative_models(battery: Battery) -> None:
             f"blocking={sorted(blocking_codes)} errors={errors[:3]}",
         )
 
-    strict_model = get_strict_model(MODELS["mixing"], enable_sampled_memory=False)
+    strict_model = get_strict_model(
+        MODELS["mixing"], dt=TEST_DT, enable_sampled_memory=False
+    )
     battery.require(
         "negative_closure/mixing_without_sampled_memory",
         _first_closure(strict_model) is None,

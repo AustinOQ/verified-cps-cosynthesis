@@ -24,6 +24,9 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _REPO_ROOT = os.path.dirname(_HERE)
 sys.path.insert(0, _REPO_ROOT)
 sys.path.insert(0, os.path.join(_REPO_ROOT, "rl"))
+sys.path.insert(0, os.path.join(_REPO_ROOT, "sysml-models"))
+
+from runtime_settings import DEFAULT_DT, validate_dt
 
 from handmade.composite import Composite
 from handmade.episode import evaluate
@@ -36,7 +39,7 @@ def main(argv=None):
     p.add_argument("--model-path", required=True)
     p.add_argument("--ckpt", required=True)
     p.add_argument("--seed", type=int, required=True)
-    p.add_argument("--dt", type=float, default=0.1)
+    p.add_argument("--dt", type=validate_dt, default=DEFAULT_DT)
     p.add_argument("--max-steps", type=int, default=5000)
     p.add_argument("--hidden-dim", type=int, default=64)
     p.add_argument("--eval-episodes", type=int, default=100)
@@ -53,7 +56,7 @@ def main(argv=None):
     obs_dim, n_actions = probe.obs_dim, probe.n_actions
     probe.close()
 
-    iface = extract_interface(args.model_path, dt=args.dt)
+    iface = extract_interface(args.model_path)
     policy = RecurrentActorCritic(obs_dim, n_actions, args.hidden_dim,
                                   seed=args.seed)
     load_policy(policy, args.ckpt)
@@ -84,6 +87,7 @@ def main(argv=None):
 
     out = {
         "seed": args.seed,
+        "dt": args.dt,
         "obs_dim": obs_dim,
         "n_actions": n_actions,
         "eval": asdict(eval_sum),

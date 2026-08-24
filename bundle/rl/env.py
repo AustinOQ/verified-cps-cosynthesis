@@ -25,7 +25,7 @@ class SysMLEnv:
     are read from the parsed SysML model — nothing is hardcoded.
     """
 
-    def __init__(self, model_path: str, dt: float = 0.1,
+    def __init__(self, model_path: str, dt: float,
                  max_steps: int = 1200, phase: int = 1,
                  rng_seed: int = None):
         self._model_path = model_path
