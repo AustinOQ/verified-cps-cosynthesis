@@ -7,6 +7,8 @@ from typing import Any
 
 from certification.equations import Expr
 
+from .full_model_reduction import ReducedCase
+
 from .optimization_common import (
     fraction_text,
     linear_constraints,
@@ -414,11 +416,23 @@ def solve_linear_constraints(
 
 
 def run_linear_checker(
-    counterexample: Expr,
+    reduced_case: ReducedCase,
     boolean_variables: set[str],
     *,
     timeout_ms: int,
 ) -> dict[str, Any]:
+    if not isinstance(reduced_case, ReducedCase):
+        return {
+            "outcome": "DEFERRED",
+            "reason_code": "UNREDUCED_INPUT",
+            "detail": "linear checker accepts only a recorded reduced case",
+            "applicability_checks": {
+                "accepted": False,
+                "reduced_case_required": True,
+                "optimization_timeout_ms": int(timeout_ms),
+            },
+        }
+    counterexample = reduced_case.expression
     try:
         constraints = linear_constraints(counterexample, boolean_variables)
     except ProofDeferred as exc:
@@ -451,6 +465,9 @@ def run_linear_checker(
         }
     result["applicability_checks"] = {
         "accepted": True,
+        "reduced_case_required": True,
+        "case_id": reduced_case.case_id,
+        "parent_expression_sha256": reduced_case.parent_hash,
         "constraint_count": len(constraints),
         "strict_boundaries": any(item.strict for item in constraints),
         "strict_boundaries_checked_exactly": True,

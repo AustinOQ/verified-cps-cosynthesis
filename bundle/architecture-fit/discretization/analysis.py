@@ -13,17 +13,14 @@ from certification.strict_extract import CertificationExtractor
 from sysml_parser import IfStmt, PerformStmt, SubactionCallStmt
 
 from .convex_checker import run_convex_checker
+from .full_model_reduction import build_reduction, expr_to_dict
 from .linear_checker import run_linear_checker
 from .proof_rules import (
     ProofDeferred,
     expand_definitions,
-    expr_to_dict,
     expression_symbols,
-    post_state_expression,
     prove_implication_exact,
-    simplify_known_conditions,
     substitute,
-    within_interval_expression,
 )
 
 try:  # pragma: no cover - integration environment determines availability
@@ -94,14 +91,6 @@ def _validated_attempt(attempt: dict[str, Any]) -> dict[str, Any]:
         "detail": "checker returned an invalid outcome",
         "applicability_checks": attempt.get("applicability_checks") or {},
     }
-
-
-def _and(expressions: list[Expr]) -> Expr:
-    if not expressions:
-        return Const(True)
-    if len(expressions) == 1:
-        return expressions[0]
-    return Op("and", tuple(expressions))
 
 
 def _controller_context(extractor: CertificationExtractor) -> list[str]:
@@ -326,7 +315,7 @@ def _specified_constant_values(
         values[target] = Const(parameter.value)
     for target in model.constants:
         if target == "dt" or target.endswith("_dt"):
-            values[target] = Const(dt_record["decimal"])
+            values[target] = Const(dt_record["canonical"])
     return values
 
 
@@ -349,13 +338,20 @@ def _timing_record(
         "fixed_dt": dt_record,
         "sampled_memory_cases": sampled,
         "information_delay_treatment": (
-            "The recorded steps describe how much observation and action history "
-            "reconstructs state. They are not treated as elapsed physical time."
+            "The recorded observation and action history reconstructs the modeled "
+            "state used at the controller update. It is retained as information "
+            "history and is not converted into elapsed physical time."
         ),
         "interval_length_use": (
-            "The exact proof quantifies changing property values without restricting "
-            "the interval length, so it does not convert the information delay to time."
+            "Every physical trajectory is checked for interval time from zero through "
+            "the single fixed dt. Sensor and schedule guards are retained in the "
+            "sampled point premise."
         ),
+        "observation_defect_envelope": {
+            "physical_time_upper": dt_record["canonical"],
+            "fixed_dt": True,
+            "information_history": sampled,
+        },
     }
 
 
@@ -437,7 +433,7 @@ def analyze_model(
     model = extractor.extract()
     boolean_variables = _boolean_variables(extractor, model, mdp_certificate)
     timing = _timing_record(mdp_certificate, dt_record)
-    annotated, dt_updated, continuous_records = _continuous_targets(extractor, model)
+    annotated, _dt_updated, continuous_records = _continuous_targets(extractor, model)
     constant_values = _specified_constant_values(extractor, model, dt_record)
 
     blockers = [
@@ -447,9 +443,9 @@ def analyze_model(
     ]
     if blockers:
         return {
-            "schema_version": 1,
+            "schema_version": 2,
             "result": "NOT_CERTIFIED",
-            "claim": "discretization_safety_preservation_v1",
+            "claim": "full_sysml_discretization_safety_preservation_v2",
             "timing": timing,
             "continuous_rate_assignments": continuous_records,
             "properties": [],
@@ -457,7 +453,7 @@ def analyze_model(
         }
 
     try:
-        shield_expression, shield_record = _shield_expression(
+        shield_expression, _shield_record = _shield_expression(
             extractor, model, mdp_certificate
         )
         guards = _policy_call_guards(extractor, model)
@@ -467,183 +463,219 @@ def analyze_model(
         scenario_constraints = [
             substitute(item, constant_values) for item in scenario_constraints
         ]
-        shield_record["predicate"] = expr_to_dict(shield_expression)
     except ProofDeferred as exc:
         return {
-            "schema_version": 1,
+            "schema_version": 2,
             "result": "NOT_CERTIFIED",
-            "claim": "discretization_safety_preservation_v1",
+            "claim": "full_sysml_discretization_safety_preservation_v2",
             "timing": timing,
             "continuous_rate_assignments": continuous_records,
             "properties": [],
             "blocking_diagnostics": [f"{exc.reason_code}: {exc.detail}"],
         }
 
-    premises = [shield_expression, *guards, *scenario_constraints]
     properties: list[dict[str, Any]] = []
     for target, equation in sorted(model.requirements.items()):
         if equation.source not in {"Prohibition", "Obligation"}:
             continue
         property_id = target.removeprefix("status.")
-        current_expression = substitute(
-            expand_definitions(model, equation.expr),
-            constant_values,
-        )
-        post_expression = post_state_expression(model, current_expression)
-        post_expression = substitute(post_expression, constant_values)
-        post_expression = simplify_known_conditions(post_expression, guards)
-        interval_expression = within_interval_expression(
-            model,
-            current_expression,
-            annotated,
-        )
-        interval_expression = substitute(interval_expression, constant_values)
-        interval_expression = simplify_known_conditions(interval_expression, guards)
         dependencies = equation_refs(model, equation)
-        continuous_dependencies = sorted(
-            expression_symbols(current_expression) & dt_updated
-        )
-        unannotated_continuous = sorted(set(continuous_dependencies) - annotated)
-        progression: list[dict[str, Any]] = []
-        counterexample = _and([*premises, Op("not", (interval_expression,))])
-
-        if unannotated_continuous:
-            missing_detail = (
-                "missing #ContinuousRate on " + ", ".join(unannotated_continuous)
-            )
-            linear_attempt = {
-                "outcome": "DEFERRED",
-                "reason_code": "MISSING_WITHIN_STEP_MEANING",
-                "detail": missing_detail,
-                "applicability_checks": {
-                    "accepted": False,
-                    "all_continuous_dependencies_annotated": False,
-                    "optimization_timeout_ms": int(optimization_timeout_ms),
-                },
-            }
-        else:
-            linear_attempt = run_linear_checker(
-                counterexample,
+        try:
+            reduced_cases, reduction = build_reduction(
+                extractor,
+                model,
+                equation,
+                shield_expression,
+                guards,
+                scenario_constraints,
+                constant_values,
+                annotated,
                 boolean_variables,
-                timeout_ms=optimization_timeout_ms,
+                dt_record,
             )
-            linear_attempt.setdefault("applicability_checks", {})[
-                "all_continuous_dependencies_annotated"
-            ] = True
-        linear_attempt = _validated_attempt(linear_attempt)
-        progression.append(_attempt_stage("linear", linear_attempt))
-
-        outcome = str(linear_attempt.get("outcome", "DEFERRED"))
-        if outcome == "DEFERRED":
-            if unannotated_continuous:
-                convex_attempt = {
+        except ProofDeferred as exc:
+            properties.append({
+                "property_id": property_id,
+                "annotation": equation.source,
+                "source": equation.pretty(),
+                "dependencies": sorted(dependencies),
+                "reduction": {
+                    "kind": "full_sysml_interval_reduction_v2",
                     "outcome": "DEFERRED",
-                    "reason_code": "MISSING_WITHIN_STEP_MEANING",
-                    "detail": missing_detail,
-                    "applicability_checks": {
-                        "accepted": False,
-                        "all_continuous_dependencies_annotated": False,
-                        "optimization_timeout_ms": int(optimization_timeout_ms),
-                    },
-                }
-            else:
-                convex_attempt = run_convex_checker(
-                    counterexample,
-                    boolean_variables,
-                    timeout_ms=optimization_timeout_ms,
-                )
-                convex_attempt.setdefault("applicability_checks", {})[
-                    "all_continuous_dependencies_annotated"
-                ] = True
-            convex_attempt = _validated_attempt(convex_attempt)
-            progression.append(_attempt_stage("convex", convex_attempt))
-            outcome = str(convex_attempt.get("outcome", "DEFERRED"))
-
-        if outcome == "DEFERRED":
-            try:
-                exact_proof = prove_implication_exact(
-                    premises,
-                    interval_expression,
-                    boolean_variables,
-                )
-            except ProofDeferred as exc:
-                exact_proof = {
-                    "proved": False,
                     "reason_code": exc.reason_code,
                     "detail": exc.detail,
-                }
-            except Exception as exc:  # pragma: no cover - fail-closed boundary
-                exact_proof = {
-                    "proved": False,
-                    "reason_code": "MALFORMED_OUTPUT",
-                    "detail": str(exc),
-                }
-            exact_applicability = {
-                "sampled_point_implication_proved": bool(exact_proof.get("proved")),
-                "continuous_property_dependencies": continuous_dependencies,
-                "property_variables_held_between_controller_updates": not continuous_dependencies,
-                "all_continuous_dependencies_annotated": not unannotated_continuous,
-                "time_variables_quantified_without_restriction": sorted(
-                    dependencies & set(mdp_certificate.get("sets", {}).get("time_vars", []))
-                ),
-            }
-            if exact_proof.get("proved") and not unannotated_continuous:
-                progression.append(_stage(
-                    "exact_symbolic",
-                    "CERTIFIED",
-                    applicability_checks=exact_applicability,
-                    proof={
-                        "rule": "shielded_update_implies_property_for_arbitrary_within_interval_continuous_values_v1",
-                        "within_interval_proof": exact_proof,
-                    },
-                ))
-                outcome = "CERTIFIED"
-            else:
-                reason = (
-                    "MISSING_WITHIN_STEP_MEANING"
-                    if unannotated_continuous
-                    else str(exact_proof.get("reason_code") or "UNSUPPORTED_EXPRESSION")
-                )
-                progression.append(_stage(
-                    "exact_symbolic",
-                    "DEFERRED",
-                    reason_code=reason,
-                    detail=str(
-                        exact_proof.get("detail")
-                        or "exact rule did not certify the property"
+                },
+                "cases": [],
+                "progression": [
+                    _stage(
+                        checker,
+                        "DEFERRED",
+                        reason_code=exc.reason_code,
+                        detail=exc.detail,
+                    )
+                    for checker in CHECKER_ORDER
+                ],
+                "result": "NOT_CERTIFIED",
+            })
+            continue
+
+        case_records: list[dict[str, Any]] = []
+        for reduced_case in reduced_cases:
+            case_progression: list[dict[str, Any]] = []
+            linear_attempt = _validated_attempt(run_linear_checker(
+                reduced_case,
+                set(),
+                timeout_ms=optimization_timeout_ms,
+            ))
+            if linear_attempt.get("outcome") == "VIOLATION":
+                linear_attempt = {
+                    **linear_attempt,
+                    "outcome": "DEFERRED",
+                    "reason_code": "COUNTEREXAMPLE_REPLAY_FAILED",
+                    "detail": (
+                        "the arithmetic candidate satisfies the local proof obligation, "
+                        "but reachability from the declared initial state was not replayed"
                     ),
-                    applicability_checks=exact_applicability,
-                    proof=exact_proof,
+                }
+            case_progression.append(_attempt_stage("linear", linear_attempt))
+            outcome = str(linear_attempt.get("outcome", "DEFERRED"))
+
+            if outcome == "DEFERRED":
+                convex_attempt = _validated_attempt(run_convex_checker(
+                    reduced_case,
+                    set(),
+                    timeout_ms=optimization_timeout_ms,
                 ))
+                if convex_attempt.get("outcome") == "VIOLATION":
+                    convex_attempt = {
+                        **convex_attempt,
+                        "outcome": "DEFERRED",
+                        "reason_code": "COUNTEREXAMPLE_REPLAY_FAILED",
+                        "detail": (
+                            "the arithmetic candidate satisfies the local proof obligation, "
+                            "but reachability from the declared initial state was not replayed"
+                        ),
+                    }
+                case_progression.append(_attempt_stage("convex", convex_attempt))
+                outcome = str(convex_attempt.get("outcome", "DEFERRED"))
+
+            if outcome == "DEFERRED":
+                try:
+                    exact_proof = prove_implication_exact(
+                        [reduced_case.expression],
+                        Const(False),
+                        set(),
+                    )
+                except ProofDeferred as exc:
+                    exact_proof = {
+                        "proved": False,
+                        "reason_code": exc.reason_code,
+                        "detail": exc.detail,
+                    }
+                except Exception as exc:  # pragma: no cover
+                    exact_proof = {
+                        "proved": False,
+                        "reason_code": "MALFORMED_OUTPUT",
+                        "detail": str(exc),
+                    }
+                if exact_proof.get("proved"):
+                    case_progression.append(_stage(
+                        "exact_symbolic",
+                        "CERTIFIED",
+                        applicability_checks={
+                            "reduced_case_required": True,
+                            "case_id": reduced_case.case_id,
+                        },
+                        proof={
+                            "rule": "reduced_case_exact_infeasibility_v2",
+                            "within_interval_proof": exact_proof,
+                        },
+                    ))
+                    outcome = "CERTIFIED"
+                else:
+                    case_progression.append(_stage(
+                        "exact_symbolic",
+                        "DEFERRED",
+                        reason_code=str(
+                            exact_proof.get("reason_code")
+                            or "UNSUPPORTED_EXPRESSION"
+                        ),
+                        detail=str(
+                            exact_proof.get("detail")
+                            or "the reduced case remains feasible"
+                        ),
+                        applicability_checks={
+                            "reduced_case_required": True,
+                            "case_id": reduced_case.case_id,
+                        },
+                        proof=exact_proof,
+                    ))
+                    outcome = "DEFERRED"
+
+            if outcome == "DEFERRED":
+                smt_stage = _smt_fallback(
+                    model,
+                    [reduced_case.expression],
+                    Const(False),
+                    timeout_ms=smt_timeout_ms,
+                )
+                smt_stage.setdefault("applicability_checks", {}).update({
+                    "reduced_case_required": True,
+                    "case_id": reduced_case.case_id,
+                })
+                case_progression.append(smt_stage)
                 outcome = "DEFERRED"
 
-        if outcome == "DEFERRED":
-            progression.append(_smt_fallback(
-                model,
-                premises,
-                post_expression,
-                timeout_ms=smt_timeout_ms,
-            ))
-            outcome = "DEFERRED"
+            case_records.append({
+                "case_id": reduced_case.case_id,
+                "expression": expr_to_dict(reduced_case.expression),
+                "parent_expression_sha256": reduced_case.parent_hash,
+                "boolean_assignment": dict(reduced_case.boolean_assignment),
+                "time_reduction": reduced_case.time_reduction,
+                "obligation": reduced_case.obligation,
+                "progression": case_progression,
+                "result": outcome if outcome == "CERTIFIED" else "NOT_CERTIFIED",
+            })
 
-        property_result = outcome if outcome in {"CERTIFIED", "VIOLATION"} else "NOT_CERTIFIED"
+        property_result = (
+            "CERTIFIED"
+            if all(item["result"] == "CERTIFIED" for item in case_records)
+            else "NOT_CERTIFIED"
+        )
+        property_progression: list[dict[str, Any]] = []
+        for checker in CHECKER_ORDER:
+            attempts = [
+                stage
+                for case in case_records
+                for stage in case["progression"]
+                if stage["checker"] == checker
+            ]
+            if not attempts:
+                continue
+            property_progression.append(_stage(
+                checker,
+                (
+                    "CERTIFIED"
+                    if all(stage["outcome"] == "CERTIFIED" for stage in attempts)
+                    else "DEFERRED"
+                ),
+                reason_code=(
+                    ""
+                    if all(stage["outcome"] == "CERTIFIED" for stage in attempts)
+                    else "UNRESOLVED_CASES"
+                ),
+                detail=f"{sum(stage['outcome'] == 'CERTIFIED' for stage in attempts)}/{len(attempts)} attempted cases certified",
+                applicability_checks={"case_attempt_count": len(attempts)},
+            ))
 
         properties.append({
             "property_id": property_id,
             "annotation": equation.source,
             "source": equation.pretty(),
             "dependencies": sorted(dependencies),
-            "continuous_dependencies": continuous_dependencies,
-            "sampled_point_premises": {
-                "shield": shield_record,
-                "controller_call_guards": [expr_to_dict(item) for item in guards],
-                "scenario_parameter_constraints": [
-                    expr_to_dict(item) for item in scenario_constraints
-                ],
-            },
-            "post_action_property": expr_to_dict(post_expression),
-            "within_interval_property": expr_to_dict(interval_expression),
-            "progression": progression,
+            "reduction": reduction,
+            "cases": case_records,
+            "progression": property_progression,
             "result": property_result,
         })
 
@@ -653,23 +685,31 @@ def analyze_model(
         else "NOT_CERTIFIED"
     )
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "result": result,
-        "claim": "discretization_safety_preservation_v1",
+        "claim": "full_sysml_discretization_safety_preservation_v2",
         "claim_scope": (
-            "From each shielded controller update after environment reset to the next "
-            "controller update, for every parsed #Prohibition and #Obligation."
+            "For the complete SysML physical process from each shielded controller "
+            "update through every time in the following fixed dt interval, for every "
+            "parsed #Prohibition and #Obligation."
         ),
         "timing": timing,
         "continuous_rate_semantics": (
             "#ContinuousRate marks x := x + rate * dt as a rate held over the "
-            "corresponding sampled interval under the extracted simultaneous transition semantics."
+            "following physical interval, with the selected controller action held "
+            "through the actuator and physical equations."
         ),
         "continuous_rate_assignments": continuous_records,
         "specified_constant_values": {
             name: expr_to_dict(value) for name, value in sorted(constant_values.items())
         },
         "checker_order": CHECKER_ORDER,
+        "markov_process_evidence": {
+            "buffer": mdp_certificate.get("buffer", {}),
+            "reconstructed_state": mdp_certificate.get("sets", {}).get("q", []),
+            "executed_actions": mdp_certificate.get("sets", {}).get("actions", []),
+            "time_variables": mdp_certificate.get("sets", {}).get("time_vars", []),
+        },
         "optimization_timeout_ms": int(optimization_timeout_ms),
         "properties": properties,
         "blocking_diagnostics": [],

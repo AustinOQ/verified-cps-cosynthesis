@@ -570,12 +570,12 @@ reports `NOT_CERTIFIED`.
 
 ## Current model readiness audit
 
-The current models provide useful source equations, guards, scenario bounds,
-controller contracts, executed action descriptions, and fixed `dt` plumbing.
-They do not yet explicitly declare the continuous meaning of their timestep
-assignments. Until that meaning is added or selected by an explicit checked
-model annotation, the preprocessing stage must return `NOT_CERTIFIED` for an
-actual between step physical claim.
+The current models provide source equations, guards, scenario bounds,
+controller contracts, executed action descriptions, fixed `dt` plumbing, and
+`#ContinuousRate` annotations on the physical timestep assignments. The
+preprocessing stage checks those annotations, reconstructs the corresponding
+physical trajectories, and verifies that each trajectory at `dt` matches the
+extracted next value.
 
 The thermostat temperature update has a rate that is linear in temperature
 after its declared constants and held heater outputs are resolved. It is a

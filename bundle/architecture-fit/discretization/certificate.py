@@ -23,8 +23,8 @@ from .analysis import analyze_model, canonical_dt
 from .proof_certificate_verifier import verify_recorded_optimization_certificates
 
 
-SCHEMA_VERSION = 1
-CERTIFICATE_KIND = "discretization_safety_certificate_v1"
+SCHEMA_VERSION = 2
+CERTIFICATE_KIND = "discretization_safety_certificate_v2"
 
 
 def canonical_json_bytes(value: Any) -> bytes:
@@ -129,9 +129,9 @@ def build_certificate(
     )
     if input_errors:
         analysis = {
-            "schema_version": 1,
+            "schema_version": 2,
             "result": "NOT_CERTIFIED",
-            "claim": "discretization_safety_preservation_v1",
+            "claim": "full_sysml_discretization_safety_preservation_v2",
             "properties": [],
             "blocking_diagnostics": input_errors,
         }
@@ -149,7 +149,7 @@ def build_certificate(
         "kind": CERTIFICATE_KIND,
         "result": analysis.get("result", "NOT_CERTIFIED"),
         "claim": {
-            "name": "discretization_safety_preservation_v1",
+            "name": "full_sysml_discretization_safety_preservation_v2",
             "status": (
                 "discharged"
                 if analysis.get("result") == "CERTIFIED"
@@ -210,10 +210,12 @@ def check_certificate(
         errors.append(f"unsupported kind={certificate.get('kind')}")
     if certificate.get("self_sha256") != certificate_hash(certificate):
         errors.append("self_sha256 does not match certificate contents")
-    if certificate.get("result") != "CERTIFIED":
-        errors.append(f"certificate result is not CERTIFIED: {certificate.get('result')}")
-    if certificate.get("claim", {}).get("status") != "discharged":
-        errors.append("certificate claim is not discharged")
+    result = certificate.get("result")
+    if result not in {"CERTIFIED", "NOT_CERTIFIED", "VIOLATION"}:
+        errors.append(f"certificate result is invalid: {result}")
+    expected_status = "discharged" if result == "CERTIFIED" else "not_discharged"
+    if certificate.get("claim", {}).get("status") != expected_status:
+        errors.append("certificate claim status does not match its result")
     errors.extend(
         verify_recorded_optimization_certificates(certificate.get("analysis", {}))
     )
@@ -299,6 +301,4 @@ def check_certificate(
     )
     if canonical_json_bytes(rebuilt) != canonical_json_bytes(certificate.get("analysis")):
         errors.append("independent replay does not match recorded analysis")
-    if rebuilt.get("result") != "CERTIFIED":
-        errors.append("independent replay did not certify every property")
     return errors

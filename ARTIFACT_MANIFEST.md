@@ -52,7 +52,7 @@ Bundled code required by the default run:
 | `bundle/architecture-fit/reconstruct_closure.py` | Finds finite buffers for the memoryless and Markov/MDP checks. |
 | `bundle/architecture-fit/sysml_deps.py` | Extracts dependency information from SysML for the memoryless check. |
 | `bundle/architecture-fit/certification/` | Builds and checks the Markov/MDP proof result in memory. |
-| `bundle/architecture-fit/discretization/` | Runs the linear, convex, exact symbolic, and SMT progression and independently checks the linear and convex proof certificates. |
+| `bundle/architecture-fit/discretization/` | Reduces the complete SysML physical interval into recorded cases, runs the linear, convex, exact symbolic, and SMT progression, and independently checks the reduction and proof certificates. |
 | `bundle/architecture-fit/reduced_handmade/` | Trains fitted discrete feedforward policies with NumPy PPO. |
 | `bundle/architecture-fit/train_mlp_buffer.py` | Trains a fitted real-valued-action MLP policy on CPU. |
 | `bundle/architecture-fit/mlp_buffer.py` | Defines buffered continuous/discrete MLP environment wrappers and policy classes. |

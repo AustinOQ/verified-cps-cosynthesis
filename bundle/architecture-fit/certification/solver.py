@@ -317,6 +317,8 @@ class Encoder:
                 return z3.RealVal(expr.value)
             if isinstance(expr.value, float):
                 return z3.RealVal(str(expr.value))
+            if isinstance(expr.value, str):
+                return z3.RealVal(expr.value)
             raise ValueError(f"unsupported constant {expr.value!r}")
         if isinstance(expr, RawRef):
             return self.const_var(expr.path)

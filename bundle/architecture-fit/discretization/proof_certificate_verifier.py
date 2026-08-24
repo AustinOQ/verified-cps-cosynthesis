@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from fractions import Fraction
 from typing import Any
 
@@ -149,7 +151,106 @@ def verify_recorded_optimization_certificates(analysis: dict[str, Any]) -> list[
         return ["recorded analysis is malformed"]
     for property_record in analysis.get("properties", []):
         property_id = property_record.get("property_id", "unknown")
-        for stage in property_record.get("progression", []):
+        reduction = property_record.get("reduction") or {}
+        if reduction.get("outcome") != "DEFERRED":
+            if reduction.get("kind") != "full_sysml_interval_reduction_v2":
+                errors.append(f"property {property_id} reduction kind is invalid")
+            counterexample = reduction.get("interval_counterexample")
+            if not isinstance(counterexample, dict):
+                errors.append(f"property {property_id} interval counterexample is missing")
+            else:
+                observed_hash = hashlib.sha256(json.dumps(
+                    counterexample,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode("utf-8")).hexdigest()
+                if observed_hash != reduction.get("interval_counterexample_sha256"):
+                    errors.append(f"property {property_id} interval counterexample hash is invalid")
+            sampled_counterexample = reduction.get("sampled_point_counterexample")
+            if not isinstance(sampled_counterexample, dict):
+                errors.append(f"property {property_id} sampled point counterexample is missing")
+            else:
+                sampled_hash = hashlib.sha256(json.dumps(
+                    sampled_counterexample,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode("utf-8")).hexdigest()
+                if sampled_hash != reduction.get("sampled_point_counterexample_sha256"):
+                    errors.append(f"property {property_id} sampled point counterexample hash is invalid")
+            endpoint_checks = reduction.get("endpoint_checks")
+            if not isinstance(endpoint_checks, list) or any(
+                item.get("matches") is not True for item in endpoint_checks
+            ):
+                errors.append(f"property {property_id} endpoint checks are incomplete")
+            inventory = reduction.get("equation_inventory")
+            inventory_by_target = {
+                item.get("target"): item
+                for item in inventory or []
+                if isinstance(item, dict)
+            }
+            for trajectory in reduction.get("trajectories", []):
+                target = trajectory.get("physical_value")
+                if inventory_by_target.get(target, {}).get("included") is not True:
+                    errors.append(
+                        f"property {property_id} physical equation {target} is omitted"
+                    )
+            for mapping in reduction.get("sensor_to_physical_mappings", []):
+                required = [mapping.get("physical_value")] + [
+                    item.get("target") for item in mapping.get("equation_path", [])
+                ]
+                for target in required:
+                    if inventory_by_target.get(target, {}).get("included") is not True:
+                        errors.append(
+                            f"property {property_id} sensor mapping equation {target} is omitted"
+                        )
+            if any(
+                item.get("matched_controller_call_guard") is not True
+                for item in reduction.get("sensor_mapping_guard_evidence", [])
+            ):
+                errors.append(
+                    f"property {property_id} sensor mapping guard evidence is incomplete"
+                )
+            coverage = reduction.get("case_coverage") or {}
+            if coverage.get("complete") is not True:
+                errors.append(f"property {property_id} case coverage is incomplete")
+            coverage_cases = coverage.get("cases") or []
+            recorded_cases = property_record.get("cases") or []
+            if [item.get("case_id") for item in coverage_cases] != [
+                item.get("case_id") for item in recorded_cases
+            ]:
+                errors.append(f"property {property_id} case identifiers do not match coverage")
+            coverage_by_id = {item.get("case_id"): item for item in coverage_cases}
+            for case in recorded_cases:
+                source = coverage_by_id.get(case.get("case_id"), {})
+                if source.get("expression") != case.get("expression"):
+                    errors.append(
+                        f"property {property_id} case {case.get('case_id')} expression does not match coverage"
+                    )
+                if source.get("time_reduction") != case.get("time_reduction"):
+                    errors.append(
+                        f"property {property_id} case {case.get('case_id')} time reduction does not match coverage"
+                    )
+                if source.get("obligation") != case.get("obligation"):
+                    errors.append(
+                        f"property {property_id} case {case.get('case_id')} obligation does not match coverage"
+                    )
+                if isinstance(source.get("expression"), dict):
+                    case_hash = hashlib.sha256(json.dumps(
+                        source["expression"],
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    ).encode("utf-8")).hexdigest()
+                    if case_hash != source.get("expression_sha256"):
+                        errors.append(
+                            f"property {property_id} case {case.get('case_id')} expression hash is invalid"
+                        )
+
+        stages = [
+            stage
+            for case in property_record.get("cases", [])
+            for stage in case.get("progression", [])
+        ]
+        for stage in stages:
             if stage.get("outcome") != "CERTIFIED":
                 continue
             checker = stage.get("checker")

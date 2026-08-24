@@ -17,6 +17,7 @@ from certification.equations import Const, Op, Var
 from .analysis import CHECKER_ORDER, analyze_model
 from .certificate import certificate_hash, check_certificate, load_certificate
 from .convex_checker import run_convex_checker, solve_convex_constraints
+from .full_model_reduction import ReducedCase, expression_hash
 from .linear_checker import run_linear_checker, solve_linear_constraints
 from .optimization_common import QuadraticConstraint
 from .proof_rules import expression_is_linear, prove_implication_exact
@@ -30,6 +31,17 @@ from .proof_certificate_verifier import (
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise AssertionError(message)
+
+
+def reduced_case(case_id: str, expression) -> ReducedCase:
+    return ReducedCase(
+        case_id,
+        expression,
+        expression_hash(expression),
+        (),
+        "test",
+        "test",
+    )
 
 
 def main() -> int:
@@ -109,21 +121,43 @@ def main() -> int:
         (Op("+", (Op("*", (x, x)), Const(1))), Const(0)),
     )
     require(
-        run_linear_checker(nonlinear_counterexample, set(), timeout_ms=250).get("outcome")
+        run_linear_checker(
+            reduced_case("nonlinear", nonlinear_counterexample),
+            set(),
+            timeout_ms=250,
+        ).get("outcome")
         == "DEFERRED",
         "nonlinear problem was accepted by the linear checker",
     )
     require(
-        run_convex_checker(nonlinear_counterexample, set(), timeout_ms=250).get("outcome")
+        run_convex_checker(
+            reduced_case("convex", nonlinear_counterexample),
+            set(),
+            timeout_ms=250,
+        ).get("outcome")
         == "CERTIFIED",
         "supported nonlinear problem was not certified by the convex checker",
+    )
+    require(
+        run_linear_checker(nonlinear_counterexample, set(), timeout_ms=250).get(
+            "reason_code"
+        )
+        == "UNREDUCED_INPUT",
+        "linear checker accepted an unreduced expression",
+    )
+    require(
+        run_convex_checker(nonlinear_counterexample, set(), timeout_ms=250).get(
+            "reason_code"
+        )
+        == "UNREDUCED_INPUT",
+        "convex checker accepted an unreduced expression",
     )
     with patch(
         "discretization.linear_checker.solve_linear_constraints",
         side_effect=RuntimeError("forced linear failure"),
     ):
         failed_linear = run_linear_checker(
-            Op("<=", (x, Const(0))),
+            reduced_case("failed-linear", Op("<=", (x, Const(0)))),
             set(),
             timeout_ms=250,
         )
@@ -137,7 +171,7 @@ def main() -> int:
         side_effect=RuntimeError("forced convex failure"),
     ):
         failed_convex = run_convex_checker(
-            nonlinear_counterexample,
+            reduced_case("failed-convex", nonlinear_counterexample),
             set(),
             timeout_ms=250,
         )
@@ -154,13 +188,76 @@ def main() -> int:
         mutated = copy.deepcopy(certificate)
         properties = mutated.get("analysis", {}).get("properties", [])
         require(bool(properties), f"certificate has no checked properties: {path}")
-        properties[0]["result"] = "NOT_CERTIFIED"
+        reduction = next(
+            (
+                item.get("reduction", {})
+                for item in properties
+                if item.get("reduction", {}).get("trajectories")
+            ),
+            None,
+        )
+        require(reduction is not None, f"certificate has no physical trajectory: {path}")
+        physical_target = reduction["trajectories"][0]["physical_value"]
+        inventory = reduction["equation_inventory"]
+        target_row = next(item for item in inventory if item["target"] == physical_target)
+        target_row["included"] = False
         mutated["self_sha256"] = certificate_hash(mutated)
         mutation_errors = check_certificate(mutated)
         require(
-            any("independent replay" in error for error in mutation_errors),
-            f"independent replay accepted a modified certificate: {path}",
+            any(
+                "physical equation" in error or "independent replay" in error
+                for error in mutation_errors
+            ),
+            f"checker accepted an omitted physical equation: {path}",
         )
+        all_inventory_targets = {
+            item.get("target")
+            for property_record in properties
+            for item in property_record.get("reduction", {}).get("equation_inventory", [])
+        }
+        for required_target in ("vehicle_speedMps", "vehicle_gapMeters"):
+            if required_target not in all_inventory_targets:
+                continue
+            missing_physics = copy.deepcopy(certificate)
+            changed = False
+            for property_record in missing_physics["analysis"]["properties"]:
+                for item in property_record.get("reduction", {}).get("equation_inventory", []):
+                    if item.get("target") == required_target and item.get("included") is True:
+                        item["included"] = False
+                        changed = True
+            require(changed, f"{required_target} was never included: {path}")
+            missing_physics["self_sha256"] = certificate_hash(missing_physics)
+            require(
+                any(
+                    required_target in error
+                    for error in check_certificate(missing_physics)
+                ),
+                f"checker accepted omitted {required_target}: {path}",
+            )
+        mapped_property = next(
+            (
+                item for item in properties
+                if item.get("reduction", {}).get("sensor_to_physical_mappings")
+            ),
+            None,
+        )
+        if mapped_property is not None:
+            bad_mapping = copy.deepcopy(certificate)
+            selected = next(
+                item for item in bad_mapping["analysis"]["properties"]
+                if item.get("property_id") == mapped_property.get("property_id")
+            )
+            selected["reduction"]["sensor_to_physical_mappings"][0][
+                "physical_value"
+            ] += "_corrupted"
+            bad_mapping["self_sha256"] = certificate_hash(bad_mapping)
+            require(
+                any(
+                    "independent replay" in error or "sensor mapping equation" in error
+                    for error in check_certificate(bad_mapping)
+                ),
+                f"checker accepted a corrupted sensor mapping: {path}",
+            )
         print(f"{path}: VALIDATION PASSED")
 
     marker = "#ContinuousRate assign currentTime := currentTime + dt;"
@@ -216,7 +313,9 @@ def main() -> int:
     print("convex proof certificate validation: PASSED")
     print("linear to convex progression validation: PASSED")
     print("backend failure deferral validation: PASSED")
-    print("certificate mutation rejection: PASSED")
+    print("full model equation omission rejection: PASSED")
+    print("unreduced checker input rejection: PASSED")
+    print("sensor to physical mapping mutation rejection: PASSED")
     print("loud deferral and checker progression: PASSED")
     return 0
 
