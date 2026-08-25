@@ -650,6 +650,45 @@ def _serialized_conjunct_hashes(expression: dict[str, Any]) -> set[str]:
     return {_serialized_expression_hash(expression)}
 
 
+def _verify_shared_candidate_batches(
+    records: Any,
+    invariant_hashes: list[Any],
+    label: str,
+) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(records, list) or not records:
+        return [f"shared reachable region {label} batches are malformed"]
+    covered: set[Any] = set()
+    for record in records:
+        if not isinstance(record, dict):
+            errors.append(f"shared reachable region {label} batch is malformed")
+            continue
+        candidates = record.get("candidates")
+        candidate_hashes = record.get("candidate_sha256")
+        if not isinstance(candidates, list) or not isinstance(candidate_hashes, list):
+            errors.append(f"shared reachable region {label} candidates are malformed")
+            continue
+        if len(candidates) != len(candidate_hashes):
+            errors.append(f"shared reachable region {label} candidate hashes are malformed")
+        for index, candidate in enumerate(candidates):
+            if not isinstance(candidate, dict) or index >= len(
+                candidate_hashes
+            ) or candidate_hashes[index] != _serialized_expression_hash(candidate):
+                errors.append(f"shared reachable region {label} candidate hash is invalid")
+            elif index < len(candidate_hashes):
+                covered.add(candidate_hashes[index])
+        query = record.get("query")
+        errors.extend(_verify_smt_reachability_query(query))
+        if not isinstance(query, dict) or query.get("solver_status") != "unsat":
+            errors.append(f"shared reachable region {label} batch is not proved impossible")
+        else:
+            errors.extend(_recheck_smt_no_solution(query))
+    for invariant_hash in invariant_hashes:
+        if invariant_hash not in covered:
+            errors.append(f"shared reachable region clause has no {label} proof")
+    return errors
+
+
 def _verify_shared_reachability(
     analysis: dict[str, Any],
 ) -> tuple[list[str], dict[str, Any], dict[str, Any]]:
@@ -677,7 +716,11 @@ def _verify_shared_reachability(
             ).encode("utf-8")).hexdigest()
             if key != context_hash or region.get("context_sha256") != context_hash:
                 errors.append("shared reachable region context hash is invalid")
-        if region.get("rule") != "shared_relational_reachable_region_v1":
+        rule = region.get("rule")
+        if rule not in {
+            "shared_relational_reachable_region_v1",
+            "shared_relational_reachable_region_v2",
+        }:
             errors.append("shared reachable region proof rule is invalid")
         for name in ("initial_expression", "domain_expression", "transition_expression"):
             expression = region.get(name)
@@ -702,44 +745,56 @@ def _verify_shared_reachability(
             ) or invariant_hashes[index] != _serialized_expression_hash(expression):
                 errors.append("shared reachable region invariant clause hash is invalid")
 
-        initiation = region.get("initiation_queries")
-        preservation = region.get("preservation_queries")
-        if not isinstance(initiation, list):
-            errors.append("shared reachable region initiation queries are malformed")
-            initiation = []
-        if not isinstance(preservation, list):
-            errors.append("shared reachable region preservation queries are malformed")
-            preservation = []
-        initiated_hashes = {
-            item.get("candidate_sha256")
-            for item in initiation
-            if isinstance(item, dict)
-        }
-        preserved_hashes = {
-            item.get("candidate_sha256")
-            for item in preservation
-            if isinstance(item, dict)
-        }
-        for invariant_hash in invariant_hashes:
-            if invariant_hash not in initiated_hashes:
-                errors.append("shared reachable region clause has no initiation proof")
-            if invariant_hash not in preserved_hashes:
-                errors.append("shared reachable region clause has no preservation proof")
-        for record in [*initiation, *preservation]:
-            if not isinstance(record, dict):
-                errors.append("shared reachable region query record is malformed")
-                continue
-            candidate = record.get("candidate")
-            if not isinstance(candidate, dict) or record.get(
-                "candidate_sha256"
-            ) != _serialized_expression_hash(candidate):
-                errors.append("shared reachable region candidate hash is invalid")
-            query = record.get("query")
-            errors.extend(_verify_smt_reachability_query(query))
-            if not isinstance(query, dict) or query.get("solver_status") != "unsat":
-                errors.append("shared reachable region obligation is not proved impossible")
-            else:
-                errors.extend(_recheck_smt_no_solution(query))
+        if rule == "shared_relational_reachable_region_v2":
+            errors.extend(_verify_shared_candidate_batches(
+                region.get("initiation_batches"),
+                invariant_hashes,
+                "initiation",
+            ))
+            errors.extend(_verify_shared_candidate_batches(
+                region.get("preservation_batches"),
+                invariant_hashes,
+                "preservation",
+            ))
+        else:
+            initiation = region.get("initiation_queries")
+            preservation = region.get("preservation_queries")
+            if not isinstance(initiation, list):
+                errors.append("shared reachable region initiation queries are malformed")
+                initiation = []
+            if not isinstance(preservation, list):
+                errors.append("shared reachable region preservation queries are malformed")
+                preservation = []
+            initiated_hashes = {
+                item.get("candidate_sha256")
+                for item in initiation
+                if isinstance(item, dict)
+            }
+            preserved_hashes = {
+                item.get("candidate_sha256")
+                for item in preservation
+                if isinstance(item, dict)
+            }
+            for invariant_hash in invariant_hashes:
+                if invariant_hash not in initiated_hashes:
+                    errors.append("shared reachable region clause has no initiation proof")
+                if invariant_hash not in preserved_hashes:
+                    errors.append("shared reachable region clause has no preservation proof")
+            for record in [*initiation, *preservation]:
+                if not isinstance(record, dict):
+                    errors.append("shared reachable region query record is malformed")
+                    continue
+                candidate = record.get("candidate")
+                if not isinstance(candidate, dict) or record.get(
+                    "candidate_sha256"
+                ) != _serialized_expression_hash(candidate):
+                    errors.append("shared reachable region candidate hash is invalid")
+                query = record.get("query")
+                errors.extend(_verify_smt_reachability_query(query))
+                if not isinstance(query, dict) or query.get("solver_status") != "unsat":
+                    errors.append("shared reachable region obligation is not proved impossible")
+                else:
+                    errors.extend(_recheck_smt_no_solution(query))
 
         for removal in region.get("implication_removals", []):
             if not isinstance(removal, dict):

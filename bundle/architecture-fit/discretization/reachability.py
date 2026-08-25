@@ -1488,6 +1488,51 @@ def shared_reachability_context_sha256(
     return hashlib.sha256(payload).hexdigest()
 
 
+def _batched_candidate_filter(
+    candidates: list[Expr],
+    antecedent: Expr,
+    context: ReachabilityContext,
+    frame: int,
+    run_query: Callable[[Expr], dict[str, Any]],
+) -> tuple[list[Expr], list[Expr]]:
+    proved: list[Expr] = []
+    rejected: list[Expr] = []
+
+    def check(group: list[Expr]) -> None:
+        if not group:
+            return
+        consequent = _relational_query([
+            _relational_lift(item, context, frame) for item in group
+        ])
+        query = run_query(_relational_query([
+            antecedent,
+            Op("not", (consequent,)),
+        ]))
+        if query.get("solver_status") == "unsat":
+            proved.extend(group)
+            return
+        if len(group) == 1:
+            rejected.extend(group)
+            return
+        middle = len(group) // 2
+        check(group[:middle])
+        check(group[middle:])
+
+    check(candidates)
+    return proved, rejected
+
+
+def _batch_proof_record(
+    candidates: list[Expr],
+    query: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "candidates": [expr_to_dict(item) for item in candidates],
+        "candidate_sha256": [expression_hash(item) for item in candidates],
+        "query": query,
+    }
+
+
 def _prepare_shared_relational_region(
     model: EquationModel,
     context: ReachabilityContext,
@@ -1523,34 +1568,33 @@ def _prepare_shared_relational_region(
         query_cache[key] = result
         return result
 
-    initiated: list[Expr] = []
-    for candidate in candidates:
-        query_expression = _relational_query([
-            initial,
-            Op("not", (_relational_lift(candidate, context, 0),)),
-        ])
-        if run_query(query_expression).get("solver_status") == "unsat":
-            initiated.append(candidate)
+    initiated, _rejected_initial = _batched_candidate_filter(
+        candidates,
+        initial,
+        context,
+        0,
+        run_query,
+    )
 
     active = list(initiated)
     changed = True
     while changed and active:
-        changed = False
         current_invariant = _relational_query([
             _relational_lift(item, context, 0) for item in active
         ])
-        preserved: list[Expr] = []
-        for candidate in active:
-            query_expression = _relational_query([
-                current_invariant,
-                domain,
-                transition,
-                Op("not", (_relational_lift(candidate, context, 1),)),
-            ])
-            if run_query(query_expression).get("solver_status") == "unsat":
-                preserved.append(candidate)
-            else:
-                changed = True
+        preservation_antecedent = _relational_query([
+            current_invariant,
+            domain,
+            transition,
+        ])
+        preserved, rejected = _batched_candidate_filter(
+            active,
+            preservation_antecedent,
+            context,
+            1,
+            run_query,
+        )
+        changed = bool(rejected)
         active = preserved
 
     if not active:
@@ -1559,6 +1603,7 @@ def _prepare_shared_relational_region(
             "no generated state constraint was both initial and preserved",
         )
 
+    preserved_candidate_count = len(active)
     implication_removals: list[dict[str, Any]] = []
     reduced = list(active)
     for candidate in list(active):
@@ -1586,45 +1631,36 @@ def _prepare_shared_relational_region(
     current_invariant = _relational_query([
         _relational_lift(item, context, 0) for item in active
     ])
-    initiation_records: list[dict[str, Any]] = []
-    preservation_records: list[dict[str, Any]] = []
-    for candidate in active:
-        initiation_expression = _relational_query([
-            initial,
-            Op("not", (_relational_lift(candidate, context, 0),)),
-        ])
-        initiation_query = run_query(initiation_expression)
-        if initiation_query.get("solver_status") != "unsat":
-            raise ProofDeferred(
-                str(initiation_query.get("reason_code") or "INVARIANT_NOT_INITIAL"),
-                str(initiation_query.get("detail") or "a retained state constraint is not initial"),
-            )
-        initiation_records.append({
-            "candidate": expr_to_dict(candidate),
-            "candidate_sha256": expression_hash(candidate),
-            "query": initiation_query,
-        })
+    initiation_expression = _relational_query([
+        initial,
+        Op("not", (_relational_query([
+            _relational_lift(item, context, 0) for item in active
+        ]),)),
+    ])
+    initiation_query = run_query(initiation_expression)
+    if initiation_query.get("solver_status") != "unsat":
+        raise ProofDeferred(
+            str(initiation_query.get("reason_code") or "INVARIANT_NOT_INITIAL"),
+            str(initiation_query.get("detail") or "the retained state constraints are not initial"),
+        )
 
-        preservation_expression = _relational_query([
-            current_invariant,
-            domain,
-            transition,
-            Op("not", (_relational_lift(candidate, context, 1),)),
-        ])
-        preservation_query = run_query(preservation_expression)
-        if preservation_query.get("solver_status") != "unsat":
-            raise ProofDeferred(
-                str(preservation_query.get("reason_code") or "INVARIANT_NOT_PRESERVED"),
-                str(preservation_query.get("detail") or "a retained state constraint is not preserved"),
-            )
-        preservation_records.append({
-            "candidate": expr_to_dict(candidate),
-            "candidate_sha256": expression_hash(candidate),
-            "query": preservation_query,
-        })
+    preservation_expression = _relational_query([
+        current_invariant,
+        domain,
+        transition,
+        Op("not", (_relational_query([
+            _relational_lift(item, context, 1) for item in active
+        ]),)),
+    ])
+    preservation_query = run_query(preservation_expression)
+    if preservation_query.get("solver_status") != "unsat":
+        raise ProofDeferred(
+            str(preservation_query.get("reason_code") or "INVARIANT_NOT_PRESERVED"),
+            str(preservation_query.get("detail") or "the retained state constraints are not preserved"),
+        )
 
     record = {
-        "rule": "shared_relational_reachable_region_v1",
+        "rule": "shared_relational_reachable_region_v2",
         "context": context_record,
         "context_sha256": context_sha256,
         "initial_expression": expr_to_dict(initial),
@@ -1635,12 +1671,12 @@ def _prepare_shared_relational_region(
         "transition_expression_sha256": expression_hash(transition),
         "candidate_count": len(candidates),
         "initiated_candidate_count": len(initiated),
-        "preserved_candidate_count": len(reduced) + len(implication_removals),
+        "preserved_candidate_count": preserved_candidate_count,
         "invariant": [expr_to_dict(item) for item in active],
         "invariant_sha256": [expression_hash(item) for item in active],
         "implication_removals": implication_removals,
-        "initiation_queries": initiation_records,
-        "preservation_queries": preservation_records,
+        "initiation_batches": [_batch_proof_record(active, initiation_query)],
+        "preservation_batches": [_batch_proof_record(active, preservation_query)],
         "unique_query_count": len(query_cache),
         "query_cache_hits": query_cache_hits,
     }
