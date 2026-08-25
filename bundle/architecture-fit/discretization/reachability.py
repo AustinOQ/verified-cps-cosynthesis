@@ -453,6 +453,7 @@ def _run_smt_query(
     *,
     timeout_ms: int,
     record_sat_values: bool = True,
+    replay_sat_query: bool = True,
 ) -> dict[str, Any]:
     serialized = expr_to_dict(expression)
     query_hash = expression_hash(expression)
@@ -503,10 +504,11 @@ def _run_smt_query(
         expression,
     )
     record["exact_values"] = exact_values
-    record["exact_replay"] = replay_serialized_boolean_expression(
-        serialized,
-        exact_values,
-    )
+    if replay_sat_query:
+        record["exact_replay"] = replay_serialized_boolean_expression(
+            serialized,
+            exact_values,
+        )
     return record
 
 
@@ -1499,24 +1501,47 @@ def _batched_candidate_filter(
     rejected: list[Expr] = []
 
     def check(group: list[Expr]) -> None:
-        if not group:
+        remaining = list(group)
+        while remaining:
+            lifted = [
+                _relational_lift(item, context, frame) for item in remaining
+            ]
+            consequent = _relational_query(lifted)
+            query = run_query(_relational_query([
+                antecedent,
+                Op("not", (consequent,)),
+            ]))
+            if query.get("solver_status") == "unsat":
+                proved.extend(remaining)
+                return
+            failed: list[Expr] = []
+            if query.get("solver_status") == "sat" and isinstance(
+                query.get("exact_values"), dict
+            ):
+                for candidate, lifted_candidate in zip(remaining, lifted):
+                    try:
+                        holds = replay_serialized_boolean_expression(
+                            expr_to_dict(lifted_candidate),
+                            query["exact_values"],
+                        )
+                    except (TypeError, ValueError, ZeroDivisionError):
+                        holds = None
+                    if holds is False:
+                        failed.append(candidate)
+            if failed:
+                failed_set = set(failed)
+                rejected.extend(failed)
+                remaining = [
+                    item for item in remaining if item not in failed_set
+                ]
+                continue
+            if len(remaining) == 1:
+                rejected.extend(remaining)
+                return
+            middle = len(remaining) // 2
+            check(remaining[:middle])
+            check(remaining[middle:])
             return
-        consequent = _relational_query([
-            _relational_lift(item, context, frame) for item in group
-        ])
-        query = run_query(_relational_query([
-            antecedent,
-            Op("not", (consequent,)),
-        ]))
-        if query.get("solver_status") == "unsat":
-            proved.extend(group)
-            return
-        if len(group) == 1:
-            rejected.extend(group)
-            return
-        middle = len(group) // 2
-        check(group[:middle])
-        check(group[middle:])
 
     check(candidates)
     return proved, rejected
@@ -1563,7 +1588,7 @@ def _prepare_shared_relational_region(
             context,
             expression,
             timeout_ms=_remaining_timeout_ms(deadline),
-            record_sat_values=False,
+            replay_sat_query=False,
         )
         query_cache[key] = result
         return result
@@ -1826,6 +1851,204 @@ def _run_relational_invariant_checker(
         },
         "proof": proof,
     }
+
+
+def _run_relational_invariant_group(
+    model: EquationModel,
+    reduced_cases: list[ReducedCase],
+    context: ReachabilityContext,
+    *,
+    timeout_ms: int,
+    cache: SharedReachabilityCache,
+) -> dict[str, dict[str, Any]]:
+    if not reduced_cases:
+        return {}
+    if any(item.obligation != "physical_interval" for item in reduced_cases):
+        return {
+            item.case_id: {
+                "outcome": "DEFERRED",
+                "reason_code": "BLOCKED_INPUT",
+                "detail": "grouped relational checks require physical interval cases",
+                "applicability_checks": {"accepted": False},
+            }
+            for item in reduced_cases
+        }
+    if z3 is None:
+        return {
+            item.case_id: {
+                "outcome": "DEFERRED",
+                "reason_code": "BLOCKED_INPUT",
+                "detail": "z3-solver is unavailable",
+                "applicability_checks": {"accepted": False},
+            }
+            for item in reduced_cases
+        }
+
+    deadline = monotonic() + (timeout_ms / 1000.0)
+    context_sha256 = shared_reachability_context_sha256(context)
+    if context_sha256 in cache.region_failures:
+        failure = cache.region_failures[context_sha256]
+        return {item.case_id: dict(failure) for item in reduced_cases}
+    shared = cache.regions.get(context_sha256)
+    if shared is None:
+        shared = _prepare_shared_relational_region(
+            model,
+            context,
+            timeout_ms=_remaining_timeout_ms(deadline),
+        )
+        cache.regions[context_sha256] = shared
+
+    domain = _relational_lift(context.domain, context, 0)
+    current_invariant = _relational_query([
+        _relational_lift(item, context, 0) for item in shared.invariant
+    ])
+    case_safety: list[tuple[ReducedCase, Expr]] = []
+    for reduced_case in reduced_cases:
+        unsafe = reduced_case.reachability_expression or reduced_case.expression
+        mode = _mode_condition(reduced_case, {
+            name: f"rel_action_0__{name}"
+            for name in context.action_variables
+        })
+        case_safety.append((
+            reduced_case,
+            _relational_query([
+                current_invariant,
+                domain,
+                mode,
+                _relational_lift(unsafe, context, 0),
+            ]),
+        ))
+    group_expression = simplify(Op(
+        "or",
+        tuple(expression for _case, expression in case_safety),
+    ))
+    group_expression_sha256 = expression_hash(group_expression)
+    safety_key = hashlib.sha256(
+        f"{context_sha256}:{group_expression_sha256}".encode("utf-8")
+    ).hexdigest()
+    safety_record = cache.safety_queries.get(safety_key)
+    if safety_record is None:
+        query = _run_smt_query(
+            model,
+            context,
+            group_expression,
+            timeout_ms=_remaining_timeout_ms(deadline),
+        )
+        safety_record = {
+            "rule": "grouped_relational_safety_query_v2",
+            "context_sha256": context_sha256,
+            "safety_expression": expr_to_dict(group_expression),
+            "safety_expression_sha256": group_expression_sha256,
+            "case_ids": [item.case_id for item, _expression in case_safety],
+            "covered_case_expressions": [
+                {
+                    "case_id": item.case_id,
+                    "expression": expr_to_dict(expression),
+                    "expression_sha256": expression_hash(expression),
+                    "merge_rule": "group_disjunction",
+                }
+                for item, expression in case_safety
+            ],
+            "query": query,
+        }
+        cache.safety_queries[safety_key] = safety_record
+        cache.safety_expressions[safety_key] = group_expression
+    query = safety_record["query"]
+    certified = query.get("solver_status") == "unsat"
+    attempts: dict[str, dict[str, Any]] = {}
+    for reduced_case, safety_expression in case_safety:
+        proof = {
+            "rule": "shared_relational_inductive_invariant_v2",
+            "case_id": reduced_case.case_id,
+            "case_expression_sha256": expression_hash(reduced_case.expression),
+            "reachability_expression_sha256": expression_hash(
+                reduced_case.reachability_expression or reduced_case.expression
+            ),
+            "shared_reachable_region_sha256": context_sha256,
+            "merged_safety_query_sha256": safety_key,
+            "case_safety_expression_sha256": expression_hash(safety_expression),
+            "merge_rule": "group_disjunction",
+            "reused_safety_query": len(reduced_cases) > 1,
+        }
+        attempts[reduced_case.case_id] = {
+            "outcome": "CERTIFIED" if certified else "DEFERRED",
+            "reason_code": "" if certified else str(
+                query.get("reason_code") or "GROUP_SAFETY_INCONCLUSIVE"
+            ),
+            "detail": (
+                f"one checked relational query excludes {len(reduced_cases)} unsafe cases"
+                if certified
+                else "the grouped unsafe cases require automatic subdivision"
+            ),
+            "applicability_checks": {
+                "accepted": True,
+                "case_id": reduced_case.case_id,
+                "group_case_count": len(reduced_cases),
+                "complete_initialization": True,
+                "complete_transition_encoding": True,
+                "candidate_count": shared.record["candidate_count"],
+                "invariant_clause_count": len(shared.invariant),
+                "shared_reachable_region": True,
+            },
+            "proof": proof,
+        }
+    return attempts
+
+
+def run_relational_invariant_group_checker(
+    model: EquationModel,
+    reduced_cases: list[ReducedCase],
+    context: ReachabilityContext,
+    *,
+    timeout_ms: int,
+    cache: SharedReachabilityCache,
+) -> dict[str, dict[str, Any]]:
+    """Certify groups and divide only groups whose combined query is inconclusive."""
+
+    results: dict[str, dict[str, Any]] = {}
+
+    def check(group: list[ReducedCase]) -> None:
+        try:
+            with _hard_timeout(timeout_ms):
+                attempts = _run_relational_invariant_group(
+                    model,
+                    group,
+                    context,
+                    timeout_ms=timeout_ms,
+                    cache=cache,
+                )
+        except ProofDeferred as exc:
+            attempts = {
+                item.case_id: {
+                    "outcome": "DEFERRED",
+                    "reason_code": exc.reason_code,
+                    "detail": exc.detail,
+                    "applicability_checks": {
+                        "accepted": True,
+                        "case_id": item.case_id,
+                    },
+                }
+                for item in group
+            }
+            context_sha256 = shared_reachability_context_sha256(context)
+            cache.region_failures.setdefault(
+                context_sha256,
+                next(iter(attempts.values())),
+            )
+        if attempts and all(
+            item.get("outcome") == "CERTIFIED" for item in attempts.values()
+        ):
+            results.update(attempts)
+            return
+        if len(group) == 1:
+            results.update(attempts)
+            return
+        middle = len(group) // 2
+        check(group[:middle])
+        check(group[middle:])
+
+    check(list(reduced_cases))
+    return results
 
 
 def run_relational_invariant_checker(

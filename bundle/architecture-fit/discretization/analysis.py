@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from fractions import Fraction
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from certification.equations import Const, EquationModel, Expr, Ite, Op, RawRef, Var
 from certification.relevance import equation_refs
@@ -26,7 +27,7 @@ from .linear_checker import run_linear_checker
 from .reachability import (
     SharedReachabilityCache,
     run_reachability_checker,
-    run_relational_invariant_checker,
+    run_relational_invariant_group_checker,
     run_smt_reachability_checker,
 )
 from .proof_rules import (
@@ -109,6 +110,111 @@ def _validated_attempt(attempt: dict[str, Any]) -> dict[str, Any]:
         "detail": "checker returned an invalid outcome",
         "applicability_checks": attempt.get("applicability_checks") or {},
     }
+
+
+def _case_conjuncts(expression: Expr) -> list[Expr]:
+    if isinstance(expression, Op) and expression.op == "and":
+        result: list[Expr] = []
+        for argument in expression.args:
+            result.extend(_case_conjuncts(argument))
+        return result
+    return [expression]
+
+
+def _case_conjunction(expressions: list[Expr]) -> Expr:
+    if not expressions:
+        return Const(True)
+    if len(expressions) == 1:
+        return expressions[0]
+    return Op("and", tuple(expressions))
+
+
+def _grouped_case_attempts(
+    reduced_cases: list[ReducedCase],
+    checker_name: str,
+    checker: Callable[[ReducedCase], dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    conjunct_maps = {
+        item.case_id: {
+            expression_hash(expression): expression
+            for expression in _case_conjuncts(item.expression)
+        }
+        for item in reduced_cases
+    }
+    results: dict[str, dict[str, Any]] = {}
+    attempt_cache: dict[str, dict[str, Any]] = {}
+
+    def partition(group: list[ReducedCase]) -> tuple[list[ReducedCase], list[ReducedCase]]:
+        sets = [set(conjunct_maps[item.case_id]) for item in group]
+        union = set().union(*sets)
+        shared = set.intersection(*sets)
+        choices = []
+        for key in sorted(union - shared):
+            present = sum(key in item for item in sets)
+            if 0 < present < len(group):
+                choices.append((abs(2 * present - len(group)), key))
+        if choices:
+            _distance, pivot = min(choices)
+            left = [item for item in group if pivot in conjunct_maps[item.case_id]]
+            right = [item for item in group if pivot not in conjunct_maps[item.case_id]]
+            return left, right
+        middle = len(group) // 2
+        return group[:middle], group[middle:]
+
+    def check(group: list[ReducedCase]) -> None:
+        if not group:
+            return
+        common = set(conjunct_maps[group[0].case_id])
+        for item in group[1:]:
+            common.intersection_update(conjunct_maps[item.case_id])
+        common_expression = _case_conjunction([
+            conjunct_maps[group[0].case_id][key] for key in sorted(common)
+        ])
+        if len(group) == 1:
+            common_expression = group[0].expression
+        common_hash = expression_hash(common_expression)
+        attempt = attempt_cache.get(common_hash)
+        if attempt is None:
+            group_case = ReducedCase(
+                f"group.{checker_name}.{common_hash[:12]}",
+                common_expression,
+                common_hash,
+                (),
+                "common_constraint_group",
+                group[0].obligation,
+                common_expression,
+            )
+            attempt = _validated_attempt(checker(group_case))
+            attempt_cache[common_hash] = attempt
+        if attempt.get("outcome") == "CERTIFIED":
+            shared_conjuncts = sorted(common)
+            for item in group:
+                covered = deepcopy(attempt)
+                covered.setdefault("applicability_checks", {}).update({
+                    "case_id": item.case_id,
+                    "shared_case_group": len(group) > 1,
+                    "shared_case_count": len(group),
+                })
+                if len(group) > 1:
+                    covered.setdefault("proof", {})["group_reduction"] = {
+                        "rule": "common_conjunctive_case_group_v1",
+                        "source_expression_sha256": expression_hash(item.expression),
+                        "shared_expression": expr_to_dict(common_expression),
+                        "shared_expression_sha256": common_hash,
+                        "shared_conjunct_sha256": shared_conjuncts,
+                        "covered_case_count": len(group),
+                    }
+                results[item.case_id] = covered
+            return
+        if len(group) == 1:
+            results[group[0].case_id] = deepcopy(attempt)
+            return
+        left, right = partition(group)
+        check(left)
+        check(right)
+
+    check(list(reduced_cases))
+    return results
 
 
 def _controller_context(extractor: CertificationExtractor) -> list[str]:
@@ -782,14 +888,33 @@ def analyze_model(
             })
             continue
 
-        case_records: list[dict[str, Any]] = []
-        for reduced_case in reduced_cases:
-            case_progression: list[dict[str, Any]] = []
-            linear_attempt = _validated_attempt(run_linear_checker(
-                reduced_case,
+        linear_group_attempts = _grouped_case_attempts(
+            reduced_cases,
+            "linear",
+            lambda item: run_linear_checker(
+                item,
                 set(),
                 timeout_ms=optimization_timeout_ms,
-            ))
+            ),
+        )
+        convex_group_attempts = _grouped_case_attempts(
+            [
+                item for item in reduced_cases
+                if linear_group_attempts[item.case_id].get("outcome")
+                != "CERTIFIED"
+            ],
+            "convex",
+            lambda item: run_convex_checker(
+                item,
+                set(),
+                timeout_ms=optimization_timeout_ms,
+            ),
+        )
+        case_records: list[dict[str, Any]] = []
+        pending_relational: list[tuple[ReducedCase, dict[str, Any]]] = []
+        for reduced_case in reduced_cases:
+            case_progression: list[dict[str, Any]] = []
+            linear_attempt = deepcopy(linear_group_attempts[reduced_case.case_id])
             if linear_attempt.get("outcome") == "VIOLATION":
                 linear_attempt = {
                     **linear_attempt,
@@ -804,11 +929,9 @@ def analyze_model(
             outcome = str(linear_attempt.get("outcome", "DEFERRED"))
 
             if outcome == "DEFERRED":
-                convex_attempt = _validated_attempt(run_convex_checker(
-                    reduced_case,
-                    set(),
-                    timeout_ms=optimization_timeout_ms,
-                ))
+                convex_attempt = deepcopy(
+                    convex_group_attempts[reduced_case.case_id]
+                )
                 if convex_attempt.get("outcome") == "VIOLATION":
                     convex_attempt = {
                         **convex_attempt,
@@ -923,42 +1046,7 @@ def analyze_model(
                 case_progression.append(smt_stage)
                 outcome = str(smt_stage.get("outcome", "DEFERRED"))
 
-            if outcome == "DEFERRED":
-                relational_invariant = _validated_attempt(
-                    run_relational_invariant_checker(
-                        model,
-                        reduced_case,
-                        reachability_context,
-                        timeout_ms=smt_timeout_ms,
-                        cache=shared_reachability_cache,
-                    )
-                )
-                case_progression.append(_attempt_stage(
-                    "relational_invariant",
-                    relational_invariant,
-                ))
-                outcome = str(
-                    relational_invariant.get("outcome", "DEFERRED")
-                )
-
-            if outcome == "DEFERRED":
-                smt_reachability = _validated_attempt(
-                    run_smt_reachability_checker(
-                        model,
-                        reduced_case,
-                        reachability_context,
-                        timeout_ms=smt_timeout_ms,
-                    )
-                )
-                case_progression.append(_attempt_stage(
-                    "smt_reachability",
-                    smt_reachability,
-                ))
-                outcome = str(
-                    smt_reachability.get("outcome", "DEFERRED")
-                )
-
-            case_records.append({
+            case_record = {
                 "case_id": reduced_case.case_id,
                 "expression": expr_to_dict(reduced_case.expression),
                 "reachability_expression": expr_to_dict(
@@ -975,7 +1063,55 @@ def analyze_model(
                     if outcome in {"CERTIFIED", "VIOLATION"}
                     else "NOT_CERTIFIED"
                 ),
-            })
+            }
+            case_records.append(case_record)
+            if outcome == "DEFERRED":
+                pending_relational.append((reduced_case, case_record))
+
+        if pending_relational:
+            relational_attempts = run_relational_invariant_group_checker(
+                model,
+                [item for item, _record in pending_relational],
+                reachability_context,
+                timeout_ms=smt_timeout_ms,
+                cache=shared_reachability_cache,
+            )
+            for reduced_case, case_record in pending_relational:
+                relational_invariant = _validated_attempt(
+                    relational_attempts.get(reduced_case.case_id, {
+                        "outcome": "DEFERRED",
+                        "reason_code": "MALFORMED_OUTPUT",
+                        "detail": "grouped relational checker omitted the case",
+                    })
+                )
+                case_record["progression"].append(_attempt_stage(
+                    "relational_invariant",
+                    relational_invariant,
+                ))
+                outcome = str(
+                    relational_invariant.get("outcome", "DEFERRED")
+                )
+                if outcome == "DEFERRED":
+                    smt_reachability = _validated_attempt(
+                        run_smt_reachability_checker(
+                            model,
+                            reduced_case,
+                            reachability_context,
+                            timeout_ms=smt_timeout_ms,
+                        )
+                    )
+                    case_record["progression"].append(_attempt_stage(
+                        "smt_reachability",
+                        smt_reachability,
+                    ))
+                    outcome = str(
+                        smt_reachability.get("outcome", "DEFERRED")
+                    )
+                case_record["result"] = (
+                    outcome
+                    if outcome in {"CERTIFIED", "VIOLATION"}
+                    else "NOT_CERTIFIED"
+                )
 
         if any(item["result"] == "VIOLATION" for item in case_records):
             property_result = "VIOLATION"

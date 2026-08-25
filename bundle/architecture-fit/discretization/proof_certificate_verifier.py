@@ -266,6 +266,238 @@ def _serialized_conjunction(expressions: list[Any]) -> Any:
     return {"type": "op", "op": "and", "args": expressions}
 
 
+def _verify_common_case_group(
+    proof: dict[str, Any],
+    case: dict[str, Any],
+) -> list[str]:
+    reduction = proof.get("group_reduction")
+    if reduction is None:
+        return []
+    if not isinstance(reduction, dict):
+        return ["common case group reduction is malformed"]
+    errors: list[str] = []
+    if reduction.get("rule") != "common_conjunctive_case_group_v1":
+        errors.append("common case group reduction rule is invalid")
+    source = case.get("expression")
+    shared = reduction.get("shared_expression")
+    if not isinstance(source, dict) or reduction.get(
+        "source_expression_sha256"
+    ) != _serialized_expression_hash(source):
+        errors.append("common case group source expression hash is invalid")
+        return errors
+    if not isinstance(shared, dict) or reduction.get(
+        "shared_expression_sha256"
+    ) != _serialized_expression_hash(shared):
+        errors.append("common case group expression hash is invalid")
+        return errors
+    source_hashes = {
+        _serialized_expression_hash(item) for item in _serialized_conjuncts(source)
+    }
+    shared_hashes = sorted(
+        _serialized_expression_hash(item) for item in _serialized_conjuncts(shared)
+    )
+    if reduction.get("shared_conjunct_sha256") != shared_hashes:
+        errors.append("common case group conjunct hashes are invalid")
+    if not set(shared_hashes) <= source_hashes:
+        errors.append("common case group is not a conjunction subset")
+    if not isinstance(reduction.get("covered_case_count"), int) or reduction.get(
+        "covered_case_count"
+    ) <= 1:
+        errors.append("common case group size is invalid")
+    return errors
+
+
+def _normalized_bound_values(record: Any) -> tuple[dict[str, Fraction], Fraction, bool]:
+    if not isinstance(record, dict) or not isinstance(record.get("coefficients"), dict):
+        raise ValueError("normalized bound is malformed")
+    coefficients = {
+        str(name): parse_fraction(value)
+        for name, value in record["coefficients"].items()
+    }
+    bound = parse_fraction(record.get("bound"))
+    strict = record.get("strict")
+    if not isinstance(strict, bool) or not coefficients:
+        raise ValueError("normalized bound is malformed")
+    return coefficients, bound, strict
+
+
+def _serialized_linear_form(
+    expression: Any,
+) -> tuple[dict[str, Fraction], Fraction]:
+    if not isinstance(expression, dict):
+        raise ValueError("linear expression is malformed")
+    kind = expression.get("type")
+    if kind == "const":
+        value = expression.get("value")
+        if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+            raise ValueError("linear constant is malformed")
+        return {}, Fraction(str(value))
+    if kind in {"var", "raw_ref"}:
+        field = "name" if kind == "var" else "path"
+        name = expression.get(field)
+        if not isinstance(name, str):
+            raise ValueError("linear variable is malformed")
+        return {name: Fraction(1)}, Fraction(0)
+    if kind != "op" or not isinstance(expression.get("args"), list):
+        raise ValueError("linear operation is malformed")
+
+    operation = expression.get("op")
+    arguments = expression["args"]
+
+    def add(
+        left: tuple[dict[str, Fraction], Fraction],
+        right: tuple[dict[str, Fraction], Fraction],
+        scale: Fraction = Fraction(1),
+    ) -> tuple[dict[str, Fraction], Fraction]:
+        coefficients = dict(left[0])
+        for name, value in right[0].items():
+            coefficients[name] = coefficients.get(name, Fraction(0)) + scale * value
+        return (
+            {name: value for name, value in coefficients.items() if value},
+            left[1] + scale * right[1],
+        )
+
+    if operation == "+":
+        result = ({}, Fraction(0))
+        for argument in arguments:
+            result = add(result, _serialized_linear_form(argument))
+        return result
+    if operation == "-" and arguments:
+        if len(arguments) == 1:
+            coefficients, constant = _serialized_linear_form(arguments[0])
+            return (
+                {name: -value for name, value in coefficients.items()},
+                -constant,
+            )
+        result = _serialized_linear_form(arguments[0])
+        for argument in arguments[1:]:
+            result = add(result, _serialized_linear_form(argument), Fraction(-1))
+        return result
+    if operation == "*" and len(arguments) == 2:
+        left = _serialized_linear_form(arguments[0])
+        right = _serialized_linear_form(arguments[1])
+        if left[0] and right[0]:
+            raise ValueError("variable multiplication is not linear")
+        variable, constant = (left, right[1]) if left[0] else (right, left[1])
+        return (
+            {name: value * constant for name, value in variable[0].items()},
+            variable[1] * constant,
+        )
+    if operation == "/" and len(arguments) == 2:
+        numerator = _serialized_linear_form(arguments[0])
+        denominator = _serialized_linear_form(arguments[1])
+        if denominator[0] or denominator[1] == 0:
+            raise ValueError("linear divisor is malformed")
+        scale = Fraction(1) / denominator[1]
+        return (
+            {name: value * scale for name, value in numerator[0].items()},
+            numerator[1] * scale,
+        )
+    raise ValueError("operation is not linear")
+
+
+def _serialized_normalized_linear_bound(
+    expression: Any,
+) -> tuple[dict[str, Fraction], Fraction, bool]:
+    if not isinstance(expression, dict) or expression.get("type") != "op":
+        raise ValueError("linear comparison is malformed")
+    operation = expression.get("op")
+    arguments = expression.get("args")
+    if operation not in {"<", "<=", ">", ">="} or not isinstance(
+        arguments, list
+    ) or len(arguments) != 2:
+        raise ValueError("linear comparison is malformed")
+    left = _serialized_linear_form(arguments[0])
+    right = _serialized_linear_form(arguments[1])
+    coefficients = dict(left[0])
+    for name, value in right[0].items():
+        coefficients[name] = coefficients.get(name, Fraction(0)) - value
+    constant = left[1] - right[1]
+    if operation in {">", ">="}:
+        coefficients = {name: -value for name, value in coefficients.items()}
+        constant = -constant
+    coefficients = {
+        name: value for name, value in sorted(coefficients.items()) if value
+    }
+    if not coefficients:
+        raise ValueError("linear comparison has no variable")
+    scale = abs(next(iter(coefficients.values())))
+    return (
+        {name: value / scale for name, value in coefficients.items()},
+        -constant / scale,
+        operation in {"<", ">"},
+    )
+
+
+def _verify_constraint_removals(records: Any) -> list[str]:
+    if not isinstance(records, list):
+        return ["constraint removal records are malformed"]
+    errors: list[str] = []
+    for record in records:
+        if not isinstance(record, dict):
+            errors.append("constraint removal record is malformed")
+            continue
+        removed = record.get("removed_expression")
+        if not isinstance(removed, dict) or record.get(
+            "removed_expression_sha256"
+        ) != _serialized_expression_hash(removed):
+            errors.append("removed constraint expression hash is invalid")
+            continue
+        rule = record.get("rule")
+        if rule == "exact_duplicate_constraint_v1":
+            if record.get("retained_expression_sha256") != record.get(
+                "removed_expression_sha256"
+            ):
+                errors.append("duplicate constraint removal is not identical")
+            continue
+        if rule != "normalized_linear_bound_dominance_v1":
+            errors.append("constraint removal rule is invalid")
+            continue
+        dominating = record.get("dominating_expression")
+        if not isinstance(dominating, dict) or record.get(
+            "dominating_expression_sha256"
+        ) != _serialized_expression_hash(dominating):
+            errors.append("dominating constraint expression hash is invalid")
+        try:
+            removed_coefficients, removed_bound, removed_strict = (
+                _normalized_bound_values(record.get("removed_normalized_bound"))
+            )
+            dominating_coefficients, dominating_bound, dominating_strict = (
+                _normalized_bound_values(record.get("dominating_normalized_bound"))
+            )
+        except (TypeError, ValueError, ZeroDivisionError):
+            errors.append("normalized constraint dominance record is malformed")
+            continue
+        try:
+            if (
+                removed_coefficients,
+                removed_bound,
+                removed_strict,
+            ) != _serialized_normalized_linear_bound(removed):
+                errors.append("removed normalized bound does not match its expression")
+            if (
+                dominating_coefficients,
+                dominating_bound,
+                dominating_strict,
+            ) != _serialized_normalized_linear_bound(dominating):
+                errors.append(
+                    "dominating normalized bound does not match its expression"
+                )
+        except (TypeError, ValueError, ZeroDivisionError):
+            errors.append("constraint dominance expression is not linear")
+        if removed_coefficients != dominating_coefficients:
+            errors.append("constraint dominance uses different normalized left sides")
+        if not (
+            dominating_bound < removed_bound
+            or (
+                dominating_bound == removed_bound
+                and (dominating_strict or not removed_strict)
+            )
+        ):
+            errors.append("dominating constraint is not stronger")
+    return errors
+
+
 def _verify_smt_stage(
     stage: dict[str, Any],
     case: dict[str, Any],
@@ -650,6 +882,16 @@ def _serialized_conjunct_hashes(expression: dict[str, Any]) -> set[str]:
     return {_serialized_expression_hash(expression)}
 
 
+def _serialized_disjunct_hashes(expression: dict[str, Any]) -> set[str]:
+    if expression.get("type") == "op" and expression.get("op") == "or":
+        hashes: set[str] = set()
+        for argument in expression.get("args", []):
+            if isinstance(argument, dict):
+                hashes.update(_serialized_disjunct_hashes(argument))
+        return hashes
+    return {_serialized_expression_hash(expression)}
+
+
 def _verify_shared_candidate_batches(
     records: Any,
     invariant_hashes: list[Any],
@@ -835,6 +1077,7 @@ def _verify_shared_reachability(
             errors.append("merged relational safety query has no covered cases")
             covered = []
         source_conjuncts = _serialized_conjunct_hashes(expression)
+        source_disjuncts = _serialized_disjunct_hashes(expression)
         for coverage in covered:
             if not isinstance(coverage, dict):
                 errors.append("merged relational safety case coverage is malformed")
@@ -856,6 +1099,9 @@ def _verify_shared_reachability(
             elif rule == "new_query":
                 if coverage.get("expression_sha256") != expression_hash:
                     errors.append("new relational safety query coverage is inconsistent")
+            elif rule == "group_disjunction":
+                if coverage.get("expression_sha256") not in source_disjuncts:
+                    errors.append("grouped relational safety coverage is invalid")
             else:
                 errors.append("relational safety merge rule is invalid")
         query = safety.get("query")
@@ -903,6 +1149,22 @@ def verify_recorded_optimization_certificates(analysis: dict[str, Any]) -> list[
                 ).encode("utf-8")).hexdigest()
                 if sampled_hash != reduction.get("sampled_point_counterexample_sha256"):
                     errors.append(f"property {property_id} sampled point counterexample hash is invalid")
+            pre_case_reduction = reduction.get("pre_case_constraint_reduction") or {}
+            if pre_case_reduction.get(
+                "rule"
+            ) != "recursive_canonical_constraint_reduction_v1":
+                errors.append(f"property {property_id} pre case reduction rule is invalid")
+            for removal_error in (
+                _verify_constraint_removals(
+                    pre_case_reduction.get("sampled_point_removed_constraints")
+                )
+                + _verify_constraint_removals(
+                    pre_case_reduction.get("physical_interval_removed_constraints")
+                )
+            ):
+                errors.append(
+                    f"property {property_id} pre case reduction: {removal_error}"
+                )
             endpoint_checks = reduction.get("endpoint_checks")
             if not isinstance(endpoint_checks, list) or any(
                 item.get("matches") is not True for item in endpoint_checks
@@ -971,6 +1233,24 @@ def verify_recorded_optimization_certificates(analysis: dict[str, Any]) -> list[
                 if source.get("obligation") != case.get("obligation"):
                     errors.append(
                         f"property {property_id} case {case.get('case_id')} obligation does not match coverage"
+                    )
+                constraint_reduction = source.get("constraint_reduction") or {}
+                if constraint_reduction.get(
+                    "rule"
+                ) != "canonical_conjunction_reduction_v1":
+                    errors.append(
+                        f"property {property_id} case {case.get('case_id')} constraint reduction rule is invalid"
+                    )
+                for removal_error in (
+                    _verify_constraint_removals(
+                        constraint_reduction.get("removed_constraints")
+                    )
+                    + _verify_constraint_removals(
+                        constraint_reduction.get("reachability_removed_constraints")
+                    )
+                ):
+                    errors.append(
+                        f"property {property_id} case {case.get('case_id')} constraint reduction: {removal_error}"
                     )
                 if isinstance(source.get("expression"), dict):
                     case_hash = hashlib.sha256(json.dumps(
@@ -1160,6 +1440,8 @@ def verify_recorded_optimization_certificates(analysis: dict[str, Any]) -> list[
                                 )
             else:
                 continue
+            if checker in {"linear", "convex"}:
+                stage_errors.extend(_verify_common_case_group(proof, case))
             errors.extend(
                 f"property {property_id} {checker} certificate: {error}"
                 for error in stage_errors

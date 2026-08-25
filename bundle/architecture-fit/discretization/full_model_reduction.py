@@ -15,6 +15,7 @@ from .proof_rules import (
     Comparison,
     ProofDeferred,
     boolean_dnf,
+    comparison_inequalities,
     expr_to_dict,
     expression_symbols,
     expand_definitions,
@@ -31,6 +32,160 @@ def _canonical_bytes(value: Any) -> bytes:
 
 def expression_hash(expr: Expr) -> str:
     return hashlib.sha256(_canonical_bytes(expr_to_dict(expr))).hexdigest()
+
+
+def _fraction_text(value: Fraction) -> str:
+    return f"{value.numerator}/{value.denominator}"
+
+
+def _normalized_linear_bound(
+    expression: Expr,
+    boolean_variables: set[str],
+) -> tuple[tuple[tuple[str, Fraction], ...], Fraction, bool] | None:
+    if not isinstance(expression, Op) or expression.op not in {
+        "<", "<=", ">", ">="
+    }:
+        return None
+    try:
+        inequalities = comparison_inequalities(
+            Comparison(expression.op, expression.args[0], expression.args[1]),
+            boolean_variables,
+        )
+    except ProofDeferred:
+        return None
+    if len(inequalities) != 1 or not inequalities[0].coefficients:
+        return None
+    inequality = inequalities[0]
+    scale = abs(inequality.coefficients[0][1])
+    if scale == 0:
+        return None
+    return (
+        tuple((name, value / scale) for name, value in inequality.coefficients),
+        inequality.bound / scale,
+        inequality.strict,
+    )
+
+
+def _normalized_bound_record(
+    normalized: tuple[tuple[tuple[str, Fraction], ...], Fraction, bool],
+) -> dict[str, Any]:
+    coefficients, bound, strict = normalized
+    return {
+        "coefficients": {
+            name: _fraction_text(value) for name, value in coefficients
+        },
+        "bound": _fraction_text(bound),
+        "strict": strict,
+    }
+
+
+def _strictly_stronger_bound(
+    left: tuple[tuple[tuple[str, Fraction], ...], Fraction, bool],
+    right: tuple[tuple[tuple[str, Fraction], ...], Fraction, bool],
+) -> bool:
+    return left[1] < right[1] or (
+        left[1] == right[1] and left[2] and not right[2]
+    )
+
+
+def _reduce_constraint_list(
+    expressions: Iterable[Expr],
+    boolean_variables: set[str],
+) -> tuple[list[Expr], list[dict[str, Any]]]:
+    retained: dict[str, Expr] = {}
+    linear: dict[tuple[tuple[str, Fraction], ...], tuple[Expr, tuple]] = {}
+    removals: list[dict[str, Any]] = []
+    for expression in expressions:
+        expression = simplify(expression)
+        source_hash = expression_hash(expression)
+        normalized = _normalized_linear_bound(expression, boolean_variables)
+        if normalized is None:
+            if source_hash in retained:
+                removals.append({
+                    "rule": "exact_duplicate_constraint_v1",
+                    "removed_expression": expr_to_dict(expression),
+                    "removed_expression_sha256": source_hash,
+                    "retained_expression_sha256": source_hash,
+                })
+            else:
+                retained[source_hash] = expression
+            continue
+        coefficients = normalized[0]
+        previous = linear.get(coefficients)
+        if previous is None:
+            linear[coefficients] = (expression, normalized)
+            continue
+        previous_expression, previous_normalized = previous
+        if _strictly_stronger_bound(normalized, previous_normalized):
+            removed_expression = previous_expression
+            removed_normalized = previous_normalized
+            linear[coefficients] = (expression, normalized)
+            dominating_expression = expression
+            dominating_normalized = normalized
+        else:
+            removed_expression = expression
+            removed_normalized = normalized
+            dominating_expression = previous_expression
+            dominating_normalized = previous_normalized
+        removals.append({
+            "rule": "normalized_linear_bound_dominance_v1",
+            "removed_expression": expr_to_dict(removed_expression),
+            "removed_expression_sha256": expression_hash(removed_expression),
+            "removed_normalized_bound": _normalized_bound_record(
+                removed_normalized
+            ),
+            "dominating_expression": expr_to_dict(dominating_expression),
+            "dominating_expression_sha256": expression_hash(
+                dominating_expression
+            ),
+            "dominating_normalized_bound": _normalized_bound_record(
+                dominating_normalized
+            ),
+        })
+    for expression, _normalized in linear.values():
+        retained[expression_hash(expression)] = expression
+    return [retained[key] for key in sorted(retained)], removals
+
+
+def _normalize_constraint_expression(
+    expression: Expr,
+    boolean_variables: set[str],
+    removals: list[dict[str, Any]],
+) -> Expr:
+    if isinstance(expression, (Const, Var, RawRef)):
+        return expression
+    if isinstance(expression, Ite):
+        return simplify(Ite(
+            _normalize_constraint_expression(
+                expression.cond, boolean_variables, removals
+            ),
+            _normalize_constraint_expression(
+                expression.then_expr, boolean_variables, removals
+            ),
+            _normalize_constraint_expression(
+                expression.else_expr, boolean_variables, removals
+            ),
+        ))
+    if not isinstance(expression, Op):
+        return expression
+    normalized_args = tuple(
+        _normalize_constraint_expression(item, boolean_variables, removals)
+        for item in expression.args
+    )
+    normalized = simplify(Op(expression.op, normalized_args))
+    if not isinstance(normalized, Op) or normalized.op not in {"and", "or"}:
+        return normalized
+    items = list(normalized.args)
+    if normalized.op == "and":
+        items, local_removals = _reduce_constraint_list(
+            items,
+            boolean_variables,
+        )
+        removals.extend(local_removals)
+    else:
+        unique = {expression_hash(item): item for item in items}
+        items = [unique[key] for key in sorted(unique)]
+    return simplify(Op(normalized.op, tuple(items)))
 
 
 @dataclass(frozen=True)
@@ -532,7 +687,9 @@ def _case_split(
     parent_hash = expression_hash(expression)
     cases: list[ReducedCase] = []
     case_rows: list[dict[str, Any]] = []
+    case_by_key: dict[tuple[Any, ...], int] = {}
     index = 0
+    generated_case_count = 0
     conditional_branch_count = 0
     for values in product((False, True), repeat=len(used_booleans)):
         assignment = tuple(zip(used_booleans, values))
@@ -584,6 +741,7 @@ def _case_split(
                     endpoint_values = [("unreduced_interval_time", None)]
 
                 for time_reduction, endpoint in endpoint_values:
+                    generated_case_count += 1
                     if time_gate_relaxations:
                         time_reduction = (
                             "time_gate_outer_relaxation+" + time_reduction
@@ -632,10 +790,32 @@ def _case_split(
                             substitute(item, {INTERVAL_TIME: value})
                             for item in reachability_expressions
                         ]
+                    expressions, expression_removals = _reduce_constraint_list(
+                        expressions,
+                        boolean_variables,
+                    )
+                    (
+                        reachability_expressions,
+                        reachability_removals,
+                    ) = _reduce_constraint_list(
+                        reachability_expressions,
+                        boolean_variables,
+                    )
                     case_expression = simplify(_and(expressions))
-                    reachability_expression = simplify(_and(
-                        reachability_expressions
-                    ))
+                    reachability_expression = simplify(_and(reachability_expressions))
+                    case_key = (
+                        assignment,
+                        expression_hash(case_expression),
+                        expression_hash(reachability_expression),
+                    )
+                    merged_index = case_by_key.get(case_key)
+                    if merged_index is not None:
+                        merged_row = case_rows[merged_index]
+                        merged_row.setdefault("merged_sources", []).append({
+                            "conditional_branch": conditional_branch,
+                            "time_reduction": time_reduction,
+                        })
+                        continue
                     case_id = f"{property_id}.{obligation}.case.{index:04d}"
                     case = ReducedCase(
                         case_id,
@@ -661,7 +841,14 @@ def _case_split(
                         "reachability_expression_sha256": expression_hash(
                             reachability_expression
                         ),
+                        "constraint_reduction": {
+                            "rule": "canonical_conjunction_reduction_v1",
+                            "removed_constraints": expression_removals,
+                            "reachability_removed_constraints": reachability_removals,
+                        },
+                        "merged_sources": [],
                     })
+                    case_by_key[case_key] = len(case_rows) - 1
                     index += 1
     return cases, {
         "rule": "exhaustive_boolean_assignment_then_exact_dnf_v1",
@@ -670,6 +857,7 @@ def _case_split(
         "boolean_variables": used_booleans,
         "assignment_count": 2 ** len(used_booleans),
         "conditional_branch_count": conditional_branch_count,
+        "generated_case_count": generated_case_count,
         "case_count": len(cases),
         "complete": True,
         "time_reduction_rule": (
@@ -852,6 +1040,12 @@ def build_reduction(
         *controller_premises,
         Op("not", (start_property,)),
     ]))
+    sampled_pre_case_removals: list[dict[str, Any]] = []
+    sampled_point_counterexample = _normalize_constraint_expression(
+        sampled_point_counterexample,
+        boolean_variables,
+        sampled_pre_case_removals,
+    )
     interval_premises = [
         *controller_premises,
         start_property,
@@ -862,6 +1056,12 @@ def build_reduction(
         *interval_premises,
         Op("not", (interval_property,)),
     ]))
+    interval_pre_case_removals: list[dict[str, Any]] = []
+    counterexample = _normalize_constraint_expression(
+        counterexample,
+        boolean_variables,
+        interval_pre_case_removals,
+    )
     sampled_cases, sampled_coverage = _case_split(
         sampled_point_counterexample,
         boolean_variables,
@@ -967,6 +1167,11 @@ def build_reduction(
         ),
         "interval_counterexample": expr_to_dict(counterexample),
         "interval_counterexample_sha256": expression_hash(counterexample),
+        "pre_case_constraint_reduction": {
+            "rule": "recursive_canonical_constraint_reduction_v1",
+            "sampled_point_removed_constraints": sampled_pre_case_removals,
+            "physical_interval_removed_constraints": interval_pre_case_removals,
+        },
         "interval": {
             "time_variable": INTERVAL_TIME,
             "lower": "0/1",
