@@ -24,6 +24,7 @@ from .full_model_reduction import (
 from .linear_envelope_checker import run_linear_envelope_checker
 from .linear_checker import run_linear_checker
 from .reachability import (
+    SharedReachabilityCache,
     run_reachability_checker,
     run_relational_invariant_checker,
     run_smt_reachability_checker,
@@ -734,6 +735,7 @@ def analyze_model(
         }
 
     properties: list[dict[str, Any]] = []
+    shared_reachability_cache = SharedReachabilityCache()
     for target, equation in sorted(model.requirements.items()):
         if equation.source not in {"Prohibition", "Obligation"}:
             continue
@@ -928,6 +930,7 @@ def analyze_model(
                         reduced_case,
                         reachability_context,
                         timeout_ms=smt_timeout_ms,
+                        cache=shared_reachability_cache,
                     )
                 )
                 case_progression.append(_attempt_stage(
@@ -1058,6 +1061,7 @@ def analyze_model(
             "time_variables": mdp_certificate.get("sets", {}).get("time_vars", []),
         },
         "optimization_timeout_ms": int(optimization_timeout_ms),
+        "shared_reachability": shared_reachability_cache.export(),
         "properties": properties,
         "blocking_diagnostics": [],
     }

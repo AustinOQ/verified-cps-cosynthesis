@@ -57,6 +57,7 @@ def certificate_hash(certificate: dict[str, Any]) -> str:
 TIMED_REACHABILITY_CHECKERS = {
     "reachability_linear",
     "reachability_convex",
+    "relational_invariant",
     "smt_reachability",
 }
 

@@ -428,6 +428,8 @@ def _verify_smt_reachability_stage(
 ) -> list[str]:
     errors: list[str] = []
     proof = stage.get("proof") or {}
+    if stage.get("outcome") == "DEFERRED" and not proof:
+        return []
     rule = proof.get("rule")
     source_expression = case.get("expression")
     reachability_expression = case.get("reachability_expression")
@@ -497,11 +499,52 @@ def _verify_smt_reachability_stage(
 def _verify_relational_invariant_stage(
     stage: dict[str, Any],
     case: dict[str, Any],
+    shared_regions: dict[str, Any] | None = None,
+    shared_safety_queries: dict[str, Any] | None = None,
 ) -> list[str]:
     proof = stage.get("proof") or {}
     if stage.get("outcome") != "CERTIFIED":
         return []
     errors: list[str] = []
+    if proof.get("rule") == "shared_relational_inductive_invariant_v2":
+        source_expression = case.get("expression")
+        reachability_expression = case.get("reachability_expression")
+        if not isinstance(source_expression, dict) or proof.get(
+            "case_expression_sha256"
+        ) != _serialized_expression_hash(source_expression):
+            errors.append("shared relational source expression hash is invalid")
+        if not isinstance(reachability_expression, dict) or proof.get(
+            "reachability_expression_sha256"
+        ) != _serialized_expression_hash(reachability_expression):
+            errors.append("shared relational reachability expression hash is invalid")
+        region_key = proof.get("shared_reachable_region_sha256")
+        safety_key = proof.get("merged_safety_query_sha256")
+        region = (shared_regions or {}).get(region_key)
+        safety = (shared_safety_queries or {}).get(safety_key)
+        if not isinstance(region, dict):
+            errors.append("shared reachable region reference is missing")
+        if not isinstance(safety, dict):
+            errors.append("merged relational safety query reference is missing")
+        else:
+            if safety.get("context_sha256") != region_key:
+                errors.append("merged relational safety query context is inconsistent")
+            if case.get("case_id") not in safety.get("case_ids", []):
+                errors.append("merged relational safety query omits its case")
+            coverage = [
+                item
+                for item in safety.get("covered_case_expressions", [])
+                if isinstance(item, dict)
+                and item.get("case_id") == case.get("case_id")
+                and item.get("expression_sha256")
+                == proof.get("case_safety_expression_sha256")
+                and item.get("merge_rule") == proof.get("merge_rule")
+            ]
+            if not coverage:
+                errors.append("merged relational safety query has no case coverage")
+            query = safety.get("query")
+            if not isinstance(query, dict) or query.get("solver_status") != "unsat":
+                errors.append("merged relational safety obligation is not proved impossible")
+        return errors
     if proof.get("rule") != "relational_inductive_invariant_v1":
         return ["relational invariant proof rule is invalid"]
     source_expression = case.get("expression")
@@ -597,10 +640,186 @@ def _verify_relational_invariant_stage(
     return errors
 
 
+def _serialized_conjunct_hashes(expression: dict[str, Any]) -> set[str]:
+    if expression.get("type") == "op" and expression.get("op") == "and":
+        hashes: set[str] = set()
+        for argument in expression.get("args", []):
+            if isinstance(argument, dict):
+                hashes.update(_serialized_conjunct_hashes(argument))
+        return hashes
+    return {_serialized_expression_hash(expression)}
+
+
+def _verify_shared_reachability(
+    analysis: dict[str, Any],
+) -> tuple[list[str], dict[str, Any], dict[str, Any]]:
+    errors: list[str] = []
+    shared = analysis.get("shared_reachability") or {}
+    regions = shared.get("regions") or {}
+    safety_queries = shared.get("safety_queries") or {}
+    if not isinstance(regions, dict):
+        return ["shared reachable regions are malformed"], {}, {}
+    if not isinstance(safety_queries, dict):
+        return ["shared relational safety queries are malformed"], regions, {}
+
+    for key, region in regions.items():
+        if not isinstance(region, dict):
+            errors.append("shared reachable region is malformed")
+            continue
+        context = region.get("context")
+        if not isinstance(context, dict):
+            errors.append("shared reachable region context is malformed")
+        else:
+            context_hash = hashlib.sha256(json.dumps(
+                context,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")).hexdigest()
+            if key != context_hash or region.get("context_sha256") != context_hash:
+                errors.append("shared reachable region context hash is invalid")
+        if region.get("rule") != "shared_relational_reachable_region_v1":
+            errors.append("shared reachable region proof rule is invalid")
+        for name in ("initial_expression", "domain_expression", "transition_expression"):
+            expression = region.get(name)
+            if not isinstance(expression, dict) or region.get(
+                name + "_sha256"
+            ) != _serialized_expression_hash(expression):
+                errors.append(f"shared reachable region {name} hash is invalid")
+
+        invariants = region.get("invariant")
+        invariant_hashes = region.get("invariant_sha256")
+        if not isinstance(invariants, list) or not invariants:
+            errors.append("shared reachable region invariant is missing")
+            invariants = []
+        if not isinstance(invariant_hashes, list) or len(invariant_hashes) != len(
+            invariants
+        ):
+            errors.append("shared reachable region invariant hashes are malformed")
+            invariant_hashes = []
+        for index, expression in enumerate(invariants):
+            if not isinstance(expression, dict) or index >= len(
+                invariant_hashes
+            ) or invariant_hashes[index] != _serialized_expression_hash(expression):
+                errors.append("shared reachable region invariant clause hash is invalid")
+
+        initiation = region.get("initiation_queries")
+        preservation = region.get("preservation_queries")
+        if not isinstance(initiation, list):
+            errors.append("shared reachable region initiation queries are malformed")
+            initiation = []
+        if not isinstance(preservation, list):
+            errors.append("shared reachable region preservation queries are malformed")
+            preservation = []
+        initiated_hashes = {
+            item.get("candidate_sha256")
+            for item in initiation
+            if isinstance(item, dict)
+        }
+        preserved_hashes = {
+            item.get("candidate_sha256")
+            for item in preservation
+            if isinstance(item, dict)
+        }
+        for invariant_hash in invariant_hashes:
+            if invariant_hash not in initiated_hashes:
+                errors.append("shared reachable region clause has no initiation proof")
+            if invariant_hash not in preserved_hashes:
+                errors.append("shared reachable region clause has no preservation proof")
+        for record in [*initiation, *preservation]:
+            if not isinstance(record, dict):
+                errors.append("shared reachable region query record is malformed")
+                continue
+            candidate = record.get("candidate")
+            if not isinstance(candidate, dict) or record.get(
+                "candidate_sha256"
+            ) != _serialized_expression_hash(candidate):
+                errors.append("shared reachable region candidate hash is invalid")
+            query = record.get("query")
+            errors.extend(_verify_smt_reachability_query(query))
+            if not isinstance(query, dict) or query.get("solver_status") != "unsat":
+                errors.append("shared reachable region obligation is not proved impossible")
+            else:
+                errors.extend(_recheck_smt_no_solution(query))
+
+        for removal in region.get("implication_removals", []):
+            if not isinstance(removal, dict):
+                errors.append("shared reachable region implication removal is malformed")
+                continue
+            candidate = removal.get("removed_candidate")
+            if not isinstance(candidate, dict) or removal.get(
+                "removed_candidate_sha256"
+            ) != _serialized_expression_hash(candidate):
+                errors.append("removed reachable region constraint hash is invalid")
+            query = removal.get("query")
+            errors.extend(_verify_smt_reachability_query(query))
+            if not isinstance(query, dict) or query.get("solver_status") != "unsat":
+                errors.append("reachable region constraint removal is not proved")
+            else:
+                errors.extend(_recheck_smt_no_solution(query))
+
+    for key, safety in safety_queries.items():
+        if not isinstance(safety, dict):
+            errors.append("merged relational safety query is malformed")
+            continue
+        expression = safety.get("safety_expression")
+        if not isinstance(expression, dict):
+            errors.append("merged relational safety expression is malformed")
+            continue
+        expression_hash = _serialized_expression_hash(expression)
+        if safety.get("safety_expression_sha256") != expression_hash:
+            errors.append("merged relational safety expression hash is invalid")
+        expected_key = hashlib.sha256(
+            f"{safety.get('context_sha256')}:{expression_hash}".encode("utf-8")
+        ).hexdigest()
+        if key != expected_key:
+            errors.append("merged relational safety query hash is invalid")
+        if safety.get("context_sha256") not in regions:
+            errors.append("merged relational safety query has no reachable region")
+        covered = safety.get("covered_case_expressions")
+        if not isinstance(covered, list) or not covered:
+            errors.append("merged relational safety query has no covered cases")
+            covered = []
+        source_conjuncts = _serialized_conjunct_hashes(expression)
+        for coverage in covered:
+            if not isinstance(coverage, dict):
+                errors.append("merged relational safety case coverage is malformed")
+                continue
+            covered_expression = coverage.get("expression")
+            if not isinstance(covered_expression, dict) or coverage.get(
+                "expression_sha256"
+            ) != _serialized_expression_hash(covered_expression):
+                errors.append("merged relational safety case expression hash is invalid")
+                continue
+            rule = coverage.get("merge_rule")
+            covered_conjuncts = _serialized_conjunct_hashes(covered_expression)
+            if rule == "identical_expression":
+                if covered_conjuncts != source_conjuncts:
+                    errors.append("identical relational safety merge is not identical")
+            elif rule == "conjunct_containment":
+                if not source_conjuncts <= covered_conjuncts:
+                    errors.append("relational safety containment merge is invalid")
+            elif rule == "new_query":
+                if coverage.get("expression_sha256") != expression_hash:
+                    errors.append("new relational safety query coverage is inconsistent")
+            else:
+                errors.append("relational safety merge rule is invalid")
+        query = safety.get("query")
+        errors.extend(_verify_smt_reachability_query(query))
+        if isinstance(query, dict) and query.get("query_expression") != expression:
+            errors.append("merged relational safety query expression does not match")
+        if isinstance(query, dict) and query.get("solver_status") == "unsat":
+            errors.extend(_recheck_smt_no_solution(query))
+    return errors, regions, safety_queries
+
+
 def verify_recorded_optimization_certificates(analysis: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     if not isinstance(analysis, dict):
         return ["recorded analysis is malformed"]
+    shared_errors, shared_regions, shared_safety_queries = (
+        _verify_shared_reachability(analysis)
+    )
+    errors.extend(shared_errors)
     for property_record in analysis.get("properties", []):
         property_id = property_record.get("property_id", "unknown")
         reduction = property_record.get("reduction") or {}
@@ -732,7 +951,12 @@ def verify_recorded_optimization_certificates(analysis: dict[str, Any]) -> list[
             if checker == "relational_invariant":
                 errors.extend(
                     f"property {property_id} relational invariant certificate: {error}"
-                    for error in _verify_relational_invariant_stage(stage, case)
+                    for error in _verify_relational_invariant_stage(
+                        stage,
+                        case,
+                        shared_regions,
+                        shared_safety_queries,
+                    )
                 )
                 continue
             if stage.get("outcome") == "VIOLATION":
