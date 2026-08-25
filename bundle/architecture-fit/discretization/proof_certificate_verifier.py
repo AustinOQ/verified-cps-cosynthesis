@@ -7,7 +7,13 @@ import json
 from fractions import Fraction
 from typing import Any
 
+from .exact_replay import replay_serialized_boolean_expression
 from .optimization_common import fraction_text, parse_fraction
+
+try:  # pragma: no cover - integration environment determines availability
+    import z3  # type: ignore
+except Exception:  # pragma: no cover
+    z3 = None
 
 
 def _fraction_mapping(value: Any) -> dict[str, Fraction]:
@@ -61,6 +67,91 @@ def verify_recorded_linear_certificate(certificate: dict[str, Any]) -> list[str]
         errors.append("linear certificate combined bound is incorrect")
     if certificate.get("combined_strict") is not combined_strict:
         errors.append("linear certificate combined strictness is incorrect")
+    return errors
+
+
+def verify_recorded_linear_counterexample(proof: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    try:
+        witness = _fraction_mapping(proof["counterexample"])
+        constraints = proof["constraints"]
+        if not isinstance(constraints, list):
+            raise ValueError
+        for item in constraints:
+            coefficients = _fraction_mapping(item["coefficients"])
+            bound = parse_fraction(item["bound"])
+            if item.get("strict") not in {True, False}:
+                raise ValueError
+            if any(name not in witness for name in coefficients):
+                errors.append("linear counterexample omits a required variable")
+                continue
+            left = sum(
+                coefficient * witness[name]
+                for name, coefficient in coefficients.items()
+            )
+            if left > bound or (item["strict"] and left == bound):
+                errors.append("linear counterexample violates a recorded constraint")
+    except (AttributeError, KeyError, TypeError, ValueError, ZeroDivisionError):
+        errors.append("linear counterexample contents are malformed")
+    return errors
+
+
+def verify_recorded_outer_reduction(
+    proof: dict[str, Any],
+    source_expression_sha256: str,
+) -> list[str]:
+    outer = proof.get("outer_reduction")
+    if outer is None:
+        return []
+    errors: list[str] = []
+    if outer.get("rule") not in {
+        "linear_skeleton_outer_reduction_v1",
+        "certified_bounded_product_linear_envelope_v1",
+        "certified_square_tangent_secant_envelope_v1",
+    }:
+        errors.append("outer reduction rule is invalid")
+    if outer.get("source_expression_sha256") != source_expression_sha256:
+        errors.append("outer reduction source expression hash is invalid")
+    for bound in outer.get("bounds", []):
+        variable = bound.get("variable")
+        if not isinstance(variable, str):
+            errors.append("outer reduction bound variable is malformed")
+            continue
+        for direction in ("lower", "upper"):
+            value = bound.get(direction)
+            recorded_proof = bound.get(direction + "_proof")
+            if value is None:
+                if recorded_proof is not None:
+                    errors.append("outer reduction records a proof for a missing bound")
+                continue
+            try:
+                exact_value = parse_fraction(value)
+                certificate = recorded_proof["proof"]["certificate"]
+                constraints = certificate["constraints"]
+                final = constraints[-1]
+                expected_coefficients = {
+                    variable: fraction_text(
+                        Fraction(1) if direction == "lower" else Fraction(-1)
+                    )
+                }
+                expected_bound = fraction_text(
+                    exact_value if direction == "lower" else -exact_value
+                )
+            except (IndexError, KeyError, TypeError, ValueError, ZeroDivisionError):
+                errors.append("outer reduction bound proof is malformed")
+                continue
+            if recorded_proof.get("outcome") != "CERTIFIED":
+                errors.append("outer reduction bound is not certified")
+            errors.extend(
+                "outer reduction bound certificate: " + error
+                for error in verify_recorded_linear_certificate(certificate)
+            )
+            if (
+                final.get("coefficients") != expected_coefficients
+                or final.get("bound") != expected_bound
+                or final.get("strict") is not True
+            ):
+                errors.append("outer reduction bound proof checks the wrong inequality")
     return errors
 
 
@@ -145,6 +236,367 @@ def verify_recorded_convex_certificate(certificate: dict[str, Any]) -> list[str]
     return errors
 
 
+def _serialized_expression_hash(expression: Any) -> str:
+    return hashlib.sha256(json.dumps(
+        expression,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")).hexdigest()
+
+
+def _serialized_conjuncts(expression: Any) -> list[Any]:
+    if (
+        isinstance(expression, dict)
+        and expression.get("type") == "op"
+        and expression.get("op") == "and"
+        and isinstance(expression.get("args"), list)
+    ):
+        result: list[Any] = []
+        for argument in expression["args"]:
+            result.extend(_serialized_conjuncts(argument))
+        return result
+    return [expression]
+
+
+def _serialized_conjunction(expressions: list[Any]) -> Any:
+    if not expressions:
+        return {"type": "const", "value": True}
+    if len(expressions) == 1:
+        return expressions[0]
+    return {"type": "op", "op": "and", "args": expressions}
+
+
+def _verify_smt_stage(
+    stage: dict[str, Any],
+    case: dict[str, Any],
+) -> list[str]:
+    errors: list[str] = []
+    proof = stage.get("proof") or {}
+    rule = proof.get("rule")
+    source_expression = case.get("expression")
+    if not isinstance(source_expression, dict):
+        return ["source case expression is malformed"]
+    source_hash = _serialized_expression_hash(source_expression)
+    if proof.get("source_expression_sha256") != source_hash:
+        errors.append("source expression hash is invalid")
+
+    if rule == "exact_local_feasibility_replay_v1":
+        if stage.get("outcome") != "DEFERRED":
+            errors.append("local feasibility replay must remain deferred")
+        if proof.get("solver_status") != "sat":
+            errors.append("local feasibility replay solver status is invalid")
+        try:
+            replayed = replay_serialized_boolean_expression(
+                source_expression,
+                proof.get("exact_values"),
+            )
+        except (TypeError, ValueError, ZeroDivisionError) as exc:
+            errors.append(f"local feasibility replay is malformed: {exc}")
+        else:
+            if replayed is not True or proof.get("exact_replay") is not True:
+                errors.append("local feasibility values do not satisfy the source case")
+        return errors
+
+    if rule != "solver_selected_subset_recertification_v1":
+        if stage.get("outcome") == "CERTIFIED":
+            errors.append("certified solver fallback proof rule is invalid")
+        return errors
+    if proof.get("solver_status") != "unsat":
+        errors.append("selected subset solver status is invalid")
+
+    source_constraints = _serialized_conjuncts(source_expression)
+    if proof.get("source_constraint_count") != len(source_constraints):
+        errors.append("source constraint count is invalid")
+    indices = proof.get("selected_indices")
+    if (
+        not isinstance(indices, list)
+        or any(not isinstance(index, int) for index in indices)
+        or indices != sorted(set(indices))
+        or any(index < 0 or index >= len(source_constraints) for index in indices)
+    ):
+        errors.append("selected constraint indices are malformed")
+        return errors
+    selected = [source_constraints[index] for index in indices]
+    if proof.get("selected_constraints") != selected:
+        errors.append("selected constraints are not the recorded source subset")
+    selected_expression = _serialized_conjunction(selected)
+    if proof.get("selected_expression") != selected_expression:
+        errors.append("selected constraint expression is invalid")
+    selected_hash = _serialized_expression_hash(selected_expression)
+    if proof.get("selected_expression_sha256") != selected_hash:
+        errors.append("selected constraint expression hash is invalid")
+
+    if stage.get("outcome") != "CERTIFIED":
+        return errors
+    attempt = proof.get("certificate_attempt")
+    if not isinstance(attempt, dict) or attempt.get("outcome") != "CERTIFIED":
+        errors.append("selected constraint certificate attempt is missing")
+        return errors
+    if proof.get("certifying_checker") != attempt.get("checker"):
+        errors.append("selected constraint certifying checker is inconsistent")
+    certificate = (attempt.get("proof") or {}).get("certificate")
+    if not isinstance(certificate, dict):
+        errors.append("selected constraint certificate is missing")
+        return errors
+    kind = certificate.get("kind")
+    if kind == "linear_infeasibility_weights_v1":
+        errors.extend(
+            "selected constraint linear certificate: " + error
+            for error in verify_recorded_linear_certificate(certificate)
+        )
+    elif kind == "convex_dual_bound_v1":
+        errors.extend(
+            "selected constraint convex certificate: " + error
+            for error in verify_recorded_convex_certificate(certificate)
+        )
+    else:
+        errors.append("selected constraint certificate kind is invalid")
+    errors.extend(
+        "selected constraint outer reduction: " + error
+        for error in verify_recorded_outer_reduction(
+            attempt.get("proof") or {},
+            selected_hash,
+        )
+    )
+    return errors
+
+
+def _verify_smt_reachability_query(query: Any) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(query, dict):
+        return ["SMT reachability query is malformed"]
+    expression = query.get("query_expression")
+    if not isinstance(expression, dict):
+        errors.append("SMT reachability query expression is malformed")
+    elif query.get("query_expression_sha256") != _serialized_expression_hash(
+        expression
+    ):
+        errors.append("SMT reachability query expression hash is invalid")
+    smt2 = query.get("query_smt2")
+    if not isinstance(smt2, str) or not smt2:
+        errors.append("SMT reachability query text is missing")
+    elif query.get("query_smt2_sha256") != hashlib.sha256(
+        smt2.encode("utf-8")
+    ).hexdigest():
+        errors.append("SMT reachability query text hash is invalid")
+    status = query.get("solver_status")
+    if status == "unsat":
+        proof_text = query.get("z3_proof")
+        if not isinstance(proof_text, str) or not proof_text:
+            errors.append("SMT reachability no solution proof is missing")
+        elif query.get("z3_proof_sha256") != hashlib.sha256(
+            proof_text.encode("utf-8")
+        ).hexdigest():
+            errors.append("SMT reachability no solution proof hash is invalid")
+    elif status == "sat":
+        try:
+            replayed = replay_serialized_boolean_expression(
+                expression,
+                query.get("exact_values"),
+            )
+        except (TypeError, ValueError, ZeroDivisionError) as exc:
+            errors.append(f"SMT reachability trace is malformed: {exc}")
+        else:
+            if replayed is not True or query.get("exact_replay") is not True:
+                errors.append("SMT reachability trace does not satisfy its query")
+    elif status not in {"unknown", "unsupported"}:
+        errors.append("SMT reachability solver status is invalid")
+    return errors
+
+
+def _recheck_smt_no_solution(query: dict[str, Any]) -> list[str]:
+    if z3 is None:
+        return ["z3-solver is unavailable for SMT reachability proof replay"]
+    smt2 = query.get("query_smt2")
+    if not isinstance(smt2, str) or not smt2:
+        return ["SMT reachability query text is missing"]
+    try:
+        assertions = z3.parse_smt2_string(smt2)
+        solver = z3.Solver()
+        solver.add(assertions)
+        result = solver.check()
+    except Exception as exc:  # pragma: no cover - fail-closed boundary
+        return [f"SMT reachability proof replay failed: {exc}"]
+    if result != z3.unsat:
+        return [f"SMT reachability no solution result did not replay: {result}"]
+    return []
+
+
+def _verify_smt_reachability_stage(
+    stage: dict[str, Any],
+    case: dict[str, Any],
+) -> list[str]:
+    errors: list[str] = []
+    proof = stage.get("proof") or {}
+    rule = proof.get("rule")
+    source_expression = case.get("expression")
+    reachability_expression = case.get("reachability_expression")
+    if not isinstance(source_expression, dict):
+        return ["SMT reachability source expression is malformed"]
+    if not isinstance(reachability_expression, dict):
+        return ["SMT reachability expression is malformed"]
+    if proof.get("case_expression_sha256") != _serialized_expression_hash(
+        source_expression
+    ):
+        errors.append("SMT reachability source expression hash is invalid")
+    if proof.get("reachability_expression_sha256") != _serialized_expression_hash(
+        reachability_expression
+    ):
+        errors.append("SMT reachability expression hash is invalid")
+
+    if rule == "smt_finite_prefix_counterexample_v1":
+        if stage.get("outcome") != "VIOLATION":
+            errors.append("SMT reachability trace must report a violation")
+        trace_query = proof.get("trace_query")
+        errors.extend(_verify_smt_reachability_query(trace_query))
+        if isinstance(trace_query, dict) and trace_query.get("solver_status") != "sat":
+            errors.append("SMT reachability trace is not a solution")
+        return errors
+
+    if rule != "smt_finite_prefix_and_inductive_exclusion_v1":
+        if stage.get("outcome") in {"CERTIFIED", "VIOLATION"}:
+            errors.append("SMT reachability proof rule is invalid")
+        return errors
+    attempts = proof.get("depth_attempts")
+    if not isinstance(attempts, list):
+        return errors + ["SMT reachability depth attempts are malformed"]
+    for attempt in attempts:
+        if not isinstance(attempt, dict):
+            errors.append("SMT reachability depth attempt is malformed")
+            continue
+        for query in attempt.get("base_queries", []):
+            errors.extend(_verify_smt_reachability_query(query))
+        induction = attempt.get("induction_query")
+        if induction is not None:
+            errors.extend(_verify_smt_reachability_query(induction))
+    if stage.get("outcome") == "CERTIFIED":
+        certified = [
+            attempt for attempt in attempts if attempt.get("proved") is True
+        ]
+        if not certified:
+            errors.append("SMT reachability proof has no certified depth")
+        for attempt in certified:
+            bases = attempt.get("base_queries")
+            induction = attempt.get("induction_query")
+            if not isinstance(bases, list) or not bases:
+                errors.append("SMT reachability certified depth has no base query")
+            elif any(query.get("solver_status") != "unsat" for query in bases):
+                errors.append("SMT reachability base query is not proved impossible")
+            else:
+                for query in bases:
+                    errors.extend(_recheck_smt_no_solution(query))
+            if not isinstance(induction, dict) or induction.get(
+                "solver_status"
+            ) != "unsat":
+                errors.append("SMT reachability induction query is not proved impossible")
+            else:
+                errors.extend(_recheck_smt_no_solution(induction))
+    return errors
+
+
+def _verify_relational_invariant_stage(
+    stage: dict[str, Any],
+    case: dict[str, Any],
+) -> list[str]:
+    proof = stage.get("proof") or {}
+    if stage.get("outcome") != "CERTIFIED":
+        return []
+    errors: list[str] = []
+    if proof.get("rule") != "relational_inductive_invariant_v1":
+        return ["relational invariant proof rule is invalid"]
+    source_expression = case.get("expression")
+    reachability_expression = case.get("reachability_expression")
+    if not isinstance(source_expression, dict):
+        errors.append("relational invariant source expression is malformed")
+    elif proof.get("case_expression_sha256") != _serialized_expression_hash(
+        source_expression
+    ):
+        errors.append("relational invariant source expression hash is invalid")
+    if not isinstance(reachability_expression, dict):
+        errors.append("relational invariant reachability expression is malformed")
+    elif proof.get(
+        "reachability_expression_sha256"
+    ) != _serialized_expression_hash(reachability_expression):
+        errors.append("relational invariant reachability expression hash is invalid")
+
+    transition = proof.get("transition_expression")
+    if not isinstance(transition, dict):
+        errors.append("relational transition expression is malformed")
+    elif proof.get("transition_expression_sha256") != _serialized_expression_hash(
+        transition
+    ):
+        errors.append("relational transition expression hash is invalid")
+
+    invariants = proof.get("invariant")
+    invariant_hashes = proof.get("invariant_sha256")
+    if not isinstance(invariants, list) or not invariants:
+        errors.append("relational invariant is missing")
+        invariants = []
+    if not isinstance(invariant_hashes, list) or len(invariant_hashes) != len(
+        invariants
+    ):
+        errors.append("relational invariant hashes are malformed")
+        invariant_hashes = []
+    for index, expression in enumerate(invariants):
+        if not isinstance(expression, dict):
+            errors.append("relational invariant clause is malformed")
+        elif index < len(invariant_hashes) and invariant_hashes[
+            index
+        ] != _serialized_expression_hash(expression):
+            errors.append("relational invariant clause hash is invalid")
+
+    initiation = proof.get("initiation_queries")
+    preservation = proof.get("preservation_queries")
+    if not isinstance(initiation, list):
+        errors.append("relational invariant initiation queries are malformed")
+        initiation = []
+    if not isinstance(preservation, list):
+        errors.append("relational invariant preservation queries are malformed")
+        preservation = []
+    initiated_hashes = {
+        item.get("candidate_sha256")
+        for item in initiation
+        if isinstance(item, dict)
+    }
+    preserved_hashes = {
+        item.get("candidate_sha256")
+        for item in preservation
+        if isinstance(item, dict)
+    }
+    for invariant_hash in invariant_hashes:
+        if invariant_hash not in initiated_hashes:
+            errors.append("relational invariant clause has no initiation proof")
+        if invariant_hash not in preserved_hashes:
+            errors.append("relational invariant clause has no preservation proof")
+    for record in [*initiation, *preservation]:
+        if not isinstance(record, dict):
+            errors.append("relational invariant query record is malformed")
+            continue
+        candidate = record.get("candidate")
+        if not isinstance(candidate, dict):
+            errors.append("relational invariant query candidate is malformed")
+        elif record.get("candidate_sha256") != _serialized_expression_hash(
+            candidate
+        ):
+            errors.append("relational invariant query candidate hash is invalid")
+        query = record.get("query")
+        errors.extend(_verify_smt_reachability_query(query))
+        if not isinstance(query, dict) or query.get("solver_status") != "unsat":
+            errors.append("relational invariant obligation is not proved impossible")
+        else:
+            errors.extend(_recheck_smt_no_solution(query))
+
+    safety_query = proof.get("safety_query")
+    errors.extend(_verify_smt_reachability_query(safety_query))
+    if not isinstance(safety_query, dict) or safety_query.get(
+        "solver_status"
+    ) != "unsat":
+        errors.append("relational invariant safety obligation is not proved impossible")
+    else:
+        errors.extend(_recheck_smt_no_solution(safety_query))
+    return errors
+
+
 def verify_recorded_optimization_certificates(analysis: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     if not isinstance(analysis, dict):
@@ -153,7 +605,7 @@ def verify_recorded_optimization_certificates(analysis: dict[str, Any]) -> list[
         property_id = property_record.get("property_id", "unknown")
         reduction = property_record.get("reduction") or {}
         if reduction.get("outcome") != "DEFERRED":
-            if reduction.get("kind") != "full_sysml_interval_reduction_v2":
+            if reduction.get("kind") != "full_sysml_interval_reduction_v3":
                 errors.append(f"property {property_id} reduction kind is invalid")
             counterexample = reduction.get("interval_counterexample")
             if not isinstance(counterexample, dict):
@@ -226,6 +678,18 @@ def verify_recorded_optimization_certificates(analysis: dict[str, Any]) -> list[
                     errors.append(
                         f"property {property_id} case {case.get('case_id')} expression does not match coverage"
                     )
+                if source.get("reachability_expression") is not None:
+                    reachability_hash = hashlib.sha256(json.dumps(
+                        source["reachability_expression"],
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    ).encode("utf-8")).hexdigest()
+                    if reachability_hash != source.get(
+                        "reachability_expression_sha256"
+                    ):
+                        errors.append(
+                            f"property {property_id} case {case.get('case_id')} reachability expression hash is invalid"
+                        )
                 if source.get("time_reduction") != case.get("time_reduction"):
                     errors.append(
                         f"property {property_id} case {case.get('case_id')} time reduction does not match coverage"
@@ -246,15 +710,62 @@ def verify_recorded_optimization_certificates(analysis: dict[str, Any]) -> list[
                         )
 
         stages = [
-            stage
+            (case, stage)
             for case in property_record.get("cases", [])
             for stage in case.get("progression", [])
         ]
-        for stage in stages:
-            if stage.get("outcome") != "CERTIFIED":
-                continue
+        for case, stage in stages:
             checker = stage.get("checker")
             proof = stage.get("proof") or {}
+            if checker == "smt_fallback":
+                errors.extend(
+                    f"property {property_id} smt fallback certificate: {error}"
+                    for error in _verify_smt_stage(stage, case)
+                )
+                continue
+            if checker == "smt_reachability":
+                errors.extend(
+                    f"property {property_id} smt reachability certificate: {error}"
+                    for error in _verify_smt_reachability_stage(stage, case)
+                )
+                continue
+            if checker == "relational_invariant":
+                errors.extend(
+                    f"property {property_id} relational invariant certificate: {error}"
+                    for error in _verify_relational_invariant_stage(stage, case)
+                )
+                continue
+            if stage.get("outcome") == "VIOLATION":
+                if checker != "reachability_linear":
+                    errors.append(
+                        f"property {property_id} unsupported violation checker {checker}"
+                    )
+                    continue
+                if proof.get("rule") != "exact_finite_prefix_counterexample_v1":
+                    errors.append(
+                        f"property {property_id} reachability violation proof rule is invalid"
+                    )
+                    continue
+                obligations = proof.get("base_obligations", [])
+                replayed = [
+                    obligation.get("attempt", {})
+                    for obligation in obligations
+                    if obligation.get("attempt", {}).get("outcome") == "VIOLATION"
+                ]
+                if not replayed:
+                    errors.append(
+                        f"property {property_id} reachability violation has no replayed obligation"
+                    )
+                for attempt in replayed:
+                    for error in verify_recorded_linear_counterexample(
+                        attempt.get("proof") or {}
+                    ):
+                        errors.append(
+                            f"property {property_id} reachability counterexample: {error}"
+                        )
+                continue
+            if stage.get("outcome") != "CERTIFIED":
+                continue
             certificate = proof.get("certificate")
             if checker == "linear":
                 if not isinstance(certificate, dict):
@@ -266,6 +777,108 @@ def verify_recorded_optimization_certificates(analysis: dict[str, Any]) -> list[
                     stage_errors = ["convex proof certificate is missing"]
                 else:
                     stage_errors = verify_recorded_convex_certificate(certificate)
+            elif checker in {"reachability_linear", "reachability_convex"}:
+                method = (
+                    "linear"
+                    if checker == "reachability_linear"
+                    else "convex"
+                )
+                if proof.get("rule") != "finite_prefix_and_inductive_case_exclusion_v1":
+                    stage_errors = ["reachability proof rule is invalid"]
+                elif proof.get("method") != method:
+                    stage_errors = ["reachability proof method is invalid"]
+                else:
+                    stage_errors = []
+                    certified_depths = [
+                        item
+                        for item in proof.get("depth_attempts", [])
+                        if item.get("proved") is True
+                    ]
+                    if not certified_depths:
+                        stage_errors.append("reachability proof has no certified depth")
+                    for depth in certified_depths:
+                        obligations = (
+                            depth.get("base_obligations", [])
+                            + depth.get("induction_obligations", [])
+                        )
+                        if not obligations:
+                            stage_errors.append(
+                                "reachability proof has no arithmetic obligations"
+                            )
+                        for obligation in obligations:
+                            attempt = obligation.get("attempt") or {}
+                            if obligation.get("outer_case_group") is True:
+                                if (
+                                    not isinstance(
+                                        obligation.get("covered_case_first_id"),
+                                        str,
+                                    )
+                                    or not isinstance(
+                                        obligation.get("covered_case_last_id"),
+                                        str,
+                                    )
+                                    or not isinstance(
+                                        obligation.get("covered_case_count"),
+                                        int,
+                                    )
+                                    or obligation.get("covered_case_count") <= 1
+                                ):
+                                    stage_errors.append(
+                                        "reachability outer case group coverage is malformed"
+                                    )
+                            certificate = (attempt.get("proof") or {}).get(
+                                "certificate"
+                            )
+                            if attempt.get("outcome") != "CERTIFIED":
+                                stage_errors.append(
+                                    "reachability arithmetic obligation is not certified"
+                                )
+                            elif (
+                                (attempt.get("proof") or {}).get("rule")
+                                == "exhaustive_case_split_empty_v1"
+                            ):
+                                if attempt.get("applicability_checks", {}).get(
+                                    "arithmetic_case_count"
+                                ) != 0:
+                                    stage_errors.append(
+                                        "empty reachability split has a nonzero case count"
+                                    )
+                            elif not isinstance(certificate, dict):
+                                stage_errors.append(
+                                    "reachability arithmetic certificate is missing"
+                                )
+                            elif certificate.get("kind") == "linear_infeasibility_weights_v1":
+                                stage_errors.extend(
+                                    "reachability linear certificate: " + error
+                                    for error in verify_recorded_linear_certificate(
+                                        certificate
+                                    )
+                                )
+                                stage_errors.extend(
+                                    "reachability outer reduction: " + error
+                                    for error in verify_recorded_outer_reduction(
+                                        attempt.get("proof") or {},
+                                        str(obligation.get("expression_sha256", "")),
+                                    )
+                                )
+                            elif certificate.get("kind") == "convex_dual_bound_v1":
+                                stage_errors.extend(
+                                    "reachability convex certificate: " + error
+                                    for error in verify_recorded_convex_certificate(
+                                        certificate
+                                    )
+                                )
+                                stage_errors.extend(
+                                    "reachability outer reduction: " + error
+                                    for error in verify_recorded_outer_reduction(
+                                        attempt.get("proof") or {},
+                                        str(obligation.get("expression_sha256", "")),
+                                    )
+                                )
+                            else:
+                                stage_errors.append(
+                                    "reachability certificate kind is invalid"
+                                )
             else:
                 continue
             errors.extend(

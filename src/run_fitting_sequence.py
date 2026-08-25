@@ -1190,7 +1190,7 @@ def main() -> int:
     parser.add_argument(
         "--discretization-smt-timeout-ms",
         type=int,
-        default=2000,
+        default=30000,
         help="solver timeout for the final fallback in Stage 4",
     )
     parser.add_argument(

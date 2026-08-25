@@ -12,12 +12,15 @@ from pathlib import Path
 from unittest.mock import patch
 
 from certification.certificate import load_certificate as load_mdp_certificate
-from certification.equations import Const, Op, Var
+from certification.equations import Const, EquationModel, Op, Var
 
 from .analysis import CHECKER_ORDER, analyze_model
 from .certificate import certificate_hash, check_certificate, load_certificate
 from .convex_checker import run_convex_checker, solve_convex_constraints
-from .full_model_reduction import ReducedCase, expression_hash
+from .convex_envelope_checker import run_convex_envelope_checker
+from .exact_replay import replay_serialized_boolean_expression
+from .full_model_reduction import ReachabilityContext, ReducedCase, expression_hash
+from .linear_envelope_checker import run_linear_envelope_checker
 from .linear_checker import run_linear_checker, solve_linear_constraints
 from .optimization_common import QuadraticConstraint
 from .proof_rules import expression_is_linear, prove_implication_exact
@@ -25,7 +28,9 @@ from .proof_rules import LinearInequality
 from .proof_certificate_verifier import (
     verify_recorded_convex_certificate,
     verify_recorded_linear_certificate,
+    verify_recorded_outer_reduction,
 )
+from .reachability import run_reachability_checker, run_smt_reachability_checker
 
 
 def require(condition: bool, message: str) -> None:
@@ -64,6 +69,49 @@ def main() -> int:
     require(unsound.get("proved") is False, "invalid exact implication was accepted")
     linear, _detail = expression_is_linear(Op("*", (x, x)), set())
     require(linear is False, "variable multiplication was classified as linear")
+    exact_replay_expression = {
+        "type": "op",
+        "op": "and",
+        "args": [
+            {
+                "type": "op",
+                "op": "==",
+                "args": [
+                    {
+                        "type": "op",
+                        "op": "*",
+                        "args": [
+                            {"type": "var", "name": "x"},
+                            {"type": "const", "value": 2},
+                        ],
+                    },
+                    {"type": "const", "value": 1},
+                ],
+            },
+            {
+                "type": "op",
+                "op": ">",
+                "args": [
+                    {"type": "var", "name": "x"},
+                    {"type": "const", "value": 0},
+                ],
+            },
+        ],
+    }
+    require(
+        replay_serialized_boolean_expression(
+            exact_replay_expression,
+            {"x": "1/2"},
+        ) is True,
+        "exact recorded values did not replay",
+    )
+    require(
+        replay_serialized_boolean_expression(
+            exact_replay_expression,
+            {"x": "-1/2"},
+        ) is False,
+        "invalid recorded values replayed",
+    )
 
     linear_problem = [
         LinearInequality.make({"x": Fraction(1)}, Fraction(0)),
@@ -138,6 +186,125 @@ def main() -> int:
         == "CERTIFIED",
         "supported nonlinear problem was not certified by the convex checker",
     )
+    bounded_product = Op(
+        "and",
+        (
+            Op(">=", (x, Const(-1))),
+            Op("<=", (x, Const(1))),
+            Op(">=", (Op("*", (x, x)), Const(2))),
+        ),
+    )
+    bounded_product_result = run_linear_envelope_checker(
+        reduced_case("bounded-product", bounded_product),
+        timeout_ms=250,
+    )
+    require(
+        bounded_product_result.get("outcome") == "CERTIFIED",
+        "bounded product was not certified by the linear outer reduction",
+    )
+    require(
+        not verify_recorded_outer_reduction(
+            bounded_product_result["proof"],
+            expression_hash(bounded_product),
+        ),
+        "bounded product reduction certificate did not verify",
+    )
+    require(
+        run_convex_envelope_checker(
+            reduced_case("bounded-square", bounded_product),
+            timeout_ms=250,
+        ).get("outcome") == "CERTIFIED",
+        "bounded square was not certified by the convex outer reduction",
+    )
+    feasible_product = Op(
+        "and",
+        (
+            Op(">=", (x, Const(-1))),
+            Op("<=", (x, Const(1))),
+            Op(">=", (Op("*", (x, x)), Const(0))),
+        ),
+    )
+    require(
+        run_linear_envelope_checker(
+            reduced_case("feasible-product", feasible_product),
+            timeout_ms=250,
+        ).get("outcome") == "DEFERRED",
+        "feasible linear outer reduction reported a proof",
+    )
+
+    reachability_context = ReachabilityContext(
+        domain=Const(True),
+        initial_constraints=(Op("==", (x, Const(0))),),
+        initial_variables=("x",),
+        post_values=(("x", Op("+", (x, Const(1)))),),
+        action_variables=(),
+        boolean_variables=(),
+        integer_variables=(),
+    )
+    safe_reachability_case = ReducedCase(
+        "safe-reachability",
+        Op("<", (x, Const(0))),
+        expression_hash(Op("<", (x, Const(0)))),
+        (),
+        "time_independent",
+        "physical_interval",
+        Op("<", (x, Const(0))),
+    )
+    require(
+        run_reachability_checker(
+            safe_reachability_case,
+            reachability_context,
+            method="linear",
+            timeout_ms=250,
+        ).get("outcome") == "CERTIFIED",
+        "linear reachability proof was rejected",
+    )
+    unsafe_reachability_case = ReducedCase(
+        "unsafe-reachability",
+        Op(">=", (x, Const(0))),
+        expression_hash(Op(">=", (x, Const(0)))),
+        (),
+        "time_independent",
+        "physical_interval",
+        Op(">=", (x, Const(0))),
+    )
+    require(
+        run_reachability_checker(
+            unsafe_reachability_case,
+            reachability_context,
+            method="linear",
+            timeout_ms=250,
+        ).get("outcome") == "VIOLATION",
+        "exact initial reachability violation was not replayed",
+    )
+    smt_model = EquationModel(
+        "synthetic",
+        {"x"},
+        set(),
+        initial_values={"x": 0},
+    )
+    require(
+        run_smt_reachability_checker(
+            smt_model,
+            safe_reachability_case,
+            reachability_context,
+            timeout_ms=250,
+        ).get("outcome") == "CERTIFIED",
+        "SMT reachability proof was rejected",
+    )
+    smt_violation = run_smt_reachability_checker(
+        smt_model,
+        unsafe_reachability_case,
+        reachability_context,
+        timeout_ms=250,
+    )
+    require(
+        smt_violation.get("outcome") == "VIOLATION"
+        and smt_violation.get("proof", {}).get("trace_query", {}).get(
+            "exact_replay"
+        ) is True,
+        "SMT reachability trace was not replayed",
+    )
     require(
         run_linear_checker(nonlinear_counterexample, set(), timeout_ms=250).get(
             "reason_code"
@@ -210,6 +377,7 @@ def main() -> int:
             ),
             f"checker accepted an omitted physical equation: {path}",
         )
+        del mutated
         all_inventory_targets = {
             item.get("target")
             for property_record in properties
@@ -234,6 +402,7 @@ def main() -> int:
                 ),
                 f"checker accepted omitted {required_target}: {path}",
             )
+            del missing_physics
         mapped_property = next(
             (
                 item for item in properties
@@ -258,6 +427,111 @@ def main() -> int:
                 ),
                 f"checker accepted a corrupted sensor mapping: {path}",
             )
+            del bad_mapping
+        exact_stage = next(
+            (
+                stage
+                for property_record in properties
+                for case in property_record.get("cases", [])
+                for stage in case.get("progression", [])
+                if (stage.get("proof") or {}).get("rule")
+                == "exact_local_feasibility_replay_v1"
+            ),
+            None,
+        )
+        if exact_stage is not None:
+            bad_values = copy.deepcopy(certificate)
+            selected_stage = next(
+                stage
+                for property_record in bad_values["analysis"]["properties"]
+                for case in property_record.get("cases", [])
+                for stage in case.get("progression", [])
+                if (stage.get("proof") or {}).get("rule")
+                == "exact_local_feasibility_replay_v1"
+            )
+            first_name = sorted(selected_stage["proof"]["exact_values"])[0]
+            selected_stage["proof"]["exact_values"][first_name] = None
+            bad_values["self_sha256"] = certificate_hash(bad_values)
+            require(
+                any(
+                    "local feasibility" in error
+                    for error in check_certificate(bad_values, check_files=False)
+                ),
+                f"checker accepted corrupted exact values: {path}",
+            )
+            del bad_values
+        subset_stage = next(
+            (
+                stage
+                for property_record in properties
+                for case in property_record.get("cases", [])
+                for stage in case.get("progression", [])
+                if stage.get("outcome") == "CERTIFIED"
+                and (stage.get("proof") or {}).get("rule")
+                == "solver_selected_subset_recertification_v1"
+            ),
+            None,
+        )
+        if subset_stage is not None:
+            bad_subset = copy.deepcopy(certificate)
+            selected_stage = next(
+                stage
+                for property_record in bad_subset["analysis"]["properties"]
+                for case in property_record.get("cases", [])
+                for stage in case.get("progression", [])
+                if stage.get("outcome") == "CERTIFIED"
+                and (stage.get("proof") or {}).get("rule")
+                == "solver_selected_subset_recertification_v1"
+            )
+            selected_stage["proof"]["selected_indices"][0] = -1
+            bad_subset["self_sha256"] = certificate_hash(bad_subset)
+            require(
+                any(
+                    "selected constraint" in error
+                    for error in check_certificate(bad_subset, check_files=False)
+                ),
+                f"checker accepted corrupted selected constraints: {path}",
+            )
+            del bad_subset
+        smt_reachability_stage = next(
+            (
+                stage
+                for property_record in properties
+                for case in property_record.get("cases", [])
+                for stage in case.get("progression", [])
+                if stage.get("checker") == "smt_reachability"
+                and stage.get("outcome") == "CERTIFIED"
+            ),
+            None,
+        )
+        if smt_reachability_stage is not None:
+            bad_smt_proof = copy.deepcopy(certificate)
+            selected_stage = next(
+                stage
+                for property_record in bad_smt_proof["analysis"]["properties"]
+                for case in property_record.get("cases", [])
+                for stage in case.get("progression", [])
+                if stage.get("checker") == "smt_reachability"
+                and stage.get("outcome") == "CERTIFIED"
+            )
+            certified_depth = next(
+                item
+                for item in selected_stage["proof"]["depth_attempts"]
+                if item.get("proved") is True
+            )
+            certified_depth["induction_query"]["z3_proof_sha256"] = "corrupted"
+            bad_smt_proof["self_sha256"] = certificate_hash(bad_smt_proof)
+            require(
+                any(
+                    "SMT reachability no solution proof hash" in error
+                    for error in check_certificate(
+                        bad_smt_proof,
+                        check_files=False,
+                    )
+                ),
+                f"checker accepted a corrupted SMT reachability proof: {path}",
+            )
+            del bad_smt_proof
         print(f"{path}: VALIDATION PASSED")
 
     marker = "#ContinuousRate assign currentTime := currentTime + dt;"
@@ -293,7 +567,7 @@ def main() -> int:
         )
         cascaded = [
             item for item in analysis.get("properties", [])
-            if item.get("progression", [{}])[0].get("reason_code")
+            if (item.get("progression") or [{}])[0].get("reason_code")
             == "MISSING_WITHIN_STEP_MEANING"
         ]
         require(bool(cascaded), "missing annotation did not produce the required reason")
@@ -316,6 +590,9 @@ def main() -> int:
     print("full model equation omission rejection: PASSED")
     print("unreduced checker input rejection: PASSED")
     print("sensor to physical mapping mutation rejection: PASSED")
+    print("exact solver value replay validation: PASSED")
+    print("selected constraint certificate validation: PASSED")
+    print("SMT reachability proof and trace validation: PASSED")
     print("loud deferral and checker progression: PASSED")
     return 0
 

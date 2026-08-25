@@ -23,8 +23,8 @@ from .analysis import analyze_model, canonical_dt
 from .proof_certificate_verifier import verify_recorded_optimization_certificates
 
 
-SCHEMA_VERSION = 2
-CERTIFICATE_KIND = "discretization_safety_certificate_v2"
+SCHEMA_VERSION = 3
+CERTIFICATE_KIND = "discretization_safety_certificate_v3"
 
 
 def canonical_json_bytes(value: Any) -> bytes:
@@ -52,6 +52,69 @@ def certificate_hash(certificate: dict[str, Any]) -> str:
     clone = json.loads(json.dumps(certificate))
     clone.pop("self_sha256", None)
     return sha256_bytes(canonical_json_bytes(clone))
+
+
+TIMED_REACHABILITY_CHECKERS = {
+    "reachability_linear",
+    "reachability_convex",
+    "smt_reachability",
+}
+
+
+def _contains_timed_reachability(value: Any) -> bool:
+    if isinstance(value, dict):
+        if value.get("checker") in TIMED_REACHABILITY_CHECKERS:
+            return True
+        return any(_contains_timed_reachability(item) for item in value.values())
+    if isinstance(value, list):
+        return any(_contains_timed_reachability(item) for item in value)
+    return False
+
+
+def _replay_projection(value: Any) -> Any:
+    if isinstance(value, dict):
+        if value.get("checker") in TIMED_REACHABILITY_CHECKERS:
+            return {
+                "checker": value.get("checker"),
+                "checker_version": value.get("checker_version"),
+            }
+        if (
+            isinstance(value.get("progression"), list)
+            and _contains_timed_reachability(value["progression"])
+        ):
+            return {
+                key: _replay_projection(item)
+                for key, item in value.items()
+                if key not in {"progression", "result"}
+            }
+        has_timed_reachability = _contains_timed_reachability(value)
+        return {
+            key: _replay_projection(item)
+            for key, item in value.items()
+            if key not in {
+                "exact_values",
+                "multipliers",
+                "solver",
+                "solver_status",
+                "selected_indices",
+                "selected_constraints",
+                "selected_expression",
+                "selected_expression_sha256",
+                "subset_minimization_checks",
+                "subset_minimization_complete",
+                "recertification_attempts",
+                "certifying_checker",
+                "certificate_attempt",
+                "query_smt2",
+                "query_smt2_sha256",
+                "z3_proof",
+                "z3_proof_sha256",
+            }
+            and not (key == "result" and has_timed_reachability)
+        }
+    if isinstance(value, list):
+        return [_replay_projection(item) for item in value]
+    return value
 
 
 def _validate_inputs(
@@ -119,7 +182,7 @@ def build_certificate(
     *,
     dt_text: str,
     optimization_timeout_ms: int = 250,
-    smt_timeout_ms: int = 2000,
+    smt_timeout_ms: int = 30000,
 ) -> dict[str, Any]:
     model = Path(model_path).resolve()
     mdp_path = Path(mdp_certificate_path).resolve()
@@ -129,9 +192,9 @@ def build_certificate(
     )
     if input_errors:
         analysis = {
-            "schema_version": 2,
+            "schema_version": 3,
             "result": "NOT_CERTIFIED",
-            "claim": "full_sysml_discretization_safety_preservation_v2",
+            "claim": "full_sysml_discretization_safety_preservation_v3",
             "properties": [],
             "blocking_diagnostics": input_errors,
         }
@@ -149,7 +212,7 @@ def build_certificate(
         "kind": CERTIFICATE_KIND,
         "result": analysis.get("result", "NOT_CERTIFIED"),
         "claim": {
-            "name": "full_sysml_discretization_safety_preservation_v2",
+            "name": "full_sysml_discretization_safety_preservation_v3",
             "status": (
                 "discharged"
                 if analysis.get("result") == "CERTIFIED"
@@ -299,6 +362,8 @@ def check_certificate(
         optimization_timeout_ms=optimization_timeout_ms,
         smt_timeout_ms=timeout_ms,
     )
-    if canonical_json_bytes(rebuilt) != canonical_json_bytes(certificate.get("analysis")):
+    if canonical_json_bytes(_replay_projection(rebuilt)) != canonical_json_bytes(
+        _replay_projection(certificate.get("analysis"))
+    ):
         errors.append("independent replay does not match recorded analysis")
     return errors

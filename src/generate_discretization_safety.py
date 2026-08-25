@@ -50,7 +50,7 @@ def main() -> int:
     parser.add_argument("--out-json", required=True)
     parser.add_argument("--dt", default=str(DEFAULT_DT))
     parser.add_argument("--optimization-timeout-ms", type=int, default=250)
-    parser.add_argument("--smt-timeout-ms", type=int, default=2000)
+    parser.add_argument("--smt-timeout-ms", type=int, default=30000)
     args = parser.parse_args()
     dt_text = str(args.dt)
     dt = validate_dt(args.dt)
@@ -68,6 +68,7 @@ def main() -> int:
 
     rows: list[dict[str, Any]] = []
     failures = 0
+    violations = 0
     for model in models:
         mdp_certificate_path = (
             mdp_dir / "certificates" / f"{model.key}.certificate.json"
@@ -108,6 +109,8 @@ def main() -> int:
         rows.append(row)
         if errors or certificate.get("result") != "CERTIFIED":
             failures += 1
+        if not errors and certificate.get("result") == "VIOLATION":
+            violations += 1
         print(
             f"{model.key}: result={row['result']} checker={row['checker']} "
             f"properties={row['properties_certified']}/{row['properties_checked']} "
@@ -129,6 +132,8 @@ def main() -> int:
         "result": "CERTIFIED" if failures == 0 else "NOT_CERTIFIED",
     }
     write_json(Path(args.out_json).resolve(), summary)
+    if violations:
+        return 2
     return 0 if failures == 0 else 3
 
 

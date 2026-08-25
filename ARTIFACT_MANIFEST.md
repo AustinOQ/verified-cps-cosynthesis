@@ -35,6 +35,7 @@ Runtime tools:
 | Bash | `run_fitting_sequence.sh` | Used only to choose the Python executable and start the runner. |
 | Python 3.12 or newer | all stages | The artifact defaults to `python3`. Another compatible interpreter can be supplied with `PYTHON_BIN`. |
 | `numpy` | checks and discrete fitted training | Required by the bundled environment, oracle code, and NumPy trainer. |
+| `scipy` | linear and convex discretization checks | Produces optimization candidates that are accepted only after exact proof-certificate checking. |
 | `z3-solver` | Markov/MDP proof check | Required by the default run. The artifact builds the Z3 query from the bundled SysML files at run time. |
 | `torch` | continuous fitted training | Used by the bundled continuous MLP PPO trainer. It is forced to CPU by the artifact. |
 
@@ -52,7 +53,7 @@ Bundled code required by the default run:
 | `bundle/architecture-fit/reconstruct_closure.py` | Finds finite buffers for the memoryless and Markov/MDP checks. |
 | `bundle/architecture-fit/sysml_deps.py` | Extracts dependency information from SysML for the memoryless check. |
 | `bundle/architecture-fit/certification/` | Builds and checks the Markov/MDP proof result in memory. |
-| `bundle/architecture-fit/discretization/` | Reduces the complete SysML physical interval into recorded cases, runs the linear, convex, exact symbolic, and SMT progression, and independently checks the reduction and proof certificates. |
+| `bundle/architecture-fit/discretization/` | Reduces the complete SysML physical interval into recorded cases, checks reachable states from the SysML initial values, runs the linear, convex, exact symbolic, local SMT, and SMT reachability progression, replays exact traces, records Z3 proofs for exact reachability exclusions, retries solver-selected source-constraint subsets through the linear and convex certificate generators, and independently checks the reduction and proof certificates. |
 | `bundle/architecture-fit/reduced_handmade/` | Trains fitted discrete feedforward policies with NumPy PPO. |
 | `bundle/architecture-fit/train_mlp_buffer.py` | Trains a fitted real-valued-action MLP policy on CPU. |
 | `bundle/architecture-fit/mlp_buffer.py` | Defines buffered continuous/discrete MLP environment wrappers and policy classes. |

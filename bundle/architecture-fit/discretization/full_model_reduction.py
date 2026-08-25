@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
+from fractions import Fraction
 from itertools import product
 from typing import Any, Iterable
 
@@ -42,6 +43,23 @@ class ReducedCase:
     boolean_assignment: tuple[tuple[str, bool], ...]
     time_reduction: str
     obligation: str
+    reachability_expression: Expr | None = None
+
+
+@dataclass(frozen=True)
+class ReachabilityContext:
+    """Exact inputs used to prove that a reduced case is unreachable."""
+
+    domain: Expr
+    initial_constraints: tuple[Expr, ...]
+    initial_variables: tuple[str, ...]
+    post_values: tuple[tuple[str, Expr], ...]
+    action_variables: tuple[str, ...]
+    boolean_variables: tuple[str, ...]
+    integer_variables: tuple[str, ...]
+
+    def post_dict(self) -> dict[str, Expr]:
+        return dict(self.post_values)
 
 
 def _and(expressions: Iterable[Expr]) -> Expr:
@@ -112,20 +130,30 @@ def _first_ite(expr: Expr) -> Ite | None:
     return None
 
 
-def _replace_exact(expr: Expr, target: Expr, replacement: Expr) -> Expr:
-    if expr == target:
-        return replacement
+def _assume_condition(expr: Expr, condition: Expr, truth: bool) -> Expr:
+    if expr == condition:
+        return Const(truth)
+    if (
+        isinstance(expr, Op)
+        and expr.op == "not"
+        and len(expr.args) == 1
+        and expr.args[0] == condition
+    ):
+        return Const(not truth)
     if isinstance(expr, Op):
-        return Op(
+        return simplify(Op(
             expr.op,
-            tuple(_replace_exact(arg, target, replacement) for arg in expr.args),
-        )
+            tuple(
+                _assume_condition(argument, condition, truth)
+                for argument in expr.args
+            ),
+        ))
     if isinstance(expr, Ite):
-        return Ite(
-            _replace_exact(expr.cond, target, replacement),
-            _replace_exact(expr.then_expr, target, replacement),
-            _replace_exact(expr.else_expr, target, replacement),
-        )
+        return simplify(Ite(
+            _assume_condition(expr.cond, condition, truth),
+            _assume_condition(expr.then_expr, condition, truth),
+            _assume_condition(expr.else_expr, condition, truth),
+        ))
     return expr
 
 
@@ -143,8 +171,8 @@ def _split_conditionals(expr: Expr, *, limit: int = 512) -> list[tuple[str, Expr
                 "INCOMPLETE_CASE_COVERAGE",
                 f"conditional case split exceeds {limit} branches",
             )
-        then_expression = _replace_exact(current, conditional, conditional.then_expr)
-        else_expression = _replace_exact(current, conditional, conditional.else_expr)
+        then_expression = _assume_condition(current, conditional.cond, True)
+        else_expression = _assume_condition(current, conditional.cond, False)
         pending.append((
             branch_id + ".then",
             simplify(_and([conditional.cond, then_expression])),
@@ -173,6 +201,44 @@ def simplify(expr: Expr) -> Expr:
     if not isinstance(expr, Op):
         return expr
     args = tuple(simplify(arg) for arg in expr.args)
+    if args and all(isinstance(arg, Const) for arg in args):
+        values = [arg.value for arg in args]
+        if expr.op == "==" and len(values) == 2:
+            return Const(values[0] == values[1])
+        if expr.op in {">", "<", ">=", "<="} and len(values) == 2:
+            try:
+                left = Fraction(str(values[0]))
+                right = Fraction(str(values[1]))
+                result = {
+                    ">": left > right,
+                    "<": left < right,
+                    ">=": left >= right,
+                    "<=": left <= right,
+                }[expr.op]
+                return Const(result)
+            except (TypeError, ValueError, ZeroDivisionError):
+                pass
+        if expr.op in {"+", "-", "*", "/"}:
+            try:
+                numbers = [Fraction(str(value)) for value in values]
+                if expr.op == "+":
+                    value = sum(numbers, Fraction(0))
+                elif expr.op == "-":
+                    value = -numbers[0] if len(numbers) == 1 else numbers[0] - sum(numbers[1:], Fraction(0))
+                elif expr.op == "*" and len(numbers) == 2:
+                    value = numbers[0] * numbers[1]
+                elif expr.op == "/" and len(numbers) == 2 and numbers[1] != 0:
+                    value = numbers[0] / numbers[1]
+                else:
+                    value = None
+                if value is not None:
+                    return Const(
+                        value.numerator
+                        if value.denominator == 1
+                        else f"{value.numerator}/{value.denominator}"
+                    )
+            except (TypeError, ValueError, ZeroDivisionError):
+                pass
     if expr.op == "not" and len(args) == 1:
         if isinstance(args[0], Const) and isinstance(args[0].value, bool):
             return Const(not args[0].value)
@@ -214,6 +280,17 @@ def simplify(expr: Expr) -> Expr:
             return right if left.value else Const(True)
         if isinstance(right, Const) and isinstance(right.value, bool):
             return Const(True) if right.value else simplify(Op("not", (left,)))
+    if expr.op == "==" and len(args) == 2:
+        for boolean_value, other in ((args[0], args[1]), (args[1], args[0])):
+            if not (
+                isinstance(boolean_value, Const)
+                and isinstance(boolean_value.value, bool)
+            ):
+                continue
+            if isinstance(other, Op) and other.op in {
+                "not", "and", "or", "implies", "==", ">", "<", ">=", "<="
+            }:
+                return other if boolean_value.value else simplify(Op("not", (other,)))
     if expr.op == "==" and len(args) == 2 and args[0] == args[1]:
         return Const(True)
     return Op(expr.op, args)
@@ -525,6 +602,9 @@ def _case_split(
                     expressions = [
                         _comparison_expression(item) for item in selected
                     ]
+                    reachability_expressions = [
+                        _comparison_expression(item) for item in comparisons
+                    ]
                     if endpoint is not None:
                         value = endpoint
                         if isinstance(endpoint, Const) and endpoint.value == "__DT__":
@@ -548,7 +628,14 @@ def _case_split(
                             substitute(item, {INTERVAL_TIME: value})
                             for item in expressions
                         ]
+                        reachability_expressions = [
+                            substitute(item, {INTERVAL_TIME: value})
+                            for item in reachability_expressions
+                        ]
                     case_expression = simplify(_and(expressions))
+                    reachability_expression = simplify(_and(
+                        reachability_expressions
+                    ))
                     case_id = f"{property_id}.{obligation}.case.{index:04d}"
                     case = ReducedCase(
                         case_id,
@@ -557,6 +644,7 @@ def _case_split(
                         assignment,
                         time_reduction,
                         obligation,
+                        reachability_expression,
                     )
                     cases.append(case)
                     case_rows.append({
@@ -567,6 +655,12 @@ def _case_split(
                         "time_reduction": time_reduction,
                         "expression": expr_to_dict(case_expression),
                         "expression_sha256": expression_hash(case_expression),
+                        "reachability_expression": expr_to_dict(
+                            reachability_expression
+                        ),
+                        "reachability_expression_sha256": expression_hash(
+                            reachability_expression
+                        ),
                     })
                     index += 1
     return cases, {
@@ -632,14 +726,22 @@ def build_reduction(
     shield_expression: Expr,
     guards: list[Expr],
     scenario_constraints: list[Expr],
+    scenario_initial_constraints: list[Expr],
     constant_values: dict[str, Expr],
     continuous: set[str],
     boolean_variables: set[str],
+    integer_variables: set[str],
     dt_record: dict[str, Any],
-) -> tuple[list[ReducedCase], dict[str, Any]]:
+) -> tuple[list[ReducedCase], dict[str, Any], ReachabilityContext]:
     """Build the full physical interval counterexample and its reduction trace."""
 
     original = expand_definitions(model, equation.expr)
+    terminal_equation = model.terminals.get("env.completion.done")
+    terminal = (
+        expand_definitions(model, terminal_equation.expr)
+        if terminal_equation is not None
+        else Const(False)
+    )
     all_changing = {
         target
         for target, transition in model.transitions.items()
@@ -650,7 +752,7 @@ def build_reduction(
     }
     aliases, alias_records = physical_aliases(
         model,
-        [original, shield_expression],
+        [original, shield_expression, terminal],
         all_changing,
     )
     required_changing = set(aliases.values()) | (
@@ -704,6 +806,15 @@ def build_reduction(
 
     physical_start = {sampled: Var(target) for sampled, target in aliases.items()}
     shield_at_start = simplify(substitute(shield_expression, physical_start))
+    terminal_at_start = _expand_post_update(
+        model,
+        substitute(terminal, physical_start),
+        continuous,
+    )
+    terminal_at_start = simplify(substitute(
+        terminal_at_start,
+        constant_values,
+    ))
 
     interval_values: dict[str, Expr] = {
         sampled: trajectories[target]
@@ -780,6 +891,61 @@ def build_reduction(
         dependency_seeds.add(record["sampled_value"])
         dependency_seeds.add(record["physical_value"])
     included_targets = _dependency_closure(model, dependency_seeds)
+
+    domain = simplify(_and([
+        *controller_premises,
+        Op("not", (terminal_at_start,)),
+    ]))
+    specified_initial_constraints = tuple(
+        Op("==", (Var(target), Const(value)))
+        for target, value in sorted(model.initial_values.items())
+    )
+    initial_constraints = (
+        specified_initial_constraints
+        + tuple(scenario_constraints)
+        + tuple(scenario_initial_constraints)
+    )
+    reachability_targets = set(model.transitions)
+    reachability_targets.update(expression_symbols(domain) & model.state)
+    for case in cases:
+        reachability_targets.update(expression_symbols(case.expression) & model.state)
+        if case.reachability_expression is not None:
+            reachability_targets.update(
+                expression_symbols(case.reachability_expression) & model.state
+            )
+    post_values: dict[str, Expr] = {}
+    pending = list(sorted(reachability_targets))
+    while pending:
+        target = pending.pop(0)
+        if target in post_values:
+            continue
+        if target in continuous:
+            trajectory = trajectories.get(target)
+            if trajectory is None:
+                trajectory, _dt_symbols = _trajectory(
+                    model, target, continuous, constant_values
+                )
+            post = simplify(substitute(
+                trajectory,
+                {INTERVAL_TIME: dt_exact},
+            ))
+        else:
+            transition = model.transitions.get(target)
+            if transition is None:
+                post = Var(target)
+            else:
+                post = simplify(substitute(
+                    _expand_post_update(
+                        model,
+                        transition.expr,
+                        continuous,
+                    ),
+                    constant_values,
+                ))
+        post_values[target] = post
+        for reference in sorted(expression_symbols(post) & model.state):
+            if reference not in post_values and reference not in pending:
+                pending.append(reference)
     cycle_order = [
         "queued actuator state machine changes",
         "same cycle constraint propagation",
@@ -789,7 +955,7 @@ def build_reduction(
         ],
     ]
     record = {
-        "kind": "full_sysml_interval_reduction_v2",
+        "kind": "full_sysml_interval_reduction_v3",
         "property_id": equation.target.removeprefix("status."),
         "annotation": equation.source,
         "original_property": expr_to_dict(original),
@@ -846,6 +1012,30 @@ def build_reduction(
         ],
         "equation_inventory": _equation_inventory(model, included_targets),
         "case_coverage": coverage,
+        "reachability_mapping": {
+            "rule": "exact_initial_values_and_complete_sampled_transition_v1",
+            "domain": expr_to_dict(domain),
+            "completion_condition": expr_to_dict(terminal_at_start),
+            "nonterminal_intervals_only": True,
+            "initial_constraints": [
+                expr_to_dict(item) for item in initial_constraints
+            ],
+            "specified_initial_constraints": [
+                expr_to_dict(item) for item in specified_initial_constraints
+            ],
+            "scenario_initial_constraints": [
+                expr_to_dict(item) for item in scenario_initial_constraints
+            ],
+            "initial_variables": sorted(model.initial_values),
+            "post_values": {
+                target: expr_to_dict(value)
+                for target, value in sorted(post_values.items())
+            },
+            "action_variables": sorted(model.actions),
+            "boolean_variables": sorted(boolean_variables),
+            "integer_variables": sorted(integer_variables),
+            "complete_for_case_symbols": True,
+        },
         "human_description": (
             "The SysML sensor equations map the controller reading to the listed "
             "physical state. The controller contract selects the held action. The "
@@ -859,4 +1049,13 @@ def build_reduction(
             "MISSING_WITHIN_STEP_MEANING",
             "a physical trajectory does not match its extracted sampled endpoint",
         )
-    return cases, record
+    reachability = ReachabilityContext(
+        domain=domain,
+        initial_constraints=initial_constraints,
+        initial_variables=tuple(sorted(model.initial_values)),
+        post_values=tuple(sorted(post_values.items())),
+        action_variables=tuple(sorted(model.actions)),
+        boolean_variables=tuple(sorted(boolean_variables)),
+        integer_variables=tuple(sorted(integer_variables)),
+    )
+    return cases, record, reachability

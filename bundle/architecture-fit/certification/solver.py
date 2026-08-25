@@ -53,7 +53,12 @@ def _var_symbol(
     key = (run, role, name)
     if key not in symbols:
         z3_name = _symbol_name(run, role, name)
-        symbols[key] = z3.Bool(z3_name) if sort == "Bool" else z3.Real(z3_name)
+        if sort == "Bool":
+            symbols[key] = z3.Bool(z3_name)
+        elif sort == "Int":
+            symbols[key] = z3.Int(z3_name)
+        else:
+            symbols[key] = z3.Real(z3_name)
     return symbols[key]
 
 

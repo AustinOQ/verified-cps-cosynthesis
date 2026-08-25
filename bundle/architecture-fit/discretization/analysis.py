@@ -13,8 +13,21 @@ from certification.strict_extract import CertificationExtractor
 from sysml_parser import IfStmt, PerformStmt, SubactionCallStmt
 
 from .convex_checker import run_convex_checker
-from .full_model_reduction import build_reduction, expr_to_dict
+from .convex_envelope_checker import run_convex_envelope_checker
+from .exact_replay import replay_serialized_boolean_expression, serialize_exact_value
+from .full_model_reduction import (
+    ReducedCase,
+    build_reduction,
+    expression_hash,
+    expr_to_dict,
+)
+from .linear_envelope_checker import run_linear_envelope_checker
 from .linear_checker import run_linear_checker
+from .reachability import (
+    run_reachability_checker,
+    run_relational_invariant_checker,
+    run_smt_reachability_checker,
+)
 from .proof_rules import (
     ProofDeferred,
     expand_definitions,
@@ -32,8 +45,12 @@ except Exception:  # pragma: no cover
 CHECKER_ORDER = [
     "linear",
     "convex",
+    "reachability_linear",
+    "reachability_convex",
     "exact_symbolic",
     "smt_fallback",
+    "relational_invariant",
+    "smt_reachability",
 ]
 
 
@@ -227,11 +244,12 @@ def _policy_call_guards(
     return unique
 
 
-def _scenario_parameter_constraints(
+def _scenario_constraints(
     extractor: CertificationExtractor,
     model: EquationModel,
-) -> list[Expr]:
-    constraints: list[Expr] = []
+) -> tuple[list[Expr], list[Expr]]:
+    parameter_constraints: list[Expr] = []
+    initial_state_constraints: list[Expr] = []
     for constraint in extractor.parser.parsed_constraints:
         if "ScenarioConstraint" not in getattr(constraint, "metadata", []):
             continue
@@ -246,9 +264,10 @@ def _scenario_parameter_constraints(
                 ),
             )
             if expression_symbols(expression) & model.state:
-                continue
-            constraints.append(expression)
-    return constraints
+                initial_state_constraints.append(expression)
+            else:
+                parameter_constraints.append(expression)
+    return parameter_constraints, initial_state_constraints
 
 
 def _boolean_variables(
@@ -273,6 +292,29 @@ def _boolean_variables(
         if str(output_types.get(row.get("param"), "")).lower() in {"bool", "boolean"}:
             variables.update(row.get("action_vars", []))
     return variables & (model.state | model.actions | set(model.definitions))
+
+
+def _integer_variables(
+    extractor: CertificationExtractor,
+    model: EquationModel,
+) -> set[str]:
+    variables: set[str] = set()
+    for fqn, instance in extractor.parser.part_instances.items():
+        part = extractor.parser.part_defs.get(instance.part_type)
+        if part is None:
+            continue
+        for attribute, type_name in part.attributes.items():
+            if type_name.lower() == "integer":
+                variables.add(
+                    extractor.legacy._canon(fqn.split("::") + [attribute])
+                )
+    return variables & (
+        model.state
+        | model.actions
+        | model.constants
+        | set(model.definitions)
+        | set(model.observations)
+    )
 
 
 def _continuous_targets(
@@ -355,12 +397,125 @@ def _timing_record(
     }
 
 
-def _smt_fallback(
+def _top_level_conjuncts(expression: Expr) -> list[Expr]:
+    if isinstance(expression, Op) and expression.op == "and":
+        result: list[Expr] = []
+        for argument in expression.args:
+            result.extend(_top_level_conjuncts(argument))
+        return result
+    return [expression]
+
+
+def _conjunction(expressions: list[Expr]) -> Expr:
+    if not expressions:
+        return Const(True)
+    if len(expressions) == 1:
+        return expressions[0]
+    return Op("and", tuple(expressions))
+
+
+def _raw_reference_names(expression: Expr) -> set[str]:
+    if isinstance(expression, RawRef):
+        return {expression.path}
+    if isinstance(expression, Op):
+        result: set[str] = set()
+        for argument in expression.args:
+            result.update(_raw_reference_names(argument))
+        return result
+    if isinstance(expression, Ite):
+        return (
+            _raw_reference_names(expression.cond)
+            | _raw_reference_names(expression.then_expr)
+            | _raw_reference_names(expression.else_expr)
+        )
+    return set()
+
+
+def _z3_exact_value(value: Any) -> bool | Fraction:
+    if z3.is_true(value):
+        return True
+    if z3.is_false(value):
+        return False
+    if z3.is_rational_value(value):
+        return Fraction(value.numerator_as_long(), value.denominator_as_long())
+    raise ValueError(f"Z3 value is not an exact rational or Boolean: {value}")
+
+
+def _exact_model_values(
     model: EquationModel,
-    premises: list[Expr],
-    conclusion: Expr,
+    encoder: Encoder,
+    solver_model: Any,
+    expression: Expr,
+) -> dict[str, bool | str]:
+    raw_references = _raw_reference_names(expression)
+    values: dict[str, bool | str] = {}
+    for name in sorted(expression_symbols(expression)):
+        if name in raw_references:
+            encoded = encoder.const_var(name)
+        else:
+            encoded = encoder.encode_expr(Var(name), 1, "current")
+        exact = _z3_exact_value(
+            solver_model.eval(encoded, model_completion=True)
+        )
+        values[name] = serialize_exact_value(exact)
+    return values
+
+
+def _core_recertification_attempts(
+    reduced_case: ReducedCase,
+    selected_constraints: list[Expr],
     *,
     timeout_ms: int,
+) -> tuple[ReducedCase, list[dict[str, Any]], dict[str, Any] | None]:
+    core_case = ReducedCase(
+        case_id=reduced_case.case_id + ".smt_core",
+        expression=_conjunction(selected_constraints),
+        parent_hash=expression_hash(reduced_case.expression),
+        boolean_assignment=reduced_case.boolean_assignment,
+        time_reduction=reduced_case.time_reduction,
+        obligation=reduced_case.obligation,
+    )
+    checks = [
+        (
+            "linear",
+            lambda: run_linear_checker(core_case, set(), timeout_ms=timeout_ms),
+        ),
+        (
+            "linear_envelope",
+            lambda: run_linear_envelope_checker(core_case, timeout_ms=timeout_ms),
+        ),
+        (
+            "convex",
+            lambda: run_convex_checker(core_case, set(), timeout_ms=timeout_ms),
+        ),
+        (
+            "convex_envelope",
+            lambda: run_convex_envelope_checker(core_case, timeout_ms=timeout_ms),
+        ),
+    ]
+    attempts: list[dict[str, Any]] = []
+    for checker, run in checks:
+        attempt = _validated_attempt(run())
+        record = {
+            "checker": checker,
+            "outcome": attempt.get("outcome", "DEFERRED"),
+            "reason_code": attempt.get("reason_code", ""),
+            "detail": attempt.get("detail", ""),
+            "applicability_checks": attempt.get("applicability_checks") or {},
+            "proof": attempt.get("proof") or {},
+        }
+        attempts.append(record)
+        if record["outcome"] == "CERTIFIED":
+            return core_case, attempts, record
+    return core_case, attempts, None
+
+
+def _smt_fallback(
+    model: EquationModel,
+    reduced_case: ReducedCase,
+    *,
+    timeout_ms: int,
+    recertification_timeout_ms: int,
 ) -> dict[str, Any]:
     if z3 is None:
         return _stage(
@@ -381,10 +536,18 @@ def _smt_fallback(
         encoder = Encoder(model, sorts)
         solver = z3.Solver()
         solver.set(timeout=int(timeout_ms))
-        for premise in premises:
-            solver.add(encoder.encode_expr(premise, 1, "current"))
-        solver.add(z3.Not(encoder.encode_expr(conclusion, 1, "current")))
-        result = solver.check()
+        solver.set(unsat_core=True)
+        source_constraints = _top_level_conjuncts(reduced_case.expression)
+        trackers = [
+            z3.Bool(f"discretization_core_{index}")
+            for index in range(len(source_constraints))
+        ]
+        for index, constraint in enumerate(source_constraints):
+            solver.add(z3.Implies(
+                trackers[index],
+                encoder.encode_expr(constraint, 1, "current"),
+            ))
+        result = solver.check(*trackers)
         if result == z3.unknown:
             reason = solver.reason_unknown()
             code = "TIMEOUT" if "timeout" in reason.lower() else "PROOF_REJECTED"
@@ -396,12 +559,101 @@ def _smt_fallback(
                 proof={"solver_status": "unknown"},
             )
         if result == z3.unsat:
+            selected_indices = sorted({
+                int(str(item).removeprefix("discretization_core_"))
+                for item in solver.unsat_core()
+            })
+            minimization_checks = 0
+            minimization_complete = True
+            for index in tuple(selected_indices):
+                candidate = [
+                    item for item in selected_indices if item != index
+                ]
+                candidate_result = solver.check(*[
+                    trackers[item] for item in candidate
+                ])
+                minimization_checks += 1
+                if candidate_result == z3.unsat:
+                    selected_indices = candidate
+                elif candidate_result == z3.unknown:
+                    minimization_complete = False
+            selected_constraints = [
+                source_constraints[index] for index in selected_indices
+            ]
+            core_case, attempts, certified = _core_recertification_attempts(
+                reduced_case,
+                selected_constraints,
+                timeout_ms=recertification_timeout_ms,
+            )
+            proof = {
+                "rule": "solver_selected_subset_recertification_v1",
+                "solver_status": "unsat",
+                "source_expression_sha256": expression_hash(
+                    reduced_case.expression
+                ),
+                "source_constraint_count": len(source_constraints),
+                "selected_indices": selected_indices,
+                "subset_minimization_checks": minimization_checks,
+                "subset_minimization_complete": minimization_complete,
+                "selected_constraints": [
+                    expr_to_dict(item) for item in selected_constraints
+                ],
+                "selected_expression": expr_to_dict(core_case.expression),
+                "selected_expression_sha256": expression_hash(
+                    core_case.expression
+                ),
+                "recertification_attempts": attempts,
+            }
+            if certified is not None:
+                proof["certifying_checker"] = certified["checker"]
+                proof["certificate_attempt"] = certified
+                return _stage(
+                    "smt_fallback",
+                    "CERTIFIED",
+                    detail=(
+                        "a solver-selected subset of the source constraints "
+                        "has an independently checked linear or convex certificate"
+                    ),
+                    proof=proof,
+                )
             return _stage(
                 "smt_fallback",
                 "DEFERRED",
                 reason_code="PROOF_REJECTED",
-                detail="solver returned unsat without a proof supported by the independent checker",
-                proof={"solver_status": "unsat"},
+                detail=(
+                    "the solver-selected source constraint subset was not "
+                    "certified by the linear or convex checkers"
+                ),
+                proof=proof,
+            )
+        exact_values = _exact_model_values(
+            model,
+            encoder,
+            solver.model(),
+            reduced_case.expression,
+        )
+        replayed = replay_serialized_boolean_expression(
+            expr_to_dict(reduced_case.expression),
+            exact_values,
+        )
+        if replayed:
+            return _stage(
+                "smt_fallback",
+                "DEFERRED",
+                reason_code="REACHABILITY_BOUND_INCONCLUSIVE",
+                detail=(
+                    "the exact values replay the local unsafe constraints, but "
+                    "do not establish reachability from the declared initial state"
+                ),
+                proof={
+                    "rule": "exact_local_feasibility_replay_v1",
+                    "solver_status": "sat",
+                    "source_expression_sha256": expression_hash(
+                        reduced_case.expression
+                    ),
+                    "exact_values": exact_values,
+                    "exact_replay": True,
+                },
             )
         return _stage(
             "smt_fallback",
@@ -425,13 +677,14 @@ def analyze_model(
     *,
     dt_text: str,
     optimization_timeout_ms: int = 250,
-    smt_timeout_ms: int = 2000,
+    smt_timeout_ms: int = 30000,
 ) -> dict[str, Any]:
     path = str(Path(model_path).resolve())
     dt_record = canonical_dt(dt_text)
     extractor = CertificationExtractor(path)
     model = extractor.extract()
     boolean_variables = _boolean_variables(extractor, model, mdp_certificate)
+    integer_variables = _integer_variables(extractor, model)
     timing = _timing_record(mdp_certificate, dt_record)
     annotated, _dt_updated, continuous_records = _continuous_targets(extractor, model)
     constant_values = _specified_constant_values(extractor, model, dt_record)
@@ -443,9 +696,9 @@ def analyze_model(
     ]
     if blockers:
         return {
-            "schema_version": 2,
+            "schema_version": 3,
             "result": "NOT_CERTIFIED",
-            "claim": "full_sysml_discretization_safety_preservation_v2",
+            "claim": "full_sysml_discretization_safety_preservation_v3",
             "timing": timing,
             "continuous_rate_assignments": continuous_records,
             "properties": [],
@@ -457,17 +710,23 @@ def analyze_model(
             extractor, model, mdp_certificate
         )
         guards = _policy_call_guards(extractor, model)
-        scenario_constraints = _scenario_parameter_constraints(extractor, model)
+        scenario_constraints, scenario_initial_constraints = _scenario_constraints(
+            extractor, model
+        )
         shield_expression = substitute(shield_expression, constant_values)
         guards = [substitute(item, constant_values) for item in guards]
         scenario_constraints = [
             substitute(item, constant_values) for item in scenario_constraints
         ]
+        scenario_initial_constraints = [
+            substitute(item, constant_values)
+            for item in scenario_initial_constraints
+        ]
     except ProofDeferred as exc:
         return {
-            "schema_version": 2,
+            "schema_version": 3,
             "result": "NOT_CERTIFIED",
-            "claim": "full_sysml_discretization_safety_preservation_v2",
+            "claim": "full_sysml_discretization_safety_preservation_v3",
             "timing": timing,
             "continuous_rate_assignments": continuous_records,
             "properties": [],
@@ -481,16 +740,18 @@ def analyze_model(
         property_id = target.removeprefix("status.")
         dependencies = equation_refs(model, equation)
         try:
-            reduced_cases, reduction = build_reduction(
+            reduced_cases, reduction, reachability_context = build_reduction(
                 extractor,
                 model,
                 equation,
                 shield_expression,
                 guards,
                 scenario_constraints,
+                scenario_initial_constraints,
                 constant_values,
                 annotated,
                 boolean_variables,
+                integer_variables,
                 dt_record,
             )
         except ProofDeferred as exc:
@@ -500,7 +761,7 @@ def analyze_model(
                 "source": equation.pretty(),
                 "dependencies": sorted(dependencies),
                 "reduction": {
-                    "kind": "full_sysml_interval_reduction_v2",
+                    "kind": "full_sysml_interval_reduction_v3",
                     "outcome": "DEFERRED",
                     "reason_code": exc.reason_code,
                     "detail": exc.detail,
@@ -560,6 +821,40 @@ def analyze_model(
                 outcome = str(convex_attempt.get("outcome", "DEFERRED"))
 
             if outcome == "DEFERRED":
+                reachability_linear = _validated_attempt(
+                    run_reachability_checker(
+                        reduced_case,
+                        reachability_context,
+                        method="linear",
+                        timeout_ms=optimization_timeout_ms,
+                    )
+                )
+                case_progression.append(_attempt_stage(
+                    "reachability_linear",
+                    reachability_linear,
+                ))
+                outcome = str(
+                    reachability_linear.get("outcome", "DEFERRED")
+                )
+
+            if outcome == "DEFERRED":
+                reachability_convex = _validated_attempt(
+                    run_reachability_checker(
+                        reduced_case,
+                        reachability_context,
+                        method="convex",
+                        timeout_ms=optimization_timeout_ms,
+                    )
+                )
+                case_progression.append(_attempt_stage(
+                    "reachability_convex",
+                    reachability_convex,
+                ))
+                outcome = str(
+                    reachability_convex.get("outcome", "DEFERRED")
+                )
+
+            if outcome == "DEFERRED":
                 try:
                     exact_proof = prove_implication_exact(
                         [reduced_case.expression],
@@ -615,33 +910,76 @@ def analyze_model(
             if outcome == "DEFERRED":
                 smt_stage = _smt_fallback(
                     model,
-                    [reduced_case.expression],
-                    Const(False),
+                    reduced_case,
                     timeout_ms=smt_timeout_ms,
+                    recertification_timeout_ms=optimization_timeout_ms,
                 )
                 smt_stage.setdefault("applicability_checks", {}).update({
                     "reduced_case_required": True,
                     "case_id": reduced_case.case_id,
                 })
                 case_progression.append(smt_stage)
-                outcome = "DEFERRED"
+                outcome = str(smt_stage.get("outcome", "DEFERRED"))
+
+            if outcome == "DEFERRED":
+                relational_invariant = _validated_attempt(
+                    run_relational_invariant_checker(
+                        model,
+                        reduced_case,
+                        reachability_context,
+                        timeout_ms=smt_timeout_ms,
+                    )
+                )
+                case_progression.append(_attempt_stage(
+                    "relational_invariant",
+                    relational_invariant,
+                ))
+                outcome = str(
+                    relational_invariant.get("outcome", "DEFERRED")
+                )
+
+            if outcome == "DEFERRED":
+                smt_reachability = _validated_attempt(
+                    run_smt_reachability_checker(
+                        model,
+                        reduced_case,
+                        reachability_context,
+                        timeout_ms=smt_timeout_ms,
+                    )
+                )
+                case_progression.append(_attempt_stage(
+                    "smt_reachability",
+                    smt_reachability,
+                ))
+                outcome = str(
+                    smt_reachability.get("outcome", "DEFERRED")
+                )
 
             case_records.append({
                 "case_id": reduced_case.case_id,
                 "expression": expr_to_dict(reduced_case.expression),
+                "reachability_expression": expr_to_dict(
+                    reduced_case.reachability_expression
+                    or reduced_case.expression
+                ),
                 "parent_expression_sha256": reduced_case.parent_hash,
                 "boolean_assignment": dict(reduced_case.boolean_assignment),
                 "time_reduction": reduced_case.time_reduction,
                 "obligation": reduced_case.obligation,
                 "progression": case_progression,
-                "result": outcome if outcome == "CERTIFIED" else "NOT_CERTIFIED",
+                "result": (
+                    outcome
+                    if outcome in {"CERTIFIED", "VIOLATION"}
+                    else "NOT_CERTIFIED"
+                ),
             })
 
-        property_result = (
-            "CERTIFIED"
-            if all(item["result"] == "CERTIFIED" for item in case_records)
-            else "NOT_CERTIFIED"
-        )
+        if any(item["result"] == "VIOLATION" for item in case_records):
+            property_result = "VIOLATION"
+        elif all(item["result"] == "CERTIFIED" for item in case_records):
+            property_result = "CERTIFIED"
+        else:
+            property_result = "NOT_CERTIFIED"
         property_progression: list[dict[str, Any]] = []
         for checker in CHECKER_ORDER:
             attempts = [
@@ -655,14 +993,22 @@ def analyze_model(
             property_progression.append(_stage(
                 checker,
                 (
-                    "CERTIFIED"
-                    if all(stage["outcome"] == "CERTIFIED" for stage in attempts)
-                    else "DEFERRED"
+                    "VIOLATION"
+                    if any(stage["outcome"] == "VIOLATION" for stage in attempts)
+                    else (
+                        "CERTIFIED"
+                        if all(stage["outcome"] == "CERTIFIED" for stage in attempts)
+                        else "DEFERRED"
+                    )
                 ),
                 reason_code=(
-                    ""
-                    if all(stage["outcome"] == "CERTIFIED" for stage in attempts)
-                    else "UNRESOLVED_CASES"
+                    "COUNTEREXAMPLE_REPLAYED"
+                    if any(stage["outcome"] == "VIOLATION" for stage in attempts)
+                    else (
+                        ""
+                        if all(stage["outcome"] == "CERTIFIED" for stage in attempts)
+                        else "UNRESOLVED_CASES"
+                    )
                 ),
                 detail=f"{sum(stage['outcome'] == 'CERTIFIED' for stage in attempts)}/{len(attempts)} attempted cases certified",
                 applicability_checks={"case_attempt_count": len(attempts)},
@@ -679,15 +1025,16 @@ def analyze_model(
             "result": property_result,
         })
 
-    result = (
-        "CERTIFIED"
-        if properties and all(item["result"] == "CERTIFIED" for item in properties)
-        else "NOT_CERTIFIED"
-    )
+    if any(item["result"] == "VIOLATION" for item in properties):
+        result = "VIOLATION"
+    elif properties and all(item["result"] == "CERTIFIED" for item in properties):
+        result = "CERTIFIED"
+    else:
+        result = "NOT_CERTIFIED"
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "result": result,
-        "claim": "full_sysml_discretization_safety_preservation_v2",
+        "claim": "full_sysml_discretization_safety_preservation_v3",
         "claim_scope": (
             "For the complete SysML physical process from each shielded controller "
             "update through every time in the following fixed dt interval, for every "
