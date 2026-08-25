@@ -247,6 +247,12 @@ def _serialized_expression_hash(expression: Any) -> str:
 def _serialized_conjuncts(expression: Any) -> list[Any]:
     if (
         isinstance(expression, dict)
+        and expression.get("type") == "const"
+        and expression.get("value") is True
+    ):
+        return []
+    if (
+        isinstance(expression, dict)
         and expression.get("type") == "op"
         and expression.get("op") == "and"
         and isinstance(expression.get("args"), list)
@@ -276,7 +282,11 @@ def _verify_common_case_group(
     if not isinstance(reduction, dict):
         return ["common case group reduction is malformed"]
     errors: list[str] = []
-    if reduction.get("rule") != "common_conjunctive_case_group_v1":
+    rule = reduction.get("rule")
+    if rule not in {
+        "common_conjunctive_case_group_v1",
+        "certified_conjunctive_subset_v2",
+    }:
         errors.append("common case group reduction rule is invalid")
     source = case.get("expression")
     shared = reduction.get("shared_expression")
@@ -300,10 +310,18 @@ def _verify_common_case_group(
         errors.append("common case group conjunct hashes are invalid")
     if not set(shared_hashes) <= source_hashes:
         errors.append("common case group is not a conjunction subset")
+    minimum_covered = 2 if rule == "common_conjunctive_case_group_v1" else 1
     if not isinstance(reduction.get("covered_case_count"), int) or reduction.get(
         "covered_case_count"
-    ) <= 1:
+    ) < minimum_covered:
         errors.append("common case group size is invalid")
+    if rule == "certified_conjunctive_subset_v2" and (
+        not isinstance(reduction.get("starting_group_case_count"), int)
+        or reduction.get("starting_group_case_count") < 1
+        or not isinstance(reduction.get("subset_minimization_checks"), int)
+        or reduction.get("subset_minimization_checks") < 0
+    ):
+        errors.append("certified conjunctive subset record is malformed")
     return errors
 
 
@@ -427,6 +445,78 @@ def _serialized_normalized_linear_bound(
         -constant / scale,
         operation in {"<", ">"},
     )
+
+
+def _serialized_linear_constraints(expression: Any) -> list[dict[str, Any]]:
+    if not isinstance(expression, dict):
+        raise ValueError("linear constraint expression is malformed")
+    if expression.get("type") == "const":
+        value = expression.get("value")
+        if value is True:
+            return []
+        if value is False:
+            return [{
+                "coefficients": {},
+                "bound": "-1/1",
+                "strict": False,
+            }]
+        raise ValueError("linear constraint constant is malformed")
+    if expression.get("type") == "op" and expression.get("op") == "and":
+        constraints: list[dict[str, Any]] = []
+        for argument in expression.get("args", []):
+            constraints.extend(_serialized_linear_constraints(argument))
+        return constraints
+    if expression.get("type") != "op" or expression.get("op") not in {
+        "==", "<", "<=", ">", ">="
+    }:
+        raise ValueError("linear constraint is not a comparison")
+    arguments = expression.get("args")
+    if not isinstance(arguments, list) or len(arguments) != 2:
+        raise ValueError("linear comparison is malformed")
+    left = _serialized_linear_form(arguments[0])
+    right = _serialized_linear_form(arguments[1])
+
+    def inequality(reverse: bool, strict: bool) -> dict[str, Any]:
+        first, second = (right, left) if reverse else (left, right)
+        coefficients = dict(first[0])
+        for name, value in second[0].items():
+            coefficients[name] = coefficients.get(name, Fraction(0)) - value
+        coefficients = {
+            name: value for name, value in sorted(coefficients.items()) if value
+        }
+        return {
+            "coefficients": {
+                name: fraction_text(value) for name, value in coefficients.items()
+            },
+            "bound": fraction_text(-(first[1] - second[1])),
+            "strict": strict,
+        }
+
+    operation = expression["op"]
+    if operation == "==":
+        return [inequality(False, False), inequality(True, False)]
+    return [
+        inequality(
+            operation in {">", ">="},
+            operation in {"<", ">"},
+        )
+    ]
+
+
+def _verify_linear_certificate_source(
+    certificate: dict[str, Any],
+    proof: dict[str, Any],
+    case: dict[str, Any],
+) -> list[str]:
+    reduction = proof.get("group_reduction") or {}
+    expression = reduction.get("shared_expression", case.get("expression"))
+    try:
+        expected = _serialized_linear_constraints(expression)
+    except (TypeError, ValueError, ZeroDivisionError):
+        return ["linear certificate source expression is malformed"]
+    if certificate.get("constraints") != expected:
+        return ["linear certificate does not match its source expression"]
+    return []
 
 
 def _verify_constraint_removals(records: Any) -> list[str]:
@@ -873,6 +963,8 @@ def _verify_relational_invariant_stage(
 
 
 def _serialized_conjunct_hashes(expression: dict[str, Any]) -> set[str]:
+    if expression.get("type") == "const" and expression.get("value") is True:
+        return set()
     if expression.get("type") == "op" and expression.get("op") == "and":
         hashes: set[str] = set()
         for argument in expression.get("args", []):
@@ -880,6 +972,130 @@ def _serialized_conjunct_hashes(expression: dict[str, Any]) -> set[str]:
                 hashes.update(_serialized_conjunct_hashes(argument))
         return hashes
     return {_serialized_expression_hash(expression)}
+
+
+def _serialized_conjunction_covers(
+    weaker: dict[str, Any],
+    stronger: dict[str, Any],
+) -> bool:
+    stronger_conjuncts = _serialized_conjuncts(stronger)
+    stronger_hashes = {
+        _serialized_expression_hash(item) for item in stronger_conjuncts
+    }
+    stronger_bounds = []
+    for item in stronger_conjuncts:
+        try:
+            stronger_bounds.append(_serialized_normalized_linear_bound(item))
+        except (TypeError, ValueError, ZeroDivisionError):
+            pass
+    for item in _serialized_conjuncts(weaker):
+        if _serialized_expression_hash(item) in stronger_hashes:
+            continue
+        try:
+            coefficients, bound, strict = _serialized_normalized_linear_bound(
+                item
+            )
+        except (TypeError, ValueError, ZeroDivisionError):
+            return False
+        if not any(
+            candidate_coefficients == coefficients
+            and (
+                candidate_bound < bound
+                or (
+                    candidate_bound == bound
+                    and (not strict or candidate_strict)
+                )
+            )
+            for (
+                candidate_coefficients,
+                candidate_bound,
+                candidate_strict,
+            ) in stronger_bounds
+        ):
+            return False
+    return True
+
+
+def _verify_merged_case_sources(
+    retained: dict[str, Any],
+    sources: Any,
+) -> list[str]:
+    if not isinstance(sources, list):
+        return ["merged case sources are malformed"]
+    errors: list[str] = []
+    retained_expression = retained.get("expression")
+    retained_reachability = retained.get("reachability_expression")
+    if not isinstance(retained_expression, dict) or not isinstance(
+        retained_reachability, dict
+    ):
+        return ["retained case expressions are malformed"]
+    retained_conjuncts = _serialized_conjunct_hashes(retained_expression)
+    retained_reachability_conjuncts = _serialized_conjunct_hashes(
+        retained_reachability
+    )
+    for source in sources:
+        if not isinstance(source, dict):
+            errors.append("merged case source is malformed")
+            continue
+        expression = source.get("expression")
+        reachability = source.get("reachability_expression")
+        if not isinstance(expression, dict) or source.get(
+            "expression_sha256"
+        ) != _serialized_expression_hash(expression):
+            errors.append("merged case expression hash is invalid")
+            continue
+        if not isinstance(reachability, dict) or source.get(
+            "reachability_expression_sha256"
+        ) != _serialized_expression_hash(reachability):
+            errors.append("merged case reachability expression hash is invalid")
+            continue
+        if source.get("boolean_assignment") != retained.get(
+            "boolean_assignment"
+        ):
+            errors.append("merged case Boolean assignment differs")
+        if source.get("obligation") != retained.get("obligation"):
+            errors.append("merged case obligation differs")
+        reduction = source.get("constraint_reduction") or {}
+        if reduction.get("rule") != "canonical_conjunction_reduction_v1":
+            errors.append("merged case constraint reduction rule is invalid")
+        errors.extend(_verify_constraint_removals(
+            reduction.get("removed_constraints")
+        ))
+        errors.extend(_verify_constraint_removals(
+            reduction.get("reachability_removed_constraints")
+        ))
+        expression_conjuncts = _serialized_conjunct_hashes(expression)
+        reachability_conjuncts = _serialized_conjunct_hashes(reachability)
+        rule = source.get("rule")
+        if rule == "exact_duplicate_case_v1":
+            if (
+                retained_conjuncts != expression_conjuncts
+                or retained_reachability_conjuncts != reachability_conjuncts
+            ):
+                errors.append("duplicate merged case is not identical")
+        elif rule == "conjunctive_case_containment_v1":
+            if (
+                not retained_conjuncts <= expression_conjuncts
+                or not retained_reachability_conjuncts
+                <= reachability_conjuncts
+            ):
+                errors.append("contained merged case is not covered")
+        elif rule == "checked_case_containment_v2":
+            try:
+                covered = _serialized_conjunction_covers(
+                    retained_expression,
+                    expression,
+                ) and _serialized_conjunction_covers(
+                    retained_reachability,
+                    reachability,
+                )
+            except (TypeError, ValueError, ZeroDivisionError):
+                covered = False
+            if not covered:
+                errors.append("checked merged case is not covered")
+        else:
+            errors.append("merged case rule is invalid")
+    return errors
 
 
 def _serialized_disjunct_hashes(expression: dict[str, Any]) -> set[str]:
@@ -1203,6 +1419,50 @@ def verify_recorded_optimization_certificates(analysis: dict[str, Any]) -> list[
                 errors.append(f"property {property_id} case coverage is incomplete")
             coverage_cases = coverage.get("cases") or []
             recorded_cases = property_record.get("cases") or []
+            if coverage.get("case_count") != len(coverage_cases):
+                errors.append(
+                    f"property {property_id} case coverage count is invalid"
+                )
+            obligations = coverage.get("obligations") or {}
+            for obligation, obligation_coverage in obligations.items():
+                if not isinstance(obligation_coverage, dict):
+                    errors.append(
+                        f"property {property_id} {obligation} coverage is malformed"
+                    )
+                    continue
+                obligation_cases = obligation_coverage.get("cases") or []
+                merged_sources = [
+                    source
+                    for row in obligation_cases
+                    if isinstance(row, dict)
+                    for source in row.get("merged_sources", [])
+                ]
+                if obligation_coverage.get("case_count") != len(
+                    obligation_cases
+                ):
+                    errors.append(
+                        f"property {property_id} {obligation} case count is invalid"
+                    )
+                if obligation_coverage.get("generated_case_count") != (
+                    len(obligation_cases) + len(merged_sources)
+                ):
+                    errors.append(
+                        f"property {property_id} {obligation} generated case count is invalid"
+                    )
+                containment_count = sum(
+                    isinstance(source, dict)
+                    and source.get("rule") in {
+                        "conjunctive_case_containment_v1",
+                        "checked_case_containment_v2",
+                    }
+                    for source in merged_sources
+                )
+                if obligation_coverage.get(
+                    "containment_merged_case_count"
+                ) != containment_count:
+                    errors.append(
+                        f"property {property_id} {obligation} containment count is invalid"
+                    )
             if [item.get("case_id") for item in coverage_cases] != [
                 item.get("case_id") for item in recorded_cases
             ]:
@@ -1251,6 +1511,13 @@ def verify_recorded_optimization_certificates(analysis: dict[str, Any]) -> list[
                 ):
                     errors.append(
                         f"property {property_id} case {case.get('case_id')} constraint reduction: {removal_error}"
+                    )
+                for merge_error in _verify_merged_case_sources(
+                    source,
+                    source.get("merged_sources"),
+                ):
+                    errors.append(
+                        f"property {property_id} case {case.get('case_id')} merge: {merge_error}"
                     )
                 if isinstance(source.get("expression"), dict):
                     case_hash = hashlib.sha256(json.dumps(
@@ -1331,6 +1598,11 @@ def verify_recorded_optimization_certificates(analysis: dict[str, Any]) -> list[
                     stage_errors = ["linear proof certificate is missing"]
                 else:
                     stage_errors = verify_recorded_linear_certificate(certificate)
+                    stage_errors.extend(_verify_linear_certificate_source(
+                        certificate,
+                        proof,
+                        case,
+                    ))
             elif checker == "convex":
                 if not isinstance(certificate, dict):
                     stage_errors = ["convex proof certificate is missing"]

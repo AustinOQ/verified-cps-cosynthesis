@@ -188,6 +188,134 @@ def _normalize_constraint_expression(
     return simplify(Op(normalized.op, tuple(items)))
 
 
+def _conjunct_hashes(expression: Expr) -> set[str]:
+    if isinstance(expression, Const) and expression.value is True:
+        return set()
+    if isinstance(expression, Op) and expression.op == "and":
+        hashes: set[str] = set()
+        for argument in expression.args:
+            hashes.update(_conjunct_hashes(argument))
+        return hashes
+    return {expression_hash(expression)}
+
+
+def _conjuncts(expression: Expr) -> list[Expr]:
+    if isinstance(expression, Const) and expression.value is True:
+        return []
+    if isinstance(expression, Op) and expression.op == "and":
+        result: list[Expr] = []
+        for argument in expression.args:
+            result.extend(_conjuncts(argument))
+        return result
+    return [expression]
+
+
+def _bound_implies(
+    stronger: tuple[tuple[tuple[str, Fraction], ...], Fraction, bool],
+    weaker: tuple[tuple[tuple[str, Fraction], ...], Fraction, bool],
+) -> bool:
+    return stronger[0] == weaker[0] and (
+        stronger[1] < weaker[1]
+        or (
+            stronger[1] == weaker[1]
+            and (not weaker[2] or stronger[2])
+        )
+    )
+
+
+def _conjunction_covers(weaker: Expr, stronger: Expr) -> bool:
+    stronger_conjuncts = _conjuncts(stronger)
+    stronger_hashes = {expression_hash(item) for item in stronger_conjuncts}
+    stronger_bounds = [
+        normalized
+        for item in stronger_conjuncts
+        if (normalized := _normalized_linear_bound(item, set())) is not None
+    ]
+    for item in _conjuncts(weaker):
+        if expression_hash(item) in stronger_hashes:
+            continue
+        normalized = _normalized_linear_bound(item, set())
+        if normalized is None or not any(
+            _bound_implies(candidate, normalized)
+            for candidate in stronger_bounds
+        ):
+            return False
+    return True
+
+
+def _merge_contained_cases(
+    cases: list[ReducedCase],
+    case_rows: list[dict[str, Any]],
+) -> tuple[list[ReducedCase], list[dict[str, Any]], int]:
+    expression_sets = {
+        item.case_id: _conjunct_hashes(item.expression) for item in cases
+    }
+    reachability_sets = {
+        item.case_id: _conjunct_hashes(
+            item.reachability_expression or item.expression
+        )
+        for item in cases
+    }
+    rows_by_id = {row["case_id"]: row for row in case_rows}
+    ordered = sorted(
+        cases,
+        key=lambda item: (
+            len(expression_sets[item.case_id])
+            + len(reachability_sets[item.case_id]),
+            len(expression_sets[item.case_id]),
+            len(reachability_sets[item.case_id]),
+            item.boolean_assignment,
+            item.case_id,
+        ),
+    )
+    retained: list[ReducedCase] = []
+    for candidate in ordered:
+        dominating = next((
+            item
+            for item in retained
+            if item.boolean_assignment == candidate.boolean_assignment
+            and _conjunction_covers(item.expression, candidate.expression)
+            and _conjunction_covers(
+                item.reachability_expression or item.expression,
+                candidate.reachability_expression or candidate.expression,
+            )
+        ), None)
+        if dominating is None:
+            retained.append(candidate)
+            continue
+        candidate_row = rows_by_id[candidate.case_id]
+        dominating_row = rows_by_id[dominating.case_id]
+        source = {
+            key: value
+            for key, value in candidate_row.items()
+            if key != "merged_sources"
+        }
+        source["rule"] = "checked_case_containment_v2"
+        dominating_row["merged_sources"].append(source)
+        for nested_source in candidate_row.get("merged_sources", []):
+            transferred = dict(nested_source)
+            transferred["rule"] = "checked_case_containment_v2"
+            dominating_row["merged_sources"].append(transferred)
+    retained_ids = {item.case_id for item in retained}
+    retained.sort(key=lambda item: item.case_id)
+    retained_rows = [
+        row for row in case_rows if row["case_id"] in retained_ids
+    ]
+    containment_merged_count = sum(
+        source.get("rule") in {
+            "conjunctive_case_containment_v1",
+            "checked_case_containment_v2",
+        }
+        for row in retained_rows
+        for source in row.get("merged_sources", [])
+    )
+    return (
+        retained,
+        retained_rows,
+        containment_merged_count,
+    )
+
+
 @dataclass(frozen=True)
 class ReducedCase:
     """One completely recorded arithmetic case produced by the reducer."""
@@ -812,8 +940,30 @@ def _case_split(
                     if merged_index is not None:
                         merged_row = case_rows[merged_index]
                         merged_row.setdefault("merged_sources", []).append({
+                            "rule": "exact_duplicate_case_v1",
+                            "source_id": (
+                                f"{property_id}.{obligation}.source."
+                                f"{generated_case_count - 1:04d}"
+                            ),
+                            "obligation": obligation,
+                            "boolean_assignment": dict(assignment),
                             "conditional_branch": conditional_branch,
                             "time_reduction": time_reduction,
+                            "expression": expr_to_dict(case_expression),
+                            "expression_sha256": expression_hash(case_expression),
+                            "reachability_expression": expr_to_dict(
+                                reachability_expression
+                            ),
+                            "reachability_expression_sha256": expression_hash(
+                                reachability_expression
+                            ),
+                            "constraint_reduction": {
+                                "rule": "canonical_conjunction_reduction_v1",
+                                "removed_constraints": expression_removals,
+                                "reachability_removed_constraints": (
+                                    reachability_removals
+                                ),
+                            },
                         })
                         continue
                     case_id = f"{property_id}.{obligation}.case.{index:04d}"
@@ -850,6 +1000,10 @@ def _case_split(
                     })
                     case_by_key[case_key] = len(case_rows) - 1
                     index += 1
+    cases, case_rows, containment_merged_case_count = _merge_contained_cases(
+        cases,
+        case_rows,
+    )
     return cases, {
         "rule": "exhaustive_boolean_assignment_then_exact_dnf_v1",
         "obligation": obligation,
@@ -858,6 +1012,7 @@ def _case_split(
         "assignment_count": 2 ** len(used_booleans),
         "conditional_branch_count": conditional_branch_count,
         "generated_case_count": generated_case_count,
+        "containment_merged_case_count": containment_merged_case_count,
         "case_count": len(cases),
         "complete": True,
         "time_reduction_rule": (

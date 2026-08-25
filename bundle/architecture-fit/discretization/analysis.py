@@ -33,6 +33,7 @@ from .reachability import (
 from .proof_rules import (
     ProofDeferred,
     expand_definitions,
+    expression_is_linear,
     expression_symbols,
     prove_implication_exact,
     substitute,
@@ -133,16 +134,78 @@ def _grouped_case_attempts(
     reduced_cases: list[ReducedCase],
     checker_name: str,
     checker: Callable[[ReducedCase], dict[str, Any]],
+    conjunct_filter: Callable[[Expr], bool] | None = None,
 ) -> dict[str, dict[str, Any]]:
     conjunct_maps = {
         item.case_id: {
             expression_hash(expression): expression
             for expression in _case_conjuncts(item.expression)
+            if conjunct_filter is None or conjunct_filter(expression)
         }
         for item in reduced_cases
     }
     results: dict[str, dict[str, Any]] = {}
     attempt_cache: dict[str, dict[str, Any]] = {}
+
+    def attempt_for(expression: Expr, obligation: str) -> dict[str, Any]:
+        expression_sha256 = expression_hash(expression)
+        attempt = attempt_cache.get(expression_sha256)
+        if attempt is None:
+            group_case = ReducedCase(
+                f"group.{checker_name}.{expression_sha256[:12]}",
+                expression,
+                expression_sha256,
+                (),
+                "common_constraint_group",
+                obligation,
+                expression,
+            )
+            attempt = _validated_attempt(checker(group_case))
+            attempt_cache[expression_sha256] = attempt
+        return attempt
+
+    def minimize_certified_subset(
+        expression: Expr,
+        obligation: str,
+        attempt: dict[str, Any],
+    ) -> tuple[Expr, dict[str, Any], int]:
+        selected = sorted(
+            _case_conjuncts(expression),
+            key=expression_hash,
+        )
+        checks = 0
+        if checker_name == "linear":
+            certificate = (attempt.get("proof") or {}).get("certificate") or {}
+            multipliers = certificate.get("multipliers")
+            if isinstance(multipliers, list) and len(multipliers) == len(selected):
+                try:
+                    supported = [
+                        item
+                        for item, multiplier in zip(selected, multipliers)
+                        if Fraction(str(multiplier)) != 0
+                    ]
+                except (TypeError, ValueError, ZeroDivisionError):
+                    supported = []
+                if 0 < len(supported) < len(selected):
+                    supported_expression = _case_conjunction(supported)
+                    supported_attempt = attempt_for(
+                        supported_expression,
+                        obligation,
+                    )
+                    checks += 1
+                    if supported_attempt.get("outcome") == "CERTIFIED":
+                        return supported_expression, supported_attempt, checks
+        for candidate in tuple(selected):
+            remaining = [item for item in selected if item is not candidate]
+            if not remaining:
+                continue
+            candidate_expression = _case_conjunction(remaining)
+            candidate_attempt = attempt_for(candidate_expression, obligation)
+            checks += 1
+            if candidate_attempt.get("outcome") == "CERTIFIED":
+                selected = remaining
+                attempt = candidate_attempt
+        return _case_conjunction(selected), attempt, checks
 
     def partition(group: list[ReducedCase]) -> tuple[list[ReducedCase], list[ReducedCase]]:
         sets = [set(conjunct_maps[item.case_id]) for item in group]
@@ -162,6 +225,7 @@ def _grouped_case_attempts(
         return group[:middle], group[middle:]
 
     def check(group: list[ReducedCase]) -> None:
+        group = [item for item in group if item.case_id not in results]
         if not group:
             return
         common = set(conjunct_maps[group[0].case_id])
@@ -170,39 +234,48 @@ def _grouped_case_attempts(
         common_expression = _case_conjunction([
             conjunct_maps[group[0].case_id][key] for key in sorted(common)
         ])
-        if len(group) == 1:
+        if len(group) == 1 and conjunct_filter is None:
             common_expression = group[0].expression
-        common_hash = expression_hash(common_expression)
-        attempt = attempt_cache.get(common_hash)
-        if attempt is None:
-            group_case = ReducedCase(
-                f"group.{checker_name}.{common_hash[:12]}",
-                common_expression,
-                common_hash,
-                (),
-                "common_constraint_group",
-                group[0].obligation,
-                common_expression,
-            )
-            attempt = _validated_attempt(checker(group_case))
-            attempt_cache[common_hash] = attempt
+        attempt = attempt_for(common_expression, group[0].obligation)
         if attempt.get("outcome") == "CERTIFIED":
-            shared_conjuncts = sorted(common)
-            for item in group:
+            selected_expression, attempt, minimization_checks = (
+                minimize_certified_subset(
+                    common_expression,
+                    group[0].obligation,
+                    attempt,
+                )
+            )
+            selected_hash = expression_hash(selected_expression)
+            selected_conjuncts = {
+                expression_hash(item)
+                for item in _case_conjuncts(selected_expression)
+            }
+            covered_cases = [
+                item
+                for item in reduced_cases
+                if item.case_id not in results
+                and selected_conjuncts <= set(conjunct_maps[item.case_id])
+            ]
+            for item in covered_cases:
                 covered = deepcopy(attempt)
                 covered.setdefault("applicability_checks", {}).update({
                     "case_id": item.case_id,
-                    "shared_case_group": len(group) > 1,
-                    "shared_case_count": len(group),
+                    "shared_case_group": len(covered_cases) > 1,
+                    "shared_case_count": len(covered_cases),
                 })
-                if len(group) > 1:
+                if (
+                    selected_hash != expression_hash(item.expression)
+                    or len(covered_cases) > 1
+                ):
                     covered.setdefault("proof", {})["group_reduction"] = {
-                        "rule": "common_conjunctive_case_group_v1",
+                        "rule": "certified_conjunctive_subset_v2",
                         "source_expression_sha256": expression_hash(item.expression),
-                        "shared_expression": expr_to_dict(common_expression),
-                        "shared_expression_sha256": common_hash,
-                        "shared_conjunct_sha256": shared_conjuncts,
-                        "covered_case_count": len(group),
+                        "shared_expression": expr_to_dict(selected_expression),
+                        "shared_expression_sha256": selected_hash,
+                        "shared_conjunct_sha256": sorted(selected_conjuncts),
+                        "covered_case_count": len(covered_cases),
+                        "starting_group_case_count": len(group),
+                        "subset_minimization_checks": minimization_checks,
                     }
                 results[item.case_id] = covered
             return
@@ -896,6 +969,10 @@ def analyze_model(
                 set(),
                 timeout_ms=optimization_timeout_ms,
             ),
+            conjunct_filter=lambda expression: expression_is_linear(
+                expression,
+                set(),
+            )[0],
         )
         convex_group_attempts = _grouped_case_attempts(
             [
