@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from copy import deepcopy
 from fractions import Fraction
 from pathlib import Path
@@ -24,6 +26,7 @@ from .full_model_reduction import (
 )
 from .linear_envelope_checker import run_linear_envelope_checker
 from .linear_checker import run_linear_checker
+from .optimization_common import quadratic_constraints
 from .reachability import (
     SharedReachabilityCache,
     run_reachability_checker,
@@ -130,6 +133,80 @@ def _case_conjunction(expressions: list[Expr]) -> Expr:
     return Op("and", tuple(expressions))
 
 
+def _expression_is_convex(expression: Expr) -> bool:
+    try:
+        quadratic_constraints(expression, set())
+        return True
+    except ProofDeferred:
+        return False
+
+
+def _deduplicate_proof_certificates(
+    properties: list[dict[str, Any]],
+) -> dict[str, Any]:
+    counts: dict[str, int] = {}
+    certificates: dict[str, dict[str, Any]] = {}
+
+    def digest(value: dict[str, Any]) -> str:
+        encoded = json.dumps(
+            value,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()
+
+    def collect(value: Any) -> None:
+        if isinstance(value, dict):
+            for key, item in value.items():
+                if (
+                    key == "certificate"
+                    and isinstance(item, dict)
+                    and item.get("kind") in {
+                        "linear_infeasibility_weights_v1",
+                        "convex_dual_bound_v1",
+                    }
+                ):
+                    key_hash = digest(item)
+                    counts[key_hash] = counts.get(key_hash, 0) + 1
+                    certificates[key_hash] = item
+                else:
+                    collect(item)
+        elif isinstance(value, list):
+            for item in value:
+                collect(item)
+
+    collect(properties)
+    repeated = {
+        key: certificates[key]
+        for key in sorted(certificates)
+        if counts[key] > 1
+    }
+
+    def replace(value: Any) -> None:
+        if isinstance(value, dict):
+            for key, item in list(value.items()):
+                if key == "certificate" and isinstance(item, dict):
+                    key_hash = digest(item)
+                    if key_hash in repeated:
+                        value[key] = {
+                            "shared_certificate_sha256": key_hash,
+                        }
+                        continue
+                replace(item)
+        elif isinstance(value, list):
+            for item in value:
+                replace(item)
+
+    replace(properties)
+    return {
+        "rule": "content_addressed_proof_certificate_pool_v1",
+        "certificates": repeated,
+        "reference_count": sum(
+            count for key, count in counts.items() if key in repeated
+        ),
+    }
+
+
 def _grouped_case_attempts(
     reduced_cases: list[ReducedCase],
     checker_name: str,
@@ -227,6 +304,25 @@ def _grouped_case_attempts(
     def check(group: list[ReducedCase]) -> None:
         group = [item for item in group if item.case_id not in results]
         if not group:
+            return
+        if (
+            len(group) == 1
+            and conjunct_filter is not None
+            and not conjunct_maps[group[0].case_id]
+        ):
+            results[group[0].case_id] = {
+                "outcome": "DEFERRED",
+                "reason_code": "INAPPLICABLE_REDUCED_FORM",
+                "detail": (
+                    f"the reduced equation form has no constraints accepted by "
+                    f"the {checker_name} checker"
+                ),
+                "applicability_checks": {
+                    "accepted": False,
+                    "case_id": group[0].case_id,
+                    "reduced_form_checked": True,
+                },
+            }
             return
         common = set(conjunct_maps[group[0].case_id])
         for item in group[1:]:
@@ -986,6 +1082,7 @@ def analyze_model(
                 set(),
                 timeout_ms=optimization_timeout_ms,
             ),
+            conjunct_filter=_expression_is_convex,
         )
         case_records: list[dict[str, Any]] = []
         pending_relational: list[tuple[ReducedCase, dict[str, Any]]] = []
@@ -1247,6 +1344,7 @@ def analyze_model(
         result = "CERTIFIED"
     else:
         result = "NOT_CERTIFIED"
+    shared_proof_certificates = _deduplicate_proof_certificates(properties)
     return {
         "schema_version": 3,
         "result": result,
@@ -1274,6 +1372,7 @@ def analyze_model(
             "time_variables": mdp_certificate.get("sets", {}).get("time_vars", []),
         },
         "optimization_timeout_ms": int(optimization_timeout_ms),
+        "shared_proof_certificates": shared_proof_certificates,
         "shared_reachability": shared_reachability_cache.export(),
         "properties": properties,
         "blocking_diagnostics": [],

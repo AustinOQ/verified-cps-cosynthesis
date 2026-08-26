@@ -28,11 +28,12 @@ from .full_model_reduction import (
 )
 from .linear_envelope_checker import run_linear_envelope_checker
 from .linear_checker import run_linear_checker
-from .optimization_common import conjunctive_comparisons
+from .optimization_common import conjunctive_comparisons, quadratic_constraints
 from .proof_rules import (
     ProofDeferred,
     boolean_dnf,
     expr_to_dict,
+    expression_is_linear,
     expression_symbols,
     prove_implication_exact,
     substitute,
@@ -54,6 +55,7 @@ class _SharedRelationalRegion:
     context_sha256: str
     invariant: tuple[Expr, ...]
     record: dict[str, Any]
+    query_runner: _IncrementalSmtQueryRunner
 
 
 @dataclass
@@ -446,6 +448,91 @@ def _reachability_sorts(
     return sorts, conflicts
 
 
+class _IncrementalSmtQueryRunner:
+    def __init__(
+        self,
+        model: EquationModel,
+        context: ReachabilityContext,
+        type_scope: Expr,
+    ) -> None:
+        self.model = model
+        self.context = context
+        self.sorts, self.conflicts = _reachability_sorts(
+            model,
+            context,
+            type_scope,
+        )
+        self.encoder = Encoder(model, self.sorts)
+        self.solver = z3.Solver()
+
+    def run(
+        self,
+        expression: Expr,
+        *,
+        timeout_ms: int,
+        record_sat_values: bool,
+        replay_sat_query: bool,
+    ) -> dict[str, Any]:
+        serialized = expr_to_dict(expression)
+        query_hash = expression_hash(expression)
+        if self.conflicts:
+            return {
+                "solver_status": "unsupported",
+                "reason_code": "UNSUPPORTED_EXPRESSION",
+                "detail": "; ".join(self.conflicts),
+                "query_expression": serialized,
+                "query_expression_sha256": query_hash,
+            }
+        self.solver.push()
+        try:
+            self.solver.set(timeout=int(timeout_ms))
+            self.solver.add(self.encoder.encode_expr(expression, 1, "current"))
+            query_smt2 = self.solver.to_smt2()
+            result = self.solver.check()
+            record: dict[str, Any] = {
+                "solver": "z3",
+                "solver_reuse": "persistent_push_pop_v1",
+                "solver_status": str(result),
+                "query_expression": serialized,
+                "query_expression_sha256": query_hash,
+                "query_smt2": query_smt2,
+                "query_smt2_sha256": hashlib.sha256(
+                    query_smt2.encode("utf-8")
+                ).hexdigest(),
+            }
+            if result == z3.unknown:
+                reason = self.solver.reason_unknown()
+                record["reason_code"] = (
+                    "TIMEOUT" if "timeout" in reason.lower() else "PROOF_REJECTED"
+                )
+                record["detail"] = reason
+                return record
+            if result == z3.unsat:
+                proof_text = self.solver.proof().sexpr()
+                record["z3_proof"] = proof_text
+                record["z3_proof_sha256"] = hashlib.sha256(
+                    proof_text.encode("utf-8")
+                ).hexdigest()
+                return record
+            if not record_sat_values:
+                return record
+            exact_values = _exact_query_values(
+                self.model,
+                self.encoder,
+                self.solver.model(),
+                expression,
+            )
+            record["exact_values"] = exact_values
+            if replay_sat_query:
+                record["exact_replay"] = replay_serialized_boolean_expression(
+                    serialized,
+                    exact_values,
+                )
+            return record
+        finally:
+            self.solver.pop()
+
+
 def _run_smt_query(
     model: EquationModel,
     context: ReachabilityContext,
@@ -454,7 +541,15 @@ def _run_smt_query(
     timeout_ms: int,
     record_sat_values: bool = True,
     replay_sat_query: bool = True,
+    runner: _IncrementalSmtQueryRunner | None = None,
 ) -> dict[str, Any]:
+    if runner is not None:
+        return runner.run(
+            expression,
+            timeout_ms=timeout_ms,
+            record_sat_values=record_sat_values,
+            replay_sat_query=replay_sat_query,
+        )
     serialized = expr_to_dict(expression)
     query_hash = expression_hash(expression)
     sorts, conflicts = _reachability_sorts(model, context, expression)
@@ -882,16 +977,20 @@ def _run_reachability_checker(
             *,
             timeout_ms: int,
         ) -> dict[str, Any]:
-            linear = run_linear_checker(
-                arithmetic_case,
+            if expression_is_linear(
+                arithmetic_case.expression,
                 boolean_variables,
-                timeout_ms=timeout_ms,
-            )
-            if linear.get("outcome") in {"CERTIFIED", "VIOLATION"}:
-                linear.setdefault("applicability_checks", {})[
-                    "reachability_submethod"
-                ] = "linear"
-                return linear
+            )[0]:
+                linear = run_linear_checker(
+                    arithmetic_case,
+                    boolean_variables,
+                    timeout_ms=timeout_ms,
+                )
+                if linear.get("outcome") in {"CERTIFIED", "VIOLATION"}:
+                    linear.setdefault("applicability_checks", {})[
+                        "reachability_submethod"
+                    ] = "linear"
+                    return linear
             envelope = run_linear_envelope_checker(
                 arithmetic_case,
                 timeout_ms=timeout_ms,
@@ -907,34 +1006,46 @@ def _run_reachability_checker(
             *,
             timeout_ms: int,
         ) -> dict[str, Any]:
-            linear = run_linear_checker(
-                arithmetic_case,
+            if expression_is_linear(
+                arithmetic_case.expression,
                 boolean_variables,
-                timeout_ms=timeout_ms,
-            )
-            if linear.get("outcome") == "CERTIFIED":
-                linear.setdefault("applicability_checks", {})[
-                    "reachability_submethod"
-                ] = "linear"
-                return linear
-            convex = run_convex_checker(
-                arithmetic_case,
-                boolean_variables,
-                timeout_ms=timeout_ms,
-            )
-            convex.setdefault("applicability_checks", {})[
-                "reachability_submethod"
-            ] = "convex"
-            if convex.get("outcome") != "CERTIFIED":
-                envelope = run_convex_envelope_checker(
+            )[0]:
+                linear = run_linear_checker(
                     arithmetic_case,
+                    boolean_variables,
                     timeout_ms=timeout_ms,
                 )
-                envelope.setdefault("applicability_checks", {})[
+                if linear.get("outcome") == "CERTIFIED":
+                    linear.setdefault("applicability_checks", {})[
+                        "reachability_submethod"
+                    ] = "linear"
+                    return linear
+            try:
+                quadratic_constraints(
+                    arithmetic_case.expression,
+                    boolean_variables,
+                )
+            except ProofDeferred:
+                convex = None
+            else:
+                convex = run_convex_checker(
+                    arithmetic_case,
+                    boolean_variables,
+                    timeout_ms=timeout_ms,
+                )
+                convex.setdefault("applicability_checks", {})[
                     "reachability_submethod"
-                ] = "convex_square_envelope"
-                return envelope
-            return convex
+                ] = "convex"
+                if convex.get("outcome") == "CERTIFIED":
+                    return convex
+            envelope = run_convex_envelope_checker(
+                arithmetic_case,
+                timeout_ms=timeout_ms,
+            )
+            envelope.setdefault("applicability_checks", {})[
+                "reachability_submethod"
+            ] = "convex_square_envelope"
+            return envelope
     else:
         return {
             "outcome": "DEFERRED",
@@ -1574,6 +1685,20 @@ def _prepare_shared_relational_region(
     domain = _relational_lift(context.domain, context, 0)
     transition = _relational_transition(context)
     candidates = _candidate_invariants(context)
+    query_runner = _IncrementalSmtQueryRunner(
+        model,
+        context,
+        _relational_query([
+            initial,
+            domain,
+            transition,
+            *[
+                _relational_lift(item, context, frame)
+                for frame in (0, 1)
+                for item in candidates
+            ],
+        ]),
+    )
     query_cache: dict[str, dict[str, Any]] = {}
     query_cache_hits = 0
 
@@ -1589,6 +1714,7 @@ def _prepare_shared_relational_region(
             expression,
             timeout_ms=_remaining_timeout_ms(deadline),
             replay_sat_query=False,
+            runner=query_runner,
         )
         query_cache[key] = result
         return result
@@ -1709,6 +1835,7 @@ def _prepare_shared_relational_region(
         context_sha256=context_sha256,
         invariant=tuple(active),
         record=record,
+        query_runner=query_runner,
     )
 
 
@@ -1793,6 +1920,7 @@ def _run_relational_invariant_checker(
             context,
             safety_expression,
             timeout_ms=_remaining_timeout_ms(deadline),
+            runner=shared.query_runner,
         )
         safety_record = {
             "rule": "merged_relational_safety_query_v1",
@@ -1933,6 +2061,7 @@ def _run_relational_invariant_group(
             context,
             group_expression,
             timeout_ms=_remaining_timeout_ms(deadline),
+            runner=shared.query_runner,
         )
         safety_record = {
             "rule": "grouped_relational_safety_query_v2",

@@ -109,6 +109,7 @@ def _replay_projection(value: Any) -> Any:
                 "query_smt2",
                 "query_smt2_sha256",
                 "query_cache_hits",
+                "shared_proof_certificates",
                 "unique_query_count",
                 "z3_proof",
                 "z3_proof_sha256",

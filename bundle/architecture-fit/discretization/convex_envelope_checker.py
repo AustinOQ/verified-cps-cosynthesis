@@ -15,6 +15,7 @@ from .optimization_common import (
     QuadraticConstraint,
     _polynomial,
     conjunctive_comparisons,
+    quadratic_constraints,
 )
 from .proof_rules import (
     LinearInequality,
@@ -24,10 +25,11 @@ from .proof_rules import (
 
 try:  # pragma: no cover - installation is checked by integration runs
     import numpy as np
-    from scipy.optimize import linprog
+    from scipy.optimize import linprog, minimize
 except Exception:  # pragma: no cover
     np = None
     linprog = None
+    minimize = None
 
 
 def _oriented_polynomial(comparison) -> tuple[Polynomial, bool]:
@@ -54,7 +56,20 @@ def _linear_skeleton(comparisons) -> list[LinearInequality]:
     return constraints
 
 
-def _candidate_bound(
+def _convex_skeleton(comparisons) -> list[QuadraticConstraint]:
+    constraints: list[QuadraticConstraint] = []
+    for comparison in comparisons:
+        try:
+            constraints.extend(quadratic_constraints(
+                Op(comparison.op, (comparison.left, comparison.right)),
+                set(),
+            ))
+        except ProofDeferred:
+            continue
+    return constraints
+
+
+def _linear_candidate_bound(
     constraints: list[LinearInequality],
     variable: str,
     *,
@@ -113,6 +128,135 @@ def _candidate_bound(
     raise ProofDeferred(
         "CERTIFICATE_RECONSTRUCTION_FAILED",
         f"the numerical {variable} bound did not produce an exact certificate",
+    )
+
+
+def _convex_candidate_bound(
+    constraints: list[QuadraticConstraint],
+    variable: str,
+    *,
+    upper: bool,
+    timeout_ms: int,
+) -> tuple[Fraction, dict[str, Any]]:
+    if minimize is None or np is None:
+        raise ProofDeferred("BLOCKED_INPUT", "SciPy convex optimization is unavailable")
+    variables = sorted({
+        name
+        for constraint in constraints
+        for name, _value in (*constraint.square, *constraint.linear)
+    } | {variable})
+    variable_index = {name: index for index, name in enumerate(variables)}
+
+    def value(constraint: QuadraticConstraint, point) -> float:
+        return (
+            sum(
+                float(coefficient) * point[variable_index[name]] ** 2
+                for name, coefficient in constraint.square
+            )
+            + sum(
+                float(coefficient) * point[variable_index[name]]
+                for name, coefficient in constraint.linear
+            )
+            + float(constraint.constant)
+        )
+
+    objective_sign = -1.0 if upper else 1.0
+    result = minimize(
+        lambda point: objective_sign * point[variable_index[variable]],
+        np.zeros(len(variables)),
+        method="SLSQP",
+        constraints=[
+            {
+                "type": "ineq",
+                "fun": lambda point, item=item: -value(item, point),
+            }
+            for item in constraints
+        ],
+        options={
+            "maxiter": 1000,
+            "ftol": 1e-12,
+        },
+    )
+    if not result.success:
+        raise ProofDeferred(
+            "MISSING_BOUND",
+            f"no certified convex {'upper' if upper else 'lower'} bound for {variable}",
+        )
+    observed = float(result.x[variable_index[variable]])
+    base = Fraction(str(observed)).limit_denominator(1_000_000)
+    expansions = (
+        Fraction(0),
+        Fraction(1, 1_000_000_000),
+        Fraction(1, 1_000_000),
+        Fraction(1, 1000),
+        Fraction(1),
+    )
+    for expansion in expansions:
+        candidate = base + expansion if upper else base - expansion
+        violation = (
+            QuadraticConstraint.make(
+                {},
+                {variable: Fraction(-1)},
+                candidate,
+                True,
+            )
+            if upper
+            else QuadraticConstraint.make(
+                {},
+                {variable: Fraction(1)},
+                -candidate,
+                True,
+            )
+        )
+        proof = solve_convex_constraints(
+            [*constraints, violation],
+            timeout_ms=timeout_ms,
+        )
+        if proof.get("outcome") == "CERTIFIED":
+            return candidate, proof
+    raise ProofDeferred(
+        "CERTIFICATE_RECONSTRUCTION_FAILED",
+        f"the numerical convex {variable} bound did not produce an exact certificate",
+    )
+
+
+def _candidate_bound(
+    linear_constraints: list[LinearInequality],
+    convex_constraints: list[QuadraticConstraint],
+    variable: str,
+    *,
+    upper: bool,
+    timeout_ms: int,
+) -> tuple[Fraction, dict[str, Any], str]:
+    candidates: list[tuple[Fraction, dict[str, Any], str]] = []
+    failures: list[ProofDeferred] = []
+    try:
+        value, proof = _linear_candidate_bound(
+            linear_constraints,
+            variable,
+            upper=upper,
+            timeout_ms=timeout_ms,
+        )
+        candidates.append((value, proof, "linear"))
+    except ProofDeferred as exc:
+        failures.append(exc)
+    try:
+        value, proof = _convex_candidate_bound(
+            convex_constraints,
+            variable,
+            upper=upper,
+            timeout_ms=timeout_ms,
+        )
+        candidates.append((value, proof, "convex"))
+    except ProofDeferred as exc:
+        failures.append(exc)
+    if not candidates:
+        failure = failures[-1]
+        raise ProofDeferred(failure.reason_code, failure.detail)
+    return (
+        min(candidates, key=lambda item: item[0])
+        if upper
+        else max(candidates, key=lambda item: item[0])
     )
 
 
@@ -196,17 +340,20 @@ def run_convex_envelope_checker(
         ):
             raise ProofDeferred("NOT_CONVEX", "cross terms or degree above two remain")
         linear = _linear_skeleton(comparisons)
+        convex = _convex_skeleton(comparisons)
         bounds: dict[str, tuple[Fraction, Fraction]] = {}
         bound_proofs: list[dict[str, Any]] = []
         for variable in square_variables:
-            lower, lower_proof = _candidate_bound(
+            lower, lower_proof, lower_method = _candidate_bound(
                 linear,
+                convex,
                 variable,
                 upper=False,
                 timeout_ms=timeout_ms,
             )
-            upper, upper_proof = _candidate_bound(
+            upper, upper_proof, upper_method = _candidate_bound(
                 linear,
+                convex,
                 variable,
                 upper=True,
                 timeout_ms=timeout_ms,
@@ -220,6 +367,8 @@ def run_convex_envelope_checker(
                 "upper": f"{upper.numerator}/{upper.denominator}",
                 "lower_proof": lower_proof,
                 "upper_proof": upper_proof,
+                "lower_method": lower_method,
+                "upper_method": upper_method,
             })
         relaxed, reductions = _relaxed_constraints(polynomials, bounds)
         linear_outer = [

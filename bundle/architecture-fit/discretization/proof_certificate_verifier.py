@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+from copy import deepcopy
 from fractions import Fraction
 from typing import Any
 
 from .exact_replay import replay_serialized_boolean_expression
 from .optimization_common import fraction_text, parse_fraction
+from .proof_rules import LinearInequality, exact_linear_infeasible
 
 try:  # pragma: no cover - integration environment determines availability
     import z3  # type: ignore
@@ -129,6 +131,16 @@ def verify_recorded_outer_reduction(
                 certificate = recorded_proof["proof"]["certificate"]
                 constraints = certificate["constraints"]
                 final = constraints[-1]
+            except (IndexError, KeyError, TypeError, ValueError, ZeroDivisionError):
+                errors.append("outer reduction bound proof is malformed")
+                continue
+            if recorded_proof.get("outcome") != "CERTIFIED":
+                errors.append("outer reduction bound is not certified")
+            if certificate.get("kind") == "linear_infeasibility_weights_v1":
+                errors.extend(
+                    "outer reduction bound certificate: " + error
+                    for error in verify_recorded_linear_certificate(certificate)
+                )
                 expected_coefficients = {
                     variable: fraction_text(
                         Fraction(1) if direction == "lower" else Fraction(-1)
@@ -137,21 +149,34 @@ def verify_recorded_outer_reduction(
                 expected_bound = fraction_text(
                     exact_value if direction == "lower" else -exact_value
                 )
-            except (IndexError, KeyError, TypeError, ValueError, ZeroDivisionError):
-                errors.append("outer reduction bound proof is malformed")
-                continue
-            if recorded_proof.get("outcome") != "CERTIFIED":
-                errors.append("outer reduction bound is not certified")
-            errors.extend(
-                "outer reduction bound certificate: " + error
-                for error in verify_recorded_linear_certificate(certificate)
-            )
-            if (
-                final.get("coefficients") != expected_coefficients
-                or final.get("bound") != expected_bound
-                or final.get("strict") is not True
-            ):
-                errors.append("outer reduction bound proof checks the wrong inequality")
+                if (
+                    final.get("coefficients") != expected_coefficients
+                    or final.get("bound") != expected_bound
+                    or final.get("strict") is not True
+                ):
+                    errors.append("outer reduction bound proof checks the wrong inequality")
+            elif certificate.get("kind") == "convex_dual_bound_v1":
+                errors.extend(
+                    "outer reduction bound certificate: " + error
+                    for error in verify_recorded_convex_certificate(certificate)
+                )
+                expected_linear = {
+                    variable: fraction_text(
+                        Fraction(1) if direction == "lower" else Fraction(-1)
+                    )
+                }
+                expected_constant = fraction_text(
+                    -exact_value if direction == "lower" else exact_value
+                )
+                if (
+                    final.get("square") != {}
+                    or final.get("linear") != expected_linear
+                    or final.get("constant") != expected_constant
+                    or final.get("relation") != "< 0"
+                ):
+                    errors.append("outer reduction bound proof checks the wrong inequality")
+            else:
+                errors.append("outer reduction bound certificate kind is invalid")
     return errors
 
 
@@ -983,36 +1008,83 @@ def _serialized_conjunction_covers(
         _serialized_expression_hash(item) for item in stronger_conjuncts
     }
     stronger_bounds = []
+    stronger_linear: list[LinearInequality] = []
     for item in stronger_conjuncts:
         try:
             stronger_bounds.append(_serialized_normalized_linear_bound(item))
         except (TypeError, ValueError, ZeroDivisionError):
             pass
+        try:
+            stronger_linear.extend(
+                LinearInequality.make(
+                    {
+                        name: parse_fraction(value)
+                        for name, value in constraint["coefficients"].items()
+                    },
+                    parse_fraction(constraint["bound"]),
+                    constraint["strict"],
+                )
+                for constraint in _serialized_linear_constraints(item)
+            )
+        except (KeyError, TypeError, ValueError, ZeroDivisionError):
+            pass
     for item in _serialized_conjuncts(weaker):
         if _serialized_expression_hash(item) in stronger_hashes:
             continue
         try:
-            coefficients, bound, strict = _serialized_normalized_linear_bound(
-                item
-            )
+            normalized = _serialized_normalized_linear_bound(item)
         except (TypeError, ValueError, ZeroDivisionError):
-            return False
-        if not any(
-            candidate_coefficients == coefficients
-            and (
-                candidate_bound < bound
-                or (
-                    candidate_bound == bound
-                    and (not strict or candidate_strict)
+            normalized = None
+        if normalized is not None:
+            coefficients, bound, strict = normalized
+            if any(
+                candidate_coefficients == coefficients
+                and (
+                    candidate_bound < bound
+                    or (
+                        candidate_bound == bound
+                        and (not strict or candidate_strict)
+                    )
                 )
-            )
-            for (
-                candidate_coefficients,
-                candidate_bound,
-                candidate_strict,
-            ) in stronger_bounds
-        ):
+                for (
+                    candidate_coefficients,
+                    candidate_bound,
+                    candidate_strict,
+                ) in stronger_bounds
+            ):
+                continue
+        try:
+            weaker_constraints = [
+                LinearInequality.make(
+                    {
+                        name: parse_fraction(value)
+                        for name, value in constraint["coefficients"].items()
+                    },
+                    parse_fraction(constraint["bound"]),
+                    constraint["strict"],
+                )
+                for constraint in _serialized_linear_constraints(item)
+            ]
+        except (KeyError, TypeError, ValueError, ZeroDivisionError):
             return False
+        for weaker_constraint in weaker_constraints:
+            negated = LinearInequality.make(
+                {
+                    name: -value
+                    for name, value in weaker_constraint.coefficients
+                },
+                -weaker_constraint.bound,
+                not weaker_constraint.strict,
+            )
+            try:
+                proved, _detail = exact_linear_infeasible([
+                    *stronger_linear,
+                    negated,
+                ])
+            except (TypeError, ValueError, ZeroDivisionError):
+                proved = False
+            if not proved:
+                return False
     return True
 
 
@@ -1329,10 +1401,66 @@ def _verify_shared_reachability(
     return errors, regions, safety_queries
 
 
+def _resolve_shared_proof_certificates(
+    analysis: dict[str, Any],
+) -> tuple[dict[str, Any], list[str]]:
+    record = analysis.get("shared_proof_certificates")
+    if record is None:
+        return analysis, []
+    if not isinstance(record, dict) or record.get(
+        "rule"
+    ) != "content_addressed_proof_certificate_pool_v1":
+        return analysis, ["shared proof certificate pool is malformed"]
+    pool = record.get("certificates")
+    if not isinstance(pool, dict):
+        return analysis, ["shared proof certificates are malformed"]
+    errors: list[str] = []
+    for key, certificate in pool.items():
+        if not isinstance(certificate, dict):
+            errors.append("shared proof certificate is malformed")
+            continue
+        observed = hashlib.sha256(json.dumps(
+            certificate,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")).hexdigest()
+        if key != observed:
+            errors.append("shared proof certificate hash is invalid")
+
+    resolved = deepcopy(analysis)
+    reference_count = 0
+
+    def resolve(value: Any) -> Any:
+        nonlocal reference_count
+        if isinstance(value, dict):
+            if "shared_certificate_sha256" in value:
+                if set(value) != {"shared_certificate_sha256"}:
+                    errors.append("shared proof certificate reference is malformed")
+                    return value
+                key = value.get("shared_certificate_sha256")
+                certificate = pool.get(key)
+                if not isinstance(certificate, dict):
+                    errors.append("shared proof certificate reference is missing")
+                    return value
+                reference_count += 1
+                return deepcopy(certificate)
+            return {key: resolve(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [resolve(item) for item in value]
+        return value
+
+    resolved["properties"] = resolve(resolved.get("properties", []))
+    if record.get("reference_count") != reference_count:
+        errors.append("shared proof certificate reference count is invalid")
+    return resolved, errors
+
+
 def verify_recorded_optimization_certificates(analysis: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     if not isinstance(analysis, dict):
         return ["recorded analysis is malformed"]
+    analysis, resolution_errors = _resolve_shared_proof_certificates(analysis)
+    errors.extend(resolution_errors)
     shared_errors, shared_regions, shared_safety_queries = (
         _verify_shared_reachability(analysis)
     )

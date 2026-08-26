@@ -17,8 +17,10 @@ from .proof_rules import (
     boolean_dnf,
     comparison_inequalities,
     expr_to_dict,
+    expression_is_linear,
     expression_symbols,
     expand_definitions,
+    prove_implication_exact,
     substitute,
 )
 
@@ -231,14 +233,31 @@ def _conjunction_covers(weaker: Expr, stronger: Expr) -> bool:
         for item in stronger_conjuncts
         if (normalized := _normalized_linear_bound(item, set())) is not None
     ]
+    stronger_linear = [
+        item
+        for item in stronger_conjuncts
+        if expression_is_linear(item, set())[0]
+    ]
     for item in _conjuncts(weaker):
         if expression_hash(item) in stronger_hashes:
             continue
         normalized = _normalized_linear_bound(item, set())
-        if normalized is None or not any(
+        if normalized is not None and any(
             _bound_implies(candidate, normalized)
             for candidate in stronger_bounds
         ):
+            continue
+        if not expression_is_linear(item, set())[0]:
+            return False
+        try:
+            implication = prove_implication_exact(
+                stronger_linear,
+                item,
+                set(),
+            )
+        except ProofDeferred:
+            return False
+        if implication.get("proved") is not True:
             return False
     return True
 
