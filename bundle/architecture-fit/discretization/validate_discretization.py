@@ -19,14 +19,21 @@ from .certificate import certificate_hash, check_certificate, load_certificate
 from .convex_checker import run_convex_checker, solve_convex_constraints
 from .convex_envelope_checker import run_convex_envelope_checker
 from .exact_replay import replay_serialized_boolean_expression
-from .full_model_reduction import ReachabilityContext, ReducedCase, expression_hash
+from .factored_logic import run_lazy_factored_checker
+from .full_model_reduction import (
+    INTERVAL_TIME,
+    ReachabilityContext,
+    ReducedCase,
+    expression_hash,
+)
 from .linear_envelope_checker import run_linear_envelope_checker
 from .linear_checker import run_linear_checker, solve_linear_constraints
 from .optimization_common import QuadraticConstraint
-from .proof_rules import expression_is_linear, prove_implication_exact
+from .proof_rules import expr_to_dict, expression_is_linear, prove_implication_exact
 from .proof_rules import LinearInequality
 from .proof_certificate_verifier import (
     verify_recorded_convex_certificate,
+    _verify_lazy_factored_stage,
     verify_recorded_linear_certificate,
     verify_recorded_outer_reduction,
 )
@@ -47,6 +54,16 @@ def reduced_case(case_id: str, expression) -> ReducedCase:
         "test",
         "test",
     )
+
+
+def nested_objects(value):
+    if isinstance(value, dict):
+        yield value
+        for item in value.values():
+            yield from nested_objects(item)
+    elif isinstance(value, list):
+        for item in value:
+            yield from nested_objects(item)
 
 
 def main() -> int:
@@ -232,6 +249,73 @@ def main() -> int:
         "feasible linear outer reduction reported a proof",
     )
 
+    interval_time = Var(INTERVAL_TIME)
+    factored_expression = Op("and", (
+        Op(">=", (interval_time, Const(0))),
+        Op("<=", (interval_time, Const(1))),
+        Op(">=", (x, Const(0))),
+        Op("<", (Op("*", (x, interval_time)), Const(0))),
+    ))
+    factored_case = ReducedCase(
+        "factored-endpoint",
+        factored_expression,
+        expression_hash(factored_expression),
+        (),
+        "test",
+        "physical_interval",
+        factored_expression,
+        True,
+    )
+    factored_attempt = run_lazy_factored_checker(
+        factored_case,
+        set(),
+        "linear",
+        lambda leaf, remaining: run_linear_checker(
+            leaf,
+            set(),
+            timeout_ms=remaining,
+        ),
+        lambda expression: expression_is_linear(expression, set())[0],
+        timeout_ms=250,
+        context_sha256="validation",
+    )
+    require(
+        factored_attempt.get("outcome") == "CERTIFIED",
+        "factored endpoint proof was rejected",
+    )
+    factored_stage = {"checker": "linear", **factored_attempt}
+    factored_record = {"expression": expr_to_dict(factored_expression)}
+    require(
+        not _verify_lazy_factored_stage(factored_stage, factored_record),
+        "factored endpoint certificate did not verify",
+    )
+    bad_factored_split = copy.deepcopy(factored_stage)
+    split_node = next(
+        item
+        for item in nested_objects(bad_factored_split)
+        if item.get("rule") == "exact_factored_split_v1"
+    )
+    split_node["children"][0]["expression_sha256"] = split_node[
+        "expression_sha256"
+    ]
+    require(
+        bool(_verify_lazy_factored_stage(bad_factored_split, factored_record)),
+        "invalid factored split was accepted",
+    )
+    bad_endpoint = copy.deepcopy(factored_stage)
+    endpoint_node = next(
+        item
+        for item in nested_objects(bad_endpoint)
+        if item.get("split_kind") == "affine_interval_endpoints"
+    )
+    endpoint_node["changing_comparison_sha256"] = endpoint_node[
+        "expression_sha256"
+    ]
+    require(
+        bool(_verify_lazy_factored_stage(bad_endpoint, factored_record)),
+        "invalid factored endpoint reduction was accepted",
+    )
+
     reachability_context = ReachabilityContext(
         domain=Const(True),
         initial_constraints=(Op("==", (x, Const(0))),),
@@ -250,15 +334,32 @@ def main() -> int:
         "physical_interval",
         Op("<", (x, Const(0))),
     )
+    safe_reachability_result = run_reachability_checker(
+        safe_reachability_case,
+        reachability_context,
+        method="linear",
+        timeout_ms=250,
+    )
     require(
-        run_reachability_checker(
-            safe_reachability_case,
-            reachability_context,
-            method="linear",
-            timeout_ms=250,
-        ).get("outcome") == "CERTIFIED",
+        safe_reachability_result.get("outcome") == "CERTIFIED",
         "linear reachability proof was rejected",
     )
+    certified_depth = next(
+        item
+        for item in safe_reachability_result["proof"]["depth_attempts"]
+        if item.get("proved") is True
+    )
+    for obligation in (
+        certified_depth["base_obligations"]
+        + certified_depth["induction_obligations"]
+    ):
+        require(
+            not _verify_lazy_factored_stage(
+                obligation["attempt"],
+                {"expression": obligation["expression"]},
+            ),
+            "factored reachability certificate did not verify",
+        )
     unsafe_reachability_case = ReducedCase(
         "unsafe-reachability",
         Op(">=", (x, Const(0))),
@@ -585,6 +686,7 @@ def main() -> int:
     print("nonlinear rejection validation: PASSED")
     print("linear proof certificate validation: PASSED")
     print("convex proof certificate validation: PASSED")
+    print("factored proof certificate validation: PASSED")
     print("linear to convex progression validation: PASSED")
     print("backend failure deferral validation: PASSED")
     print("full model equation omission rejection: PASSED")

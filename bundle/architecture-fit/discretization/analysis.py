@@ -18,6 +18,7 @@ from sysml_parser import IfStmt, PerformStmt, SubactionCallStmt
 from .convex_checker import run_convex_checker
 from .convex_envelope_checker import run_convex_envelope_checker
 from .exact_replay import replay_serialized_boolean_expression, serialize_exact_value
+from .factored_logic import run_lazy_factored_checker
 from .full_model_reduction import (
     ReducedCase,
     build_reduction,
@@ -32,6 +33,7 @@ from .reachability import (
     run_reachability_checker,
     run_relational_invariant_group_checker,
     run_smt_reachability_checker,
+    shared_reachability_context_sha256,
 )
 from .proof_rules import (
     ProofDeferred,
@@ -113,6 +115,27 @@ def _validated_attempt(attempt: dict[str, Any]) -> dict[str, Any]:
         "reason_code": "MALFORMED_OUTPUT",
         "detail": "checker returned an invalid outcome",
         "applicability_checks": attempt.get("applicability_checks") or {},
+    }
+
+
+def _local_feasibility_attempt(attempt: dict[str, Any]) -> dict[str, Any]:
+    """Do not treat a locally feasible unsafe state as a reachable violation."""
+
+    attempt = _validated_attempt(attempt)
+    if attempt.get("outcome") != "VIOLATION":
+        return attempt
+    return {
+        **attempt,
+        "outcome": "DEFERRED",
+        "reason_code": "COUNTEREXAMPLE_REPLAY_FAILED",
+        "detail": (
+            "the arithmetic candidate satisfies the local proof obligation, "
+            "but reachability from the declared initial state was not replayed"
+        ),
+        "proof": {
+            "rule": "local_feasibility_requires_reachability_v1",
+            "source_reason_code": attempt.get("reason_code", ""),
+        },
     }
 
 
@@ -1057,33 +1080,79 @@ def analyze_model(
             })
             continue
 
-        linear_group_attempts = _grouped_case_attempts(
-            reduced_cases,
-            "linear",
-            lambda item: run_linear_checker(
-                item,
-                set(),
-                timeout_ms=optimization_timeout_ms,
-            ),
-            conjunct_filter=lambda expression: expression_is_linear(
-                expression,
-                set(),
-            )[0],
-        )
-        convex_group_attempts = _grouped_case_attempts(
-            [
-                item for item in reduced_cases
+        if any(item.factored for item in reduced_cases):
+            context_sha256 = shared_reachability_context_sha256(
+                reachability_context
+            )
+            linear_group_attempts = {
+                item.case_id: run_lazy_factored_checker(
+                    item,
+                    boolean_variables,
+                    "linear",
+                    lambda leaf, remaining: _local_feasibility_attempt(
+                        run_linear_checker(
+                            leaf,
+                            set(),
+                            timeout_ms=min(optimization_timeout_ms, remaining),
+                        )
+                    ),
+                    lambda expression: expression_is_linear(
+                        expression,
+                        set(),
+                    )[0],
+                    timeout_ms=optimization_timeout_ms,
+                    context_sha256=context_sha256,
+                )
+                for item in reduced_cases
+            }
+            convex_group_attempts = {
+                item.case_id: run_lazy_factored_checker(
+                    item,
+                    boolean_variables,
+                    "convex",
+                    lambda leaf, remaining: _local_feasibility_attempt(
+                        run_convex_checker(
+                            leaf,
+                            set(),
+                            timeout_ms=min(optimization_timeout_ms, remaining),
+                        )
+                    ),
+                    _expression_is_convex,
+                    timeout_ms=optimization_timeout_ms,
+                    context_sha256=context_sha256,
+                )
+                for item in reduced_cases
                 if linear_group_attempts[item.case_id].get("outcome")
                 != "CERTIFIED"
-            ],
-            "convex",
-            lambda item: run_convex_checker(
-                item,
-                set(),
-                timeout_ms=optimization_timeout_ms,
-            ),
-            conjunct_filter=_expression_is_convex,
-        )
+            }
+        else:
+            linear_group_attempts = _grouped_case_attempts(
+                reduced_cases,
+                "linear",
+                lambda item: run_linear_checker(
+                    item,
+                    set(),
+                    timeout_ms=optimization_timeout_ms,
+                ),
+                conjunct_filter=lambda expression: expression_is_linear(
+                    expression,
+                    set(),
+                )[0],
+            )
+            convex_group_attempts = _grouped_case_attempts(
+                [
+                    item for item in reduced_cases
+                    if linear_group_attempts[item.case_id].get("outcome")
+                    != "CERTIFIED"
+                ],
+                "convex",
+                lambda item: run_convex_checker(
+                    item,
+                    set(),
+                    timeout_ms=optimization_timeout_ms,
+                ),
+                conjunct_filter=_expression_is_convex,
+            )
         case_records: list[dict[str, Any]] = []
         pending_relational: list[tuple[ReducedCase, dict[str, Any]]] = []
         for reduced_case in reduced_cases:
@@ -1154,24 +1223,34 @@ def analyze_model(
                 )
 
             if outcome == "DEFERRED":
-                try:
-                    exact_proof = prove_implication_exact(
-                        [reduced_case.expression],
-                        Const(False),
-                        set(),
-                    )
-                except ProofDeferred as exc:
+                if reduced_case.factored:
                     exact_proof = {
                         "proved": False,
-                        "reason_code": exc.reason_code,
-                        "detail": exc.detail,
+                        "reason_code": "FACTORED_FORMULA_PRESERVED",
+                        "detail": (
+                            "the factored formula is passed intact to the next "
+                            "checker without exhaustive symbolic case expansion"
+                        ),
                     }
-                except Exception as exc:  # pragma: no cover
-                    exact_proof = {
-                        "proved": False,
-                        "reason_code": "MALFORMED_OUTPUT",
-                        "detail": str(exc),
-                    }
+                else:
+                    try:
+                        exact_proof = prove_implication_exact(
+                            [reduced_case.expression],
+                            Const(False),
+                            set(),
+                        )
+                    except ProofDeferred as exc:
+                        exact_proof = {
+                            "proved": False,
+                            "reason_code": exc.reason_code,
+                            "detail": exc.detail,
+                        }
+                    except Exception as exc:  # pragma: no cover
+                        exact_proof = {
+                            "proved": False,
+                            "reason_code": "MALFORMED_OUTPUT",
+                            "detail": str(exc),
+                        }
                 if exact_proof.get("proved"):
                     case_progression.append(_stage(
                         "exact_symbolic",

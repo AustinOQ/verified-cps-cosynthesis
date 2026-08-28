@@ -8,9 +8,26 @@ from copy import deepcopy
 from fractions import Fraction
 from typing import Any
 
+from certification.equations import Const, Expr, Ite, Op, RawRef, Var
+
 from .exact_replay import replay_serialized_boolean_expression
+from .factored_logic import (
+    _affine_interval_endpoint_split,
+    _and as _factored_and,
+    _canonical as _factored_canonical,
+    _first_ite as _factored_first_ite,
+    _first_or as _factored_first_or,
+    _normal_boolean as _factored_normal_boolean,
+    _or as _factored_or,
+    _replace as _factored_replace,
+)
 from .optimization_common import fraction_text, parse_fraction
-from .proof_rules import LinearInequality, exact_linear_infeasible
+from .proof_rules import (
+    LinearInequality,
+    exact_linear_infeasible,
+    expr_to_dict,
+    substitute,
+)
 
 try:  # pragma: no cover - integration environment determines availability
     import z3  # type: ignore
@@ -1401,6 +1418,423 @@ def _verify_shared_reachability(
     return errors, regions, safety_queries
 
 
+def _verify_factored_expression_graph(
+    graph: Any,
+    root_expression: Any,
+) -> list[str]:
+    if not isinstance(graph, dict) or graph.get(
+        "rule"
+    ) != "content_addressed_expression_graph_v1":
+        return ["factored expression graph is malformed"]
+    if not isinstance(root_expression, dict):
+        return ["factored expression root is malformed"]
+    nodes = graph.get("nodes")
+    if not isinstance(nodes, dict):
+        return ["factored expression node table is malformed"]
+    expected: dict[str, dict[str, Any]] = {}
+    source_node_count = 0
+
+    def visit(item: Any) -> str:
+        nonlocal source_node_count
+        source_node_count += 1
+        if not isinstance(item, dict):
+            raise ValueError("expression node is malformed")
+        key = _serialized_expression_hash(item)
+        if key in expected:
+            return key
+        kind = item.get("type")
+        if kind == "const":
+            payload = {"type": "const", "value": item.get("value")}
+        elif kind == "var":
+            payload = {"type": "var", "name": item.get("name")}
+        elif kind == "raw_ref":
+            payload = {"type": "raw_ref", "path": item.get("path")}
+        elif kind == "op" and isinstance(item.get("args"), list):
+            payload = {
+                "type": "op",
+                "op": item.get("op"),
+                "args": [visit(argument) for argument in item["args"]],
+            }
+        elif kind == "ite":
+            payload = {
+                "type": "ite",
+                "condition": visit(item.get("cond")),
+                "then": visit(item.get("then")),
+                "else": visit(item.get("else")),
+            }
+        else:
+            raise ValueError("expression node kind is malformed")
+        expected[key] = payload
+        return key
+
+    errors: list[str] = []
+    try:
+        root_hash = visit(root_expression)
+    except (TypeError, ValueError):
+        return ["factored expression graph cannot be reconstructed"]
+    if graph.get("root_expression_sha256") != root_hash:
+        errors.append("factored expression graph root hash is invalid")
+    if graph.get("source_node_count") != source_node_count:
+        errors.append("factored expression source node count is invalid")
+    if graph.get("unique_node_count") != len(expected):
+        errors.append("factored expression unique node count is invalid")
+    if nodes != {key: expected[key] for key in sorted(expected)}:
+        errors.append("factored expression node table does not match its root")
+    return errors
+
+
+def _serialized_contains(expression: Any, target: Any) -> bool:
+    if expression == target:
+        return True
+    if not isinstance(expression, dict):
+        return False
+    if expression.get("type") == "op":
+        return any(
+            _serialized_contains(item, target)
+            for item in expression.get("args", [])
+        )
+    if expression.get("type") == "ite":
+        return any(
+            _serialized_contains(expression.get(field), target)
+            for field in ("cond", "then", "else")
+        )
+    return False
+
+
+def _factored_expr_from_dict(expression: Any) -> Expr:
+    if not isinstance(expression, dict):
+        raise ValueError("expression is malformed")
+    kind = expression.get("type")
+    if kind == "const":
+        return Const(expression.get("value"))
+    if kind == "var" and isinstance(expression.get("name"), str):
+        return Var(expression["name"])
+    if kind == "raw_ref" and isinstance(expression.get("path"), str):
+        return RawRef(expression["path"])
+    if kind == "op" and isinstance(expression.get("op"), str) and isinstance(
+        expression.get("args"),
+        list,
+    ):
+        return Op(
+            expression["op"],
+            tuple(_factored_expr_from_dict(item) for item in expression["args"]),
+        )
+    if kind == "ite":
+        return Ite(
+            _factored_expr_from_dict(expression.get("cond")),
+            _factored_expr_from_dict(expression.get("then")),
+            _factored_expr_from_dict(expression.get("else")),
+        )
+    raise ValueError("expression is malformed")
+
+
+def _serialized_common_conjuncts(expression: Any) -> dict[str, Any]:
+    if not isinstance(expression, dict) or expression.get("type") == "const":
+        return {}
+    if expression.get("type") == "op" and expression.get("op") == "and":
+        result: dict[str, Any] = {}
+        for item in expression.get("args", []):
+            result.update(_serialized_common_conjuncts(item))
+        return result
+    if expression.get("type") == "op" and expression.get("op") == "or":
+        children = [
+            _serialized_common_conjuncts(item)
+            for item in expression.get("args", [])
+        ]
+        if not children:
+            return {}
+        shared = set(children[0])
+        for child in children[1:]:
+            shared.intersection_update(child)
+        return {key: children[0][key] for key in sorted(shared)}
+    if expression.get("type") == "ite":
+        return {}
+    return {_serialized_expression_hash(expression): expression}
+
+
+def _verify_nested_factored_attempt(
+    attempt: Any,
+    expression: Any,
+    checker: str,
+) -> list[str]:
+    if not isinstance(attempt, dict) or attempt.get("outcome") != "CERTIFIED":
+        return ["factored proof leaf is not certified"]
+    proof = attempt.get("proof") or {}
+    certificate = proof.get("certificate")
+    if checker in {"linear", "reachability_arithmetic"}:
+        if not isinstance(certificate, dict):
+            return ["factored linear proof certificate is missing"]
+        errors = verify_recorded_linear_certificate(certificate)
+        try:
+            expected = _serialized_linear_constraints(expression)
+        except (TypeError, ValueError, ZeroDivisionError):
+            errors.append("factored linear source expression is malformed")
+        else:
+            if certificate.get("constraints") != expected:
+                errors.append(
+                    "factored linear certificate does not match its source"
+                )
+        return errors
+    if checker == "convex":
+        if not isinstance(certificate, dict):
+            return ["factored convex proof certificate is missing"]
+        return verify_recorded_convex_certificate(certificate)
+    return ["factored proof checker is unsupported"]
+
+
+def _verify_lazy_factored_stage(
+    stage: dict[str, Any],
+    case: dict[str, Any],
+) -> list[str]:
+    proof = stage.get("proof") or {}
+    errors: list[str] = []
+    if proof.get("rule") != "lazy_factored_formula_coverage_v2":
+        return ["factored coverage proof rule is invalid"]
+    source = case.get("expression")
+    if not isinstance(source, dict) or proof.get(
+        "source_expression_sha256"
+    ) != _serialized_expression_hash(source):
+        return ["factored coverage source does not match its case"]
+    expression_pool = proof.get("expression_pool")
+    if not isinstance(expression_pool, dict) or proof.get(
+        "expression_pool_count"
+    ) != len(expression_pool):
+        return ["factored expression pool is malformed"]
+    for key, expression in expression_pool.items():
+        if not isinstance(expression, dict) or key != _serialized_expression_hash(
+            expression
+        ):
+            return ["factored expression pool hash is invalid"]
+    if proof.get("coverage_complete") is not True:
+        errors.append("certified factored coverage is incomplete")
+    checker = str(proof.get("checker") or stage.get("checker"))
+    boolean_variables_record = proof.get("boolean_variables")
+    if (
+        not isinstance(boolean_variables_record, list)
+        or any(not isinstance(item, str) for item in boolean_variables_record)
+        or boolean_variables_record != sorted(set(boolean_variables_record))
+    ):
+        return ["factored Boolean variable inventory is malformed"]
+    boolean_variables = set(boolean_variables_record)
+    certified: set[str] = set()
+
+    def visit(node: Any) -> None:
+        if not isinstance(node, dict):
+            errors.append("factored proof node is malformed")
+            return
+        rule = node.get("rule")
+        if rule == "reused_factored_proof_v1":
+            reference = node.get("expression_sha256")
+            if reference not in certified:
+                errors.append("factored proof reuse has no prior certified node")
+            return
+        expression_hash = node.get("expression_sha256")
+        expression = expression_pool.get(expression_hash)
+        if not isinstance(expression_hash, str) or not isinstance(expression, dict):
+            errors.append("factored proof node expression hash is invalid")
+            return
+        before = len(errors)
+        if rule == "exact_boolean_normalization_v1":
+            normalized_hash = node.get("normalized_expression_sha256")
+            normalized = expression_pool.get(normalized_hash)
+            try:
+                expected_normalized = expr_to_dict(_factored_canonical(
+                    _factored_normal_boolean(
+                        _factored_expr_from_dict(expression),
+                        boolean_variables,
+                    )
+                ))
+            except (TypeError, ValueError):
+                expected_normalized = None
+            if (
+                not isinstance(normalized_hash, str)
+                or not isinstance(normalized, dict)
+                or node.get("outcome") != "CERTIFIED"
+                or normalized != expected_normalized
+            ):
+                errors.append("factored Boolean normalization is malformed")
+            else:
+                visit(node.get("proof"))
+                if normalized_hash not in certified:
+                    errors.append(
+                        "factored Boolean normalization child is not covered"
+                    )
+        elif rule == "constant_false_factored_leaf_v1":
+            if expression != {"type": "const", "value": False}:
+                errors.append("factored constant leaf is not false")
+        elif rule == "common_conjunct_factored_proof_v1":
+            common_hash = node.get("common_expression_sha256")
+            common = expression_pool.get(common_hash)
+            if not isinstance(common_hash, str) or not isinstance(common, dict):
+                errors.append("factored common expression hash is invalid")
+            else:
+                available = _serialized_common_conjuncts(expression)
+                common_hashes = {
+                    _serialized_expression_hash(item)
+                    for item in _serialized_conjuncts(common)
+                }
+                if not common_hashes <= set(available):
+                    errors.append(
+                        "factored common proof is not shared by every branch"
+                    )
+                errors.extend(_verify_nested_factored_attempt(
+                    node.get("checker_attempt"),
+                    common,
+                    checker,
+                ))
+        elif rule == "factored_checker_leaf_v1":
+            errors.extend(_verify_nested_factored_attempt(
+                node.get("checker_attempt"),
+                expression,
+                checker,
+            ))
+        elif rule == "exact_factored_split_v1":
+            children = node.get("children")
+            if not isinstance(children, list) or len(children) != 2:
+                errors.append("factored split does not have two children")
+                return
+            split_kind = node.get("split_kind")
+            expected_children: list[dict[str, Any]] | None = None
+            try:
+                parent_expression = _factored_expr_from_dict(expression)
+            except (TypeError, ValueError):
+                parent_expression = None
+            if split_kind == "boolean_variable":
+                variable = node.get("variable")
+                if not isinstance(variable, str) or not _serialized_contains(
+                    expression,
+                    {"type": "var", "name": variable},
+                ):
+                    errors.append("factored Boolean split variable is absent")
+                elif variable not in boolean_variables or parent_expression is None:
+                    errors.append("factored Boolean split variable is invalid")
+                else:
+                    expected_children = [
+                        expr_to_dict(_factored_canonical(substitute(
+                            parent_expression,
+                            {variable: Const(value)},
+                        )))
+                        for value in (False, True)
+                    ]
+            elif split_kind == "logical_alternative":
+                alternative_hash = node.get("alternative_expression_sha256")
+                alternative = expression_pool.get(alternative_hash)
+                if (
+                    not isinstance(alternative, dict)
+                    or alternative.get("type") != "op"
+                    or alternative.get("op") != "or"
+                    or not _serialized_contains(expression, alternative)
+                ):
+                    errors.append("factored logical split source is invalid")
+                elif parent_expression is not None:
+                    selected = _factored_first_or(parent_expression)
+                    if selected is None or expr_to_dict(selected) != alternative:
+                        errors.append("factored logical split source is not first")
+                    else:
+                        alternatives = list(selected.args)
+                        expected_children = [
+                            expr_to_dict(_factored_replace(
+                                parent_expression,
+                                selected,
+                                alternatives[0],
+                            )),
+                            expr_to_dict(_factored_replace(
+                                parent_expression,
+                                selected,
+                                _factored_or(alternatives[1:]),
+                            )),
+                        ]
+            elif split_kind == "conditional":
+                condition_hash = node.get("condition_sha256")
+                condition = expression_pool.get(condition_hash)
+                if not isinstance(condition, dict):
+                    errors.append("factored conditional split is malformed")
+                elif parent_expression is not None:
+                    selected = _factored_first_ite(parent_expression)
+                    if selected is None or expr_to_dict(selected.cond) != condition:
+                        errors.append("factored conditional split source is invalid")
+                    else:
+                        expected_children = [
+                            expr_to_dict(_factored_and([
+                                _factored_normal_boolean(
+                                    selected.cond,
+                                    boolean_variables,
+                                    truth=value,
+                                ),
+                                _factored_replace(
+                                    parent_expression,
+                                    selected,
+                                    selected.then_expr if value else selected.else_expr,
+                                ),
+                            ]))
+                            for value in (False, True)
+                        ]
+            elif split_kind == "affine_interval_endpoints":
+                if parent_expression is None:
+                    errors.append("factored interval endpoint source is malformed")
+                else:
+                    reduction = _affine_interval_endpoint_split(parent_expression)
+                    if reduction is None:
+                        errors.append("factored interval endpoint reduction is invalid")
+                    else:
+                        expected, expected_record = reduction
+                        expected_fields = {
+                            "relaxed_expression_sha256": _serialized_expression_hash(
+                                expr_to_dict(expected_record["relaxed_expression"])
+                            ),
+                            "removed_interval_bound_sha256": [
+                                _serialized_expression_hash(expr_to_dict(item))
+                                for item in expected_record["removed_interval_bounds"]
+                            ],
+                            "removed_time_gate_sha256": [
+                                _serialized_expression_hash(expr_to_dict(item))
+                                for item in expected_record["removed_time_gates"]
+                            ],
+                            "changing_comparison_sha256": _serialized_expression_hash(
+                                expr_to_dict(expected_record["changing_comparison"])
+                            ),
+                            "time_variable": expected_record["time_variable"],
+                            "endpoint_sha256": [
+                                _serialized_expression_hash(expr_to_dict(item))
+                                for item in expected_record["endpoints"]
+                            ],
+                        }
+                        for field, expected_value in expected_fields.items():
+                            if node.get(field) != expected_value:
+                                errors.append(
+                                    f"factored interval endpoint {field} is invalid"
+                                )
+                        expected_children = [expr_to_dict(item) for item in expected]
+            else:
+                errors.append("factored split kind is invalid")
+            for index, child in enumerate(children):
+                child_hash = child.get("expression_sha256") if isinstance(
+                    child,
+                    dict,
+                ) else None
+                child_expression = expression_pool.get(child_hash)
+                if (
+                    not isinstance(child, dict)
+                    or child.get("branch") != index
+                    or child.get("outcome") != "CERTIFIED"
+                    or not isinstance(child_expression, dict)
+                    or expected_children is None
+                    or child_expression != expected_children[index]
+                ):
+                    errors.append("factored split child is malformed")
+                    continue
+                visit(child.get("proof"))
+        else:
+            errors.append("factored proof node rule is invalid")
+        if len(errors) == before:
+            certified.add(expression_hash)
+
+    visit(proof.get("tree"))
+    if _serialized_expression_hash(source) not in certified:
+        errors.append("factored proof tree does not cover its root")
+    return errors
+
+
 def _resolve_shared_proof_certificates(
     analysis: dict[str, Any],
 ) -> tuple[dict[str, Any], list[str]]:
@@ -1552,6 +1986,10 @@ def verify_recorded_optimization_certificates(analysis: dict[str, Any]) -> list[
                     f"property {property_id} case coverage count is invalid"
                 )
             obligations = coverage.get("obligations") or {}
+            if set(obligations) != {"sampled_point", "physical_interval"}:
+                errors.append(
+                    f"property {property_id} obligation coverage is incomplete"
+                )
             for obligation, obligation_coverage in obligations.items():
                 if not isinstance(obligation_coverage, dict):
                     errors.append(
@@ -1559,6 +1997,34 @@ def verify_recorded_optimization_certificates(analysis: dict[str, Any]) -> list[
                     )
                     continue
                 obligation_cases = obligation_coverage.get("cases") or []
+                if obligation_coverage.get("rule") == "factored_obligation_root_v1":
+                    expected_root = reduction.get(
+                        "sampled_point_counterexample"
+                        if obligation == "sampled_point"
+                        else "interval_counterexample"
+                    )
+                    root = obligation_coverage.get("root_expression")
+                    if root != expected_root:
+                        errors.append(
+                            f"property {property_id} {obligation} factored root does not match the reconstructed obligation"
+                        )
+                    if not isinstance(root, dict) or obligation_coverage.get(
+                        "root_expression_sha256"
+                    ) != _serialized_expression_hash(root):
+                        errors.append(
+                            f"property {property_id} {obligation} factored root hash is invalid"
+                        )
+                    if len(obligation_cases) != 1:
+                        errors.append(
+                            f"property {property_id} {obligation} must have exactly one factored root"
+                        )
+                    for graph_error in _verify_factored_expression_graph(
+                        obligation_coverage.get("expression_graph"),
+                        root,
+                    ):
+                        errors.append(
+                            f"property {property_id} {obligation}: {graph_error}"
+                        )
                 merged_sources = [
                     source
                     for row in obligation_cases
@@ -1720,6 +2186,12 @@ def verify_recorded_optimization_certificates(analysis: dict[str, Any]) -> list[
                 continue
             if stage.get("outcome") != "CERTIFIED":
                 continue
+            if proof.get("rule") == "lazy_factored_formula_coverage_v2":
+                errors.extend(
+                    f"property {property_id} factored {checker} certificate: {error}"
+                    for error in _verify_lazy_factored_stage(stage, case)
+                )
+                continue
             certificate = proof.get("certificate")
             if checker == "linear":
                 if not isinstance(certificate, dict):
@@ -1788,14 +2260,28 @@ def verify_recorded_optimization_certificates(analysis: dict[str, Any]) -> list[
                             certificate = (attempt.get("proof") or {}).get(
                                 "certificate"
                             )
+                            attempt_rule = (attempt.get("proof") or {}).get(
+                                "rule"
+                            )
                             if attempt.get("outcome") != "CERTIFIED":
                                 stage_errors.append(
                                     "reachability arithmetic obligation is not certified"
                                 )
-                            elif (
-                                (attempt.get("proof") or {}).get("rule")
-                                == "exhaustive_case_split_empty_v1"
-                            ):
+                            elif attempt_rule == "lazy_factored_formula_coverage_v2":
+                                obligation_expression = obligation.get("expression")
+                                if not isinstance(obligation_expression, dict):
+                                    stage_errors.append(
+                                        "reachability factored expression is malformed"
+                                    )
+                                else:
+                                    stage_errors.extend(
+                                        "reachability factored certificate: " + error
+                                        for error in _verify_lazy_factored_stage(
+                                            attempt,
+                                            {"expression": obligation_expression},
+                                        )
+                                    )
+                            elif attempt_rule == "exhaustive_case_split_empty_v1":
                                 if attempt.get("applicability_checks", {}).get(
                                     "arithmetic_case_count"
                                 ) != 0:
