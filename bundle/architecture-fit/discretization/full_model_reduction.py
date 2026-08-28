@@ -346,6 +346,107 @@ class ReducedCase:
     time_reduction: str
     obligation: str
     reachability_expression: Expr | None = None
+    factored: bool = False
+
+
+def _factored_expression_graph(expression: Expr) -> dict[str, Any]:
+    """Record one shallow node per unique expression without expanding logic."""
+
+    nodes: dict[str, dict[str, Any]] = {}
+    source_node_count = 0
+
+    def visit(item: Expr) -> str:
+        nonlocal source_node_count
+        source_node_count += 1
+        key = expression_hash(item)
+        if key in nodes:
+            return key
+        if isinstance(item, Const):
+            payload = expr_to_dict(item)
+        elif isinstance(item, Var):
+            payload = {"type": "var", "name": item.name}
+        elif isinstance(item, RawRef):
+            payload = {"type": "raw_ref", "path": item.path}
+        elif isinstance(item, Ite):
+            payload = {
+                "type": "ite",
+                "condition": visit(item.cond),
+                "then": visit(item.then_expr),
+                "else": visit(item.else_expr),
+            }
+        elif isinstance(item, Op):
+            payload = {
+                "type": "op",
+                "op": item.op,
+                "args": [visit(argument) for argument in item.args],
+            }
+        else:  # pragma: no cover - the equation IR is closed above
+            raise TypeError(f"unsupported expression node {type(item).__name__}")
+        nodes[key] = payload
+        return key
+
+    root = visit(expression)
+    return {
+        "rule": "content_addressed_expression_graph_v1",
+        "root_expression_sha256": root,
+        "source_node_count": source_node_count,
+        "unique_node_count": len(nodes),
+        "nodes": {key: nodes[key] for key in sorted(nodes)},
+    }
+
+
+def _factored_obligation(
+    expression: Expr,
+    property_id: str,
+    obligation: str,
+) -> tuple[list[ReducedCase], dict[str, Any]]:
+    """Keep one exact obligation root instead of constructing all logical cases."""
+
+    root = simplify(expression)
+    root_hash = expression_hash(root)
+    case_id = f"{property_id}.{obligation}.root"
+    case = ReducedCase(
+        case_id=case_id,
+        expression=root,
+        parent_hash=root_hash,
+        boolean_assignment=(),
+        time_reduction="symbolic_factored_formula",
+        obligation=obligation,
+        reachability_expression=root,
+        factored=True,
+    )
+    row = {
+        "case_id": case_id,
+        "obligation": obligation,
+        "boolean_assignment": {},
+        "conditional_branch": "symbolic",
+        "time_reduction": "symbolic_factored_formula",
+        "expression": expr_to_dict(root),
+        "expression_sha256": root_hash,
+        "reachability_expression": expr_to_dict(root),
+        "reachability_expression_sha256": root_hash,
+        "constraint_reduction": {
+            "rule": "canonical_conjunction_reduction_v1",
+            "removed_constraints": [],
+            "reachability_removed_constraints": [],
+        },
+        "merged_sources": [],
+    }
+    graph = _factored_expression_graph(root)
+    return [case], {
+        "rule": "factored_obligation_root_v1",
+        "obligation": obligation,
+        "parent_expression_sha256": root_hash,
+        "root_expression": expr_to_dict(root),
+        "root_expression_sha256": root_hash,
+        "expression_graph": graph,
+        "generated_case_count": 1,
+        "case_count": 1,
+        "containment_merged_case_count": 0,
+        "actual_split_count": 0,
+        "complete": True,
+        "cases": [row],
+    }
 
 
 @dataclass(frozen=True)
@@ -1236,15 +1337,13 @@ def build_reduction(
         boolean_variables,
         interval_pre_case_removals,
     )
-    sampled_cases, sampled_coverage = _case_split(
+    sampled_cases, sampled_coverage = _factored_obligation(
         sampled_point_counterexample,
-        boolean_variables,
         equation.target,
         "sampled_point",
     )
-    interval_cases, interval_coverage = _case_split(
+    interval_cases, interval_coverage = _factored_obligation(
         counterexample,
-        boolean_variables,
         equation.target,
         "physical_interval",
     )

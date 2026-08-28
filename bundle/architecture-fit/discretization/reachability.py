@@ -26,6 +26,7 @@ from .full_model_reduction import (
     expression_hash,
     simplify,
 )
+from .factored_logic import run_lazy_factored_checker
 from .linear_envelope_checker import run_linear_envelope_checker
 from .linear_checker import run_linear_checker
 from .optimization_common import conjunctive_comparisons, quadratic_constraints
@@ -166,27 +167,32 @@ def _state_sequence(
     depth: int,
     *,
     deadline: float | None = None,
-) -> tuple[list[dict[str, Expr]], list[dict[str, str]]]:
+) -> tuple[list[dict[str, Expr]], list[dict[str, str]], list[Expr]]:
+    """Build linearly sized state frames and explicit transition equalities."""
+
     generic_post = context.post_dict()
     state_names = sorted(generic_post)
-    states: list[dict[str, Expr]] = [
-        {name: Var(name) for name in state_names}
-    ]
+    states: list[dict[str, Expr]] = []
+    for step in range(depth + 1):
+        states.append({
+            name: Var(name if step == 0 else f"reach_state_{step}__{name}")
+            for name in state_names
+        })
     actions = [_step_action_names(context, step) for step in range(depth + 1)]
+    transitions: list[Expr] = []
     for step in range(depth):
         if deadline is not None:
             _remaining_timeout_ms(deadline)
-        action_values = {
-            name: Var(renamed) for name, renamed in actions[step].items()
-        }
-        next_state: dict[str, Expr] = {}
+        equations: list[Expr] = []
         for target, expression in generic_post.items():
             if deadline is not None:
                 _remaining_timeout_ms(deadline)
-            with_actions = substitute(expression, action_values)
-            next_state[target] = simplify(substitute(with_actions, states[step]))
-        states.append(next_state)
-    return states, actions
+            equations.append(Op("==", (
+                states[step + 1][target],
+                _lift(expression, states[step], actions[step]),
+            )))
+        transitions.append(_and(equations))
+    return states, actions, transitions
 
 
 def _arithmetic_cases(
@@ -318,7 +324,11 @@ def _query_set(
 ) -> tuple[list[tuple[str, Expr]], Expr, set[str]]:
     if deadline is not None:
         _remaining_timeout_ms(deadline)
-    states, actions = _state_sequence(context, depth, deadline=deadline)
+    states, actions, transitions = _state_sequence(
+        context,
+        depth,
+        deadline=deadline,
+    )
     unsafe_expression = (
         reduced_case.reachability_expression or reduced_case.expression
     )
@@ -346,11 +356,13 @@ def _query_set(
             _and([
                 *context.initial_constraints,
                 *domains[:step],
+                *transitions[:step],
                 case_at[step],
             ]),
         ))
     induction = _and([
         *domains[:depth],
+        *transitions[:depth],
         *safe_at[:depth],
         case_at[depth],
     ])
@@ -428,7 +440,10 @@ def _reachability_sorts(
         if "__" not in name:
             continue
         source = name.split("__", 1)[1]
-        if name.startswith("rel_state_") and source in (
+        if (
+            name.startswith("rel_state_")
+            or name.startswith("reach_state_")
+        ) and source in (
             set(context.post_dict()) | set(context.initial_variables)
         ):
             sorts[name] = (
@@ -850,108 +865,50 @@ def _attempt_query(
     checker: Callable[..., dict[str, Any]],
     timeout_ms: int,
     context: ReachabilityContext,
-    valid_action_modes: tuple[tuple[tuple[str, bool], ...], ...],
     *,
     deadline: float,
 ) -> tuple[bool, list[dict[str, Any]], dict[str, Any] | None]:
     _remaining_timeout_ms(deadline)
-    arithmetic_cases = _arithmetic_cases(
-        expression,
-        boolean_variables,
-        prefix,
-        context,
-        valid_action_modes,
-        deadline=deadline,
+    source_case = ReducedCase(
+        case_id=prefix + ".root",
+        expression=expression,
+        parent_hash=expression_hash(expression),
+        boolean_assignment=(),
+        time_reduction="lazy_factored_reachability",
+        obligation="reachability",
+        reachability_expression=expression,
+        factored=True,
     )
-    if not arithmetic_cases:
-        return True, [{
-            "case_id": prefix + ".empty",
-            "expression": expr_to_dict(expression),
-            "expression_sha256": expression_hash(expression),
-            "attempt": {
-                "outcome": "CERTIFIED",
-                "reason_code": "",
-                "detail": "exhaustive logical reduction has no arithmetic case",
-                "applicability_checks": {
-                    "complete_case_split": True,
-                    "arithmetic_case_count": 0,
-                },
-                "proof": {"rule": "exhaustive_case_split_empty_v1"},
-            },
-        }], None
-    records: list[dict[str, Any]] = []
-
-    def common_expression(group: list[ReducedCase]) -> Expr:
-        mappings: list[dict[str, Expr]] = []
-        for arithmetic_case in group:
-            mapping: dict[str, Expr] = {}
-            for comparison in conjunctive_comparisons(
-                arithmetic_case.expression,
-                set(),
-            ):
-                expression = _comparison_expression(comparison)
-                mapping[expression_hash(expression)] = expression
-            mappings.append(mapping)
-        common = set(mappings[0])
-        for mapping in mappings[1:]:
-            common.intersection_update(mapping)
-        return _and([mappings[0][key] for key in sorted(common)])
-
-    def record_attempt(
-        arithmetic_case: ReducedCase,
-        attempt: dict[str, Any],
-        covered: list[ReducedCase],
-    ) -> dict[str, Any]:
-        record = {
-            "case_id": arithmetic_case.case_id,
-            "expression": expr_to_dict(arithmetic_case.expression),
-            "expression_sha256": expression_hash(arithmetic_case.expression),
-            "attempt": attempt,
-        }
-        if len(covered) > 1:
-            record["outer_case_group"] = True
-            record["covered_case_count"] = len(covered)
-            record["covered_case_first_id"] = covered[0].case_id
-            record["covered_case_last_id"] = covered[-1].case_id
-            record["coverage_rule"] = (
-                "every covered conjunction implies the recorded common conjunction"
-            )
-        records.append(record)
-        return record
-
-    def prove_group(
-        group: list[ReducedCase],
-    ) -> tuple[bool, dict[str, Any] | None]:
-        remaining_ms = min(timeout_ms, _remaining_timeout_ms(deadline))
-        if len(group) > 1:
-            shared = common_expression(group)
-            if not (isinstance(shared, Const) and shared.value is True):
-                shared_case = ReducedCase(
-                    group[0].case_id + f".group{len(group)}",
-                    shared,
-                    expression_hash(expression),
-                    (),
-                    "reachability_group_outer_reduction",
-                    "reachability",
-                )
-                attempt = checker(shared_case, set(), timeout_ms=remaining_ms)
-                if attempt.get("outcome") == "CERTIFIED":
-                    record_attempt(shared_case, attempt, group)
-                    return True, None
-            middle = len(group) // 2
-            left_proved, left_failure = prove_group(group[:middle])
-            if not left_proved:
-                return False, left_failure
-            return prove_group(group[middle:])
-        arithmetic_case = group[0]
-        attempt = checker(arithmetic_case, set(), timeout_ms=remaining_ms)
-        record_attempt(arithmetic_case, attempt, group)
-        if attempt.get("outcome") != "CERTIFIED":
-            return False, attempt
-        return True, None
-
-    proved, failure = prove_group(arithmetic_cases)
-    return proved, records, failure
+    factored_timeout_ms = min(
+        timeout_ms,
+        _remaining_timeout_ms(deadline),
+    )
+    attempt = run_lazy_factored_checker(
+        source_case,
+        boolean_variables,
+        "reachability_arithmetic",
+        lambda leaf, remaining: checker(
+            leaf,
+            set(),
+            timeout_ms=min(timeout_ms, remaining),
+        ),
+        lambda item: (
+            isinstance(item, Op)
+            and item.op in {"==", ">", "<", ">=", "<="}
+        ),
+        timeout_ms=factored_timeout_ms,
+        context_sha256=shared_reachability_context_sha256(context),
+        total_timeout_ms=factored_timeout_ms,
+    )
+    record = {
+        "case_id": source_case.case_id,
+        "expression": expr_to_dict(expression),
+        "expression_sha256": expression_hash(expression),
+        "attempt": attempt,
+    }
+    if attempt.get("outcome") == "CERTIFIED":
+        return True, [record], None
+    return False, [record], attempt
 
 
 def _run_reachability_checker(
@@ -1055,15 +1012,6 @@ def _run_reachability_checker(
         }
 
     depth_records: list[dict[str, Any]] = []
-    try:
-        valid_action_modes = _valid_action_modes(context)
-    except ProofDeferred as exc:
-        return {
-            "outcome": "DEFERRED",
-            "reason_code": exc.reason_code,
-            "detail": exc.detail,
-            "applicability_checks": {"accepted": False},
-        }
     deadline = monotonic() + (timeout_ms / 1000.0)
     for depth in count(1):
         try:
@@ -1084,7 +1032,6 @@ def _run_reachability_checker(
                     checker,
                     timeout_ms,
                     context,
-                    valid_action_modes,
                     deadline=deadline,
                 )
                 base_records.extend(records)
@@ -1139,7 +1086,6 @@ def _run_reachability_checker(
                     checker,
                     timeout_ms,
                     context,
-                    valid_action_modes,
                     deadline=deadline,
                 )
             else:
@@ -1167,8 +1113,8 @@ def _run_reachability_checker(
                         "case_id": reduced_case.case_id,
                         "complete_initial_prefix": True,
                         "complete_transition_mode_coverage": True,
-                        "arithmetic_branch_limit": MAX_ARITHMETIC_BRANCHES,
-                        "valid_boolean_action_mode_count": len(valid_action_modes),
+                        "symbolic_action_modes": True,
+                        "eager_action_mode_product": False,
                     },
                     "proof": {
                         "rule": "finite_prefix_and_inductive_case_exclusion_v1",
@@ -1238,8 +1184,8 @@ def _run_reachability_checker(
             "case_id": reduced_case.case_id,
             "complete_initial_prefix": True,
             "complete_transition_mode_coverage": True,
-            "arithmetic_branch_limit": MAX_ARITHMETIC_BRANCHES,
-            "valid_boolean_action_mode_count": len(valid_action_modes),
+            "symbolic_action_modes": True,
+            "eager_action_mode_product": False,
         },
         "proof": {
             "rule": "finite_prefix_and_inductive_case_exclusion_v1",
