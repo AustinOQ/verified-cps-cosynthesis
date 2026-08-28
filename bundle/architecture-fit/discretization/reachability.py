@@ -167,32 +167,27 @@ def _state_sequence(
     depth: int,
     *,
     deadline: float | None = None,
-) -> tuple[list[dict[str, Expr]], list[dict[str, str]], list[Expr]]:
-    """Build linearly sized state frames and explicit transition equalities."""
-
+) -> tuple[list[dict[str, Expr]], list[dict[str, str]]]:
     generic_post = context.post_dict()
     state_names = sorted(generic_post)
-    states: list[dict[str, Expr]] = []
-    for step in range(depth + 1):
-        states.append({
-            name: Var(name if step == 0 else f"reach_state_{step}__{name}")
-            for name in state_names
-        })
+    states: list[dict[str, Expr]] = [
+        {name: Var(name) for name in state_names}
+    ]
     actions = [_step_action_names(context, step) for step in range(depth + 1)]
-    transitions: list[Expr] = []
     for step in range(depth):
         if deadline is not None:
             _remaining_timeout_ms(deadline)
-        equations: list[Expr] = []
+        action_values = {
+            name: Var(renamed) for name, renamed in actions[step].items()
+        }
+        next_state: dict[str, Expr] = {}
         for target, expression in generic_post.items():
             if deadline is not None:
                 _remaining_timeout_ms(deadline)
-            equations.append(Op("==", (
-                states[step + 1][target],
-                _lift(expression, states[step], actions[step]),
-            )))
-        transitions.append(_and(equations))
-    return states, actions, transitions
+            with_actions = substitute(expression, action_values)
+            next_state[target] = simplify(substitute(with_actions, states[step]))
+        states.append(next_state)
+    return states, actions
 
 
 def _arithmetic_cases(
@@ -324,11 +319,7 @@ def _query_set(
 ) -> tuple[list[tuple[str, Expr]], Expr, set[str]]:
     if deadline is not None:
         _remaining_timeout_ms(deadline)
-    states, actions, transitions = _state_sequence(
-        context,
-        depth,
-        deadline=deadline,
-    )
+    states, actions = _state_sequence(context, depth, deadline=deadline)
     unsafe_expression = (
         reduced_case.reachability_expression or reduced_case.expression
     )
@@ -356,13 +347,11 @@ def _query_set(
             _and([
                 *context.initial_constraints,
                 *domains[:step],
-                *transitions[:step],
                 case_at[step],
             ]),
         ))
     induction = _and([
         *domains[:depth],
-        *transitions[:depth],
         *safe_at[:depth],
         case_at[depth],
     ])
@@ -440,10 +429,7 @@ def _reachability_sorts(
         if "__" not in name:
             continue
         source = name.split("__", 1)[1]
-        if (
-            name.startswith("rel_state_")
-            or name.startswith("reach_state_")
-        ) and source in (
+        if name.startswith("rel_state_") and source in (
             set(context.post_dict()) | set(context.initial_variables)
         ):
             sorts[name] = (

@@ -416,12 +416,6 @@ def run_lazy_factored_checker(
     )
     metrics = _Metrics()
     cache: dict[str, tuple[str, dict[str, Any]]] = {}
-    expression_pool: dict[str, dict[str, Any]] = {}
-
-    def intern(expression: Expr) -> str:
-        key = expression_hash(expression)
-        expression_pool.setdefault(key, expr_to_dict(expression))
-        return key
 
     def attempt(expression: Expr, suffix: str) -> Attempt:
         metrics.checker_query_count += 1
@@ -439,24 +433,24 @@ def run_lazy_factored_checker(
 
     def solve(expression: Expr) -> tuple[str, dict[str, Any]]:
         if deadline is not None and monotonic() >= deadline:
-            key = intern(expression)
             return "DEFERRED", {
                 "rule": "unresolved_factored_formula_v1",
                 "reason_code": "TIMEOUT",
-                "expression_sha256": key,
+                "expression": expr_to_dict(expression),
+                "expression_sha256": expression_hash(expression),
             }
         if metrics.visited_node_count >= node_limit:
-            key = intern(expression)
             return "DEFERRED", {
                 "rule": "unresolved_factored_formula_v1",
                 "reason_code": "NODE_LIMIT",
-                "expression_sha256": key,
+                "expression": expr_to_dict(expression),
+                "expression_sha256": expression_hash(expression),
             }
         expression = _canonical(_normal_boolean(
             expression,
             boolean_variables,
         ))
-        key = intern(expression)
+        key = expression_hash(expression)
         cache_key = f"{context_sha256}:{checker_name}:{key}"
         if cache_key in cache:
             metrics.cache_hits += 1
@@ -472,6 +466,7 @@ def run_lazy_factored_checker(
             metrics.proof_leaf_count += 1
             result = ("CERTIFIED", {
                 "rule": "constant_false_factored_leaf_v1",
+                "expression": expr_to_dict(expression),
                 "expression_sha256": key,
             })
             cache[cache_key] = result
@@ -489,8 +484,12 @@ def run_lazy_factored_checker(
                 metrics.proof_leaf_count += 1
                 result = ("CERTIFIED", {
                     "rule": "common_conjunct_factored_proof_v1",
+                    "expression": expr_to_dict(expression),
                     "expression_sha256": key,
-                    "common_expression_sha256": intern(common_expression),
+                    "common_expression": expr_to_dict(common_expression),
+                    "common_expression_sha256": expression_hash(
+                        common_expression
+                    ),
                     "checker_attempt": common_attempt,
                 })
                 cache[cache_key] = result
@@ -531,7 +530,8 @@ def run_lazy_factored_checker(
                 ]
                 split_kind = "conditional"
                 split_record = {
-                    "condition_sha256": intern(conditional.cond),
+                    "condition": expr_to_dict(conditional.cond),
+                    "condition_sha256": expression_hash(conditional.cond),
                 }
             elif alternative is not None:
                 alternatives = list(alternative.args)
@@ -543,7 +543,10 @@ def run_lazy_factored_checker(
                 ]
                 split_kind = "logical_alternative"
                 split_record = {
-                    "alternative_expression_sha256": intern(alternative),
+                    "alternative_expression": expr_to_dict(alternative),
+                    "alternative_expression_sha256": expression_hash(
+                        alternative
+                    ),
                 }
             else:
                 endpoint_split = _affine_interval_endpoint_split(expression)
@@ -551,23 +554,30 @@ def run_lazy_factored_checker(
                     children, endpoint_record = endpoint_split
                     split_kind = "affine_interval_endpoints"
                     split_record = {
-                        "relaxed_expression_sha256": intern(
+                        "relaxed_expression": expr_to_dict(
                             endpoint_record["relaxed_expression"]
                         ),
-                        "removed_interval_bound_sha256": [
-                            intern(item)
+                        "relaxed_expression_sha256": expression_hash(
+                            endpoint_record["relaxed_expression"]
+                        ),
+                        "removed_interval_bounds": [
+                            expr_to_dict(item)
                             for item in endpoint_record["removed_interval_bounds"]
                         ],
-                        "removed_time_gate_sha256": [
-                            intern(item)
+                        "removed_time_gates": [
+                            expr_to_dict(item)
                             for item in endpoint_record["removed_time_gates"]
                         ],
-                        "changing_comparison_sha256": intern(
+                        "changing_comparison": expr_to_dict(
+                            endpoint_record["changing_comparison"]
+                        ),
+                        "changing_comparison_sha256": expression_hash(
                             endpoint_record["changing_comparison"]
                         ),
                         "time_variable": endpoint_record["time_variable"],
-                        "endpoint_sha256": [
-                            intern(item) for item in endpoint_record["endpoints"]
+                        "endpoints": [
+                            expr_to_dict(item)
+                            for item in endpoint_record["endpoints"]
                         ],
                     }
                 else:
@@ -578,6 +588,7 @@ def run_lazy_factored_checker(
                         metrics.proof_leaf_count += 1
                         result = (outcome, {
                             "rule": "factored_checker_leaf_v1",
+                            "expression": expr_to_dict(expression),
                             "expression_sha256": key,
                             "checker_attempt": leaf_attempt,
                         })
@@ -586,6 +597,7 @@ def run_lazy_factored_checker(
                     result = ("DEFERRED", {
                         "rule": "unresolved_factored_formula_v1",
                         "reason_code": "INAPPLICABLE_REDUCED_FORM",
+                        "expression": expr_to_dict(expression),
                         "expression_sha256": key,
                     })
                     cache[cache_key] = result
@@ -598,7 +610,8 @@ def run_lazy_factored_checker(
             child_outcome, child_record = solve(child)
             child_records.append({
                 "branch": index,
-                "expression_sha256": intern(child),
+                "expression": expr_to_dict(child),
+                "expression_sha256": expression_hash(child),
                 "outcome": child_outcome,
                 "proof": child_record,
             })
@@ -616,6 +629,7 @@ def run_lazy_factored_checker(
         result = (outcome, {
             "rule": "exact_factored_split_v1",
             "split_kind": split_kind,
+            "expression": expr_to_dict(expression),
             "expression_sha256": key,
             **split_record,
             "children": child_records,
@@ -624,45 +638,32 @@ def run_lazy_factored_checker(
         return result
 
     normalized_root = reduced_case.expression
-    intern(normalized_root)
     logical_root = _canonical(_normal_boolean(
         normalized_root,
         boolean_variables,
     ))
-    intern(logical_root)
     outcome, proof_tree = solve(logical_root)
     if expression_hash(logical_root) != expression_hash(normalized_root):
         proof_tree = {
             "rule": "exact_boolean_normalization_v1",
+            "expression": expr_to_dict(normalized_root),
             "expression_sha256": expression_hash(normalized_root),
+            "normalized_expression": expr_to_dict(logical_root),
             "normalized_expression_sha256": expression_hash(logical_root),
             "outcome": outcome,
             "proof": proof_tree,
         }
-    if outcome == "DEFERRED":
-        proof_record = {
-            "rule": "lazy_factored_formula_attempt_v2",
-            "checker": checker_name,
-            "context_sha256": context_sha256,
-            "source_expression_sha256": expression_hash(normalized_root),
-            "coverage_complete": False,
-            "metrics": metrics.record(),
-        }
-    else:
-        proof_record = {
-            "rule": "lazy_factored_formula_coverage_v2",
-            "checker": checker_name,
-            "context_sha256": context_sha256,
-            "boolean_variables": sorted(boolean_variables),
-            "source_expression_sha256": expression_hash(normalized_root),
-            "expression_pool": {
-                key: expression_pool[key] for key in sorted(expression_pool)
-            },
-            "expression_pool_count": len(expression_pool),
-            "coverage_complete": outcome == "CERTIFIED",
-            "metrics": metrics.record(),
-            "tree": proof_tree,
-        }
+    proof_record = {
+        "rule": "lazy_factored_formula_coverage_v1",
+        "checker": checker_name,
+        "context_sha256": context_sha256,
+        "boolean_variables": sorted(boolean_variables),
+        "source_expression": expr_to_dict(normalized_root),
+        "source_expression_sha256": expression_hash(normalized_root),
+        "coverage_complete": outcome == "CERTIFIED",
+        "metrics": metrics.record(),
+        "tree": proof_tree,
+    }
     return {
         "outcome": outcome,
         "reason_code": "" if outcome == "CERTIFIED" else (

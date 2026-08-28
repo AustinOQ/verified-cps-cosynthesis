@@ -118,27 +118,6 @@ def _validated_attempt(attempt: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _local_feasibility_attempt(attempt: dict[str, Any]) -> dict[str, Any]:
-    """Do not treat a locally feasible unsafe state as a reachable violation."""
-
-    attempt = _validated_attempt(attempt)
-    if attempt.get("outcome") != "VIOLATION":
-        return attempt
-    return {
-        **attempt,
-        "outcome": "DEFERRED",
-        "reason_code": "COUNTEREXAMPLE_REPLAY_FAILED",
-        "detail": (
-            "the arithmetic candidate satisfies the local proof obligation, "
-            "but reachability from the declared initial state was not replayed"
-        ),
-        "proof": {
-            "rule": "local_feasibility_requires_reachability_v1",
-            "source_reason_code": attempt.get("reason_code", ""),
-        },
-    }
-
-
 def _case_conjuncts(expression: Expr) -> list[Expr]:
     if isinstance(expression, Op) and expression.op == "and":
         result: list[Expr] = []
@@ -1089,12 +1068,10 @@ def analyze_model(
                     item,
                     boolean_variables,
                     "linear",
-                    lambda leaf, remaining: _local_feasibility_attempt(
-                        run_linear_checker(
-                            leaf,
-                            set(),
-                            timeout_ms=min(optimization_timeout_ms, remaining),
-                        )
+                    lambda leaf, remaining: run_linear_checker(
+                        leaf,
+                        set(),
+                        timeout_ms=min(optimization_timeout_ms, remaining),
                     ),
                     lambda expression: expression_is_linear(
                         expression,
@@ -1110,12 +1087,10 @@ def analyze_model(
                     item,
                     boolean_variables,
                     "convex",
-                    lambda leaf, remaining: _local_feasibility_attempt(
-                        run_convex_checker(
-                            leaf,
-                            set(),
-                            timeout_ms=min(optimization_timeout_ms, remaining),
-                        )
+                    lambda leaf, remaining: run_convex_checker(
+                        leaf,
+                        set(),
+                        timeout_ms=min(optimization_timeout_ms, remaining),
                     ),
                     _expression_is_convex,
                     timeout_ms=optimization_timeout_ms,
