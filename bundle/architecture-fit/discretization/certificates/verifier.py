@@ -10,8 +10,8 @@ from typing import Any
 
 from certification.equations import Const, Expr, Ite, Op, RawRef, Var
 
-from .exact_replay import replay_serialized_boolean_expression
-from .factored_logic import (
+from .replay import replay_serialized_boolean_expression
+from ..checkers.factored import (
     _affine_interval_endpoint_split,
     _and as _factored_and,
     _canonical as _factored_canonical,
@@ -21,8 +21,8 @@ from .factored_logic import (
     _or as _factored_or,
     _replace as _factored_replace,
 )
-from .optimization_common import fraction_text, parse_fraction
-from .proof_rules import (
+from ..model.optimization import fraction_text, parse_fraction
+from ..model.proof_rules import (
     LinearInequality,
     exact_linear_infeasible,
     expr_to_dict,

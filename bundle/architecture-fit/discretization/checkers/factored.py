@@ -9,14 +9,14 @@ from typing import Any, Callable
 
 from certification.equations import Const, Expr, Ite, Op, RawRef, Var
 
-from .full_model_reduction import (
+from ..model.proof_rules import expr_to_dict, expression_symbols, substitute
+from ..model.reduction import (
     INTERVAL_TIME,
     ReducedCase,
     _time_degree,
     expression_hash,
     simplify,
 )
-from .proof_rules import expr_to_dict, expression_symbols, substitute
 
 
 Attempt = dict[str, Any]

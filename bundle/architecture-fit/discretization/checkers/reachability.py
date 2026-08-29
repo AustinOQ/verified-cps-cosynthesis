@@ -15,22 +15,14 @@ from typing import Any, Callable
 from certification.equations import Const, EquationModel, Expr, Ite, Op, RawRef, Var
 from certification.solver import Encoder, infer_sorts
 
-from .convex_checker import run_convex_checker
-from .convex_envelope_checker import run_convex_envelope_checker
-from .exact_replay import replay_serialized_boolean_expression, serialize_exact_value
-from .full_model_reduction import (
-    ReducedCase,
-    ReachabilityContext,
-    _comparison_expression,
-    _split_conditionals,
-    expression_hash,
-    simplify,
-)
-from .factored_logic import run_lazy_factored_checker
-from .linear_envelope_checker import run_linear_envelope_checker
-from .linear_checker import run_linear_checker
-from .optimization_common import conjunctive_comparisons, quadratic_constraints
-from .proof_rules import (
+from .convex import run_convex_checker
+from .convex_envelope import run_convex_envelope_checker
+from .factored import run_lazy_factored_checker
+from .linear import run_linear_checker
+from .linear_envelope import run_linear_envelope_checker
+from ..certificates.replay import replay_serialized_boolean_expression, serialize_exact_value
+from ..model.optimization import conjunctive_comparisons, quadratic_constraints
+from ..model.proof_rules import (
     ProofDeferred,
     boolean_dnf,
     expr_to_dict,
@@ -38,6 +30,14 @@ from .proof_rules import (
     expression_symbols,
     prove_implication_exact,
     substitute,
+)
+from ..model.reduction import (
+    ReducedCase,
+    ReachabilityContext,
+    _comparison_expression,
+    _split_conditionals,
+    expression_hash,
+    simplify,
 )
 
 try:  # pragma: no cover - integration environment determines availability

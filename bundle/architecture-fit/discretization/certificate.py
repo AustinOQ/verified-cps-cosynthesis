@@ -20,7 +20,7 @@ from certification.reduced_mdp_spec import (
 )
 
 from .analysis import analyze_model, canonical_dt
-from .proof_certificate_verifier import verify_recorded_optimization_certificates
+from .certificates.verifier import verify_recorded_optimization_certificates
 
 
 SCHEMA_VERSION = 3

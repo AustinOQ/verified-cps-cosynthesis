@@ -7,15 +7,14 @@ from typing import Any
 
 from certification.equations import Expr
 
-from .full_model_reduction import ReducedCase
-
-from .optimization_common import (
+from ..model.optimization import (
     fraction_text,
     linear_constraints,
     parse_fraction,
     serialize_linear_constraints,
 )
-from .proof_rules import LinearInequality, ProofDeferred
+from ..model.proof_rules import LinearInequality, ProofDeferred
+from ..model.reduction import ReducedCase
 
 try:  # pragma: no cover - installation is checked by the integration run
     import numpy as np

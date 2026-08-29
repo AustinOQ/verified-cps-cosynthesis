@@ -7,21 +7,21 @@ from typing import Any
 
 from certification.equations import Expr, Op
 
-from .convex_checker import solve_convex_constraints
-from .full_model_reduction import ReducedCase, expression_hash
-from .linear_checker import solve_linear_constraints
-from .optimization_common import (
+from .convex import solve_convex_constraints
+from .linear import solve_linear_constraints
+from ..model.optimization import (
     Polynomial,
     QuadraticConstraint,
     _polynomial,
     conjunctive_comparisons,
     quadratic_constraints,
 )
-from .proof_rules import (
+from ..model.proof_rules import (
     LinearInequality,
     ProofDeferred,
     comparison_inequalities,
 )
+from ..model.reduction import ReducedCase, expression_hash
 
 try:  # pragma: no cover - installation is checked by integration runs
     import numpy as np

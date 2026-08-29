@@ -8,8 +8,7 @@ from typing import Any
 
 from certification.equations import Expr
 
-from .full_model_reduction import ReducedCase
-from .optimization_common import (
+from ..model.optimization import (
     QuadraticConstraint,
     fraction_text,
     parse_fraction,
@@ -17,7 +16,8 @@ from .optimization_common import (
     serialize_quadratic_constraint,
     serialize_quadratic_constraints,
 )
-from .proof_rules import ProofDeferred
+from ..model.proof_rules import ProofDeferred
+from ..model.reduction import ReducedCase
 
 try:  # pragma: no cover - installation is checked by the integration run
     import numpy as np

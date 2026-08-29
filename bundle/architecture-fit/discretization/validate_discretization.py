@@ -16,28 +16,32 @@ from certification.equations import Const, EquationModel, Op, Var
 
 from .analysis import CHECKER_ORDER, analyze_model
 from .certificate import certificate_hash, check_certificate, load_certificate
-from .convex_checker import run_convex_checker, solve_convex_constraints
-from .convex_envelope_checker import run_convex_envelope_checker
-from .exact_replay import replay_serialized_boolean_expression
-from .factored_logic import run_lazy_factored_checker
-from .full_model_reduction import (
-    INTERVAL_TIME,
-    ReachabilityContext,
-    ReducedCase,
-    expression_hash,
-)
-from .linear_envelope_checker import run_linear_envelope_checker
-from .linear_checker import run_linear_checker, solve_linear_constraints
-from .optimization_common import QuadraticConstraint
-from .proof_rules import expr_to_dict, expression_is_linear, prove_implication_exact
-from .proof_rules import LinearInequality
-from .proof_certificate_verifier import (
+from .certificates.replay import replay_serialized_boolean_expression
+from .certificates.verifier import (
     verify_recorded_convex_certificate,
     _verify_lazy_factored_stage,
     verify_recorded_linear_certificate,
     verify_recorded_outer_reduction,
 )
-from .reachability import run_reachability_checker, run_smt_reachability_checker
+from .checkers.convex import run_convex_checker, solve_convex_constraints
+from .checkers.convex_envelope import run_convex_envelope_checker
+from .checkers.factored import run_lazy_factored_checker
+from .checkers.linear import run_linear_checker, solve_linear_constraints
+from .checkers.linear_envelope import run_linear_envelope_checker
+from .checkers.reachability import run_reachability_checker, run_smt_reachability_checker
+from .model.optimization import QuadraticConstraint
+from .model.proof_rules import (
+    LinearInequality,
+    expr_to_dict,
+    expression_is_linear,
+    prove_implication_exact,
+)
+from .model.reduction import (
+    INTERVAL_TIME,
+    ReachabilityContext,
+    ReducedCase,
+    expression_hash,
+)
 
 
 def require(condition: bool, message: str) -> None:
@@ -421,7 +425,7 @@ def main() -> int:
         "convex checker accepted an unreduced expression",
     )
     with patch(
-        "discretization.linear_checker.solve_linear_constraints",
+        "discretization.checkers.linear.solve_linear_constraints",
         side_effect=RuntimeError("forced linear failure"),
     ):
         failed_linear = run_linear_checker(
@@ -435,7 +439,7 @@ def main() -> int:
         "linear backend failure did not defer",
     )
     with patch(
-        "discretization.convex_checker.solve_convex_constraints",
+        "discretization.checkers.convex.solve_convex_constraints",
         side_effect=RuntimeError("forced convex failure"),
     ):
         failed_convex = run_convex_checker(

@@ -15,33 +15,33 @@ from certification.solver import Encoder, infer_sorts
 from certification.strict_extract import CertificationExtractor
 from sysml_parser import IfStmt, PerformStmt, SubactionCallStmt
 
-from .convex_checker import run_convex_checker
-from .convex_envelope_checker import run_convex_envelope_checker
-from .exact_replay import replay_serialized_boolean_expression, serialize_exact_value
-from .factored_logic import run_lazy_factored_checker
-from .full_model_reduction import (
-    ReducedCase,
-    build_reduction,
-    expression_hash,
-    expr_to_dict,
-)
-from .linear_envelope_checker import run_linear_envelope_checker
-from .linear_checker import run_linear_checker
-from .optimization_common import quadratic_constraints
-from .reachability import (
+from .certificates.replay import replay_serialized_boolean_expression, serialize_exact_value
+from .checkers.convex import run_convex_checker
+from .checkers.convex_envelope import run_convex_envelope_checker
+from .checkers.factored import run_lazy_factored_checker
+from .checkers.linear import run_linear_checker
+from .checkers.linear_envelope import run_linear_envelope_checker
+from .checkers.reachability import (
     SharedReachabilityCache,
     run_reachability_checker,
     run_relational_invariant_group_checker,
     run_smt_reachability_checker,
     shared_reachability_context_sha256,
 )
-from .proof_rules import (
+from .model.optimization import quadratic_constraints
+from .model.proof_rules import (
     ProofDeferred,
     expand_definitions,
     expression_is_linear,
     expression_symbols,
     prove_implication_exact,
     substitute,
+)
+from .model.reduction import (
+    ReducedCase,
+    build_reduction,
+    expression_hash,
+    expr_to_dict,
 )
 
 try:  # pragma: no cover - integration environment determines availability
