@@ -33,8 +33,6 @@ for path in (ARTIFACT / "src", ARTIFACT / "bundle", ARTIFACT / "bundle" / "rl"):
     if text not in sys.path:
         sys.path.insert(0, text)
 
-from continuous_env import SysMLContinuousEnv
-from continuous_shield import ContinuousShield
 from env import SysMLEnv
 from oracle import extract_interface
 from clarity.sysml.runtime_settings import DEFAULT_DT, validate_dt
@@ -125,6 +123,8 @@ def _inspect_env(model_path: str, *, dt: float, max_steps: int) -> dict[str, Any
             return base
     finally:
         probe.close()
+
+    from continuous_env import SysMLContinuousEnv
 
     env = SysMLContinuousEnv(model_path, dt=dt, max_steps=max_steps, phase=1, rng_seed=0)
     try:
@@ -284,6 +284,8 @@ def build_reduced_mdp_spec(
         layout_version = "current_obs_then_past_obs_then_past_executed_actions_v1"
         action_scale = 1.0
     else:
+        from continuous_shield import ContinuousShield
+
         shield = ContinuousShield(model_abs)
         action_width = int(env_info["act_dim"])
         if action_width != 1:
@@ -599,6 +601,8 @@ def check_reduced_mdp_spec(
             ))
             if check_files and model_path and os.path.exists(model_path):
                 try:
+                    from continuous_shield import ContinuousShield
+
                     observed_shield = ContinuousShield(model_path)
                     observed_architecture = derive_continuous_feedforward_architecture(
                         observed_shield,

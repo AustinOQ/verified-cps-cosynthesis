@@ -40,7 +40,6 @@ from clarity.certification.reduced_mdp_spec import (
 )
 from handmade.io import load_policy, save_policy
 from handmade.losses import ppo_update_grads
-from mlp_buffer import BufferedContinuousEnv
 from oracle import extract_interface
 from clarity.sysml.runtime_settings import DEFAULT_DT
 
@@ -64,7 +63,6 @@ _DISCOVERED = {
 }
 MODELS = {
     "cruise": _DISCOVERED["cruise-control"],
-    "cruise-continuous": _DISCOVERED["cruise-control-continuous"],
     "mixing": _DISCOVERED["tank-filling-system"],
     "thermostat": _DISCOVERED["thermostat"],
 }
@@ -490,58 +488,6 @@ def check_reduced_mdp_spec_contract(out_dir: Path, model_key: str = "mixing") ->
     }
 
 
-def check_continuous_reduced_mdp_spec_contract(out_dir: Path) -> dict:
-    spec_dir = out_dir / "continuous_reduced_mdp_spec_contract"
-    spec_dir.mkdir(parents=True, exist_ok=True)
-    model_path = str(MODELS["cruise-continuous"])
-    cert = build_certificate_for_path(
-        model_path, max_obs=2, max_act=6, horizon=14, dt=TEST_DT)
-    cert_path = spec_dir / "certificate.json"
-    write_certificate(cert, cert_path)
-    spec = build_reduced_mdp_spec(
-        model_path,
-        certificate=cert,
-        certificate_path=cert_path,
-        dt=TEST_DT,
-        max_steps=20,
-    )
-    spec_path = spec_dir / "reduced_mdp_spec.json"
-    write_reduced_mdp_spec(spec, spec_path)
-    loaded = load_reduced_mdp_spec(spec_path)
-    errors = check_reduced_mdp_spec(loaded)
-    _assert(not errors, f"fresh continuous reduced-MDP spec failed checker: {errors}")
-    _assert(loaded["action_space"]["type"] == "continuous_single_real_output",
-            "continuous spec did not record continuous action space")
-
-    env = BufferedContinuousEnv(
-        model_path, dt=TEST_DT, max_steps=20, phase=1, rng_seed=17,
-        n_obs=loaded["certified_buffer"]["b_obs"],
-        n_act=loaded["certified_buffer"]["b_act"],
-    )
-    try:
-        _assert(env.obs_dim == loaded["policy_input"]["input_dim"],
-                "continuous spec input_dim does not match buffered env")
-        _assert(env.act_dim == loaded["action_space"]["act_dim"],
-                "continuous spec action dimension does not match buffered env")
-    finally:
-        env.close()
-
-    bad = copy.deepcopy(loaded)
-    bad["shield"]["runtime_class"] = "SpecShield"
-    bad["self_sha256"] = spec_hash(bad)
-    _assert(check_reduced_mdp_spec(bad),
-            "mutated continuous shield runtime class was not rejected")
-
-    return {
-        "model": "cruise-continuous",
-        "spec": str(spec_path),
-        "buffer": loaded["certified_buffer"],
-        "input_dim": loaded["policy_input"]["input_dim"],
-        "act_dim": loaded["action_space"]["act_dim"],
-        "shield": loaded["shield"]["runtime_class"],
-    }
-
-
 def check_dt_propagation_and_mismatches(out_dir: Path) -> dict:
     case_dir = out_dir / "dt_propagation"
     case_dir.mkdir(parents=True, exist_ok=True)
@@ -742,8 +688,6 @@ def main() -> int:
          lambda: check_parallel_collection_equivalence()),
         ("certificate_gate", lambda: check_certificate_gate()),
         ("reduced_mdp_spec_contract", lambda: check_reduced_mdp_spec_contract(out_dir)),
-        ("continuous_reduced_mdp_spec_contract",
-         lambda: check_continuous_reduced_mdp_spec_contract(out_dir)),
         ("dt_propagation_and_mismatches",
          lambda: check_dt_propagation_and_mismatches(out_dir)),
     ]

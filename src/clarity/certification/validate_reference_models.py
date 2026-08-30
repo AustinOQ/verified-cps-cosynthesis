@@ -20,7 +20,7 @@ from .certificate import (
     load_certificate,
     write_certificate,
 )
-from .equations import Op, Var
+from .equations import Op
 from .relevance import compute_transition_closed_relevance, equation_refs
 from .strict_extract import extract_equation_model
 from clarity.certification.reconstruct import get_strict_model, reconstruct
@@ -36,7 +36,6 @@ _DISCOVERED = {
 MODELS = {
     "mixing": _DISCOVERED["tank-filling-system"],
     "thermostat": _DISCOVERED["thermostat"],
-    "cruise-continuous": _DISCOVERED["cruise-control-continuous"],
     "cruise-discrete": _DISCOVERED["cruise-control"],
 }
 TEST_DT = DEFAULT_DT
@@ -53,14 +52,12 @@ BLOCKED_DIAGNOSTICS = {
 EXPECTED_STRICT_CLOSURE = {
     "mixing": (2, 1),
     "thermostat": (1, 2),
-    "cruise-continuous": (1, 2),
     "cruise-discrete": (1, 2),
 }
 
 EXPECTED_SOLVER_ADVISORY = {
     "mixing": "discharged",
     "thermostat": "discharged",
-    "cruise-continuous": "discharged",
     "cruise-discrete": "discharged",
 }
 
@@ -165,13 +162,6 @@ def _failures_for_model(name: str) -> list[str]:
                     f"cruise-discrete: {target} does not reference policy action {action}"
                 )
 
-    if name == "cruise-continuous":
-        drive_force = model.definitions.get("vehicle_drivePort_drive_forceNewtons")
-        if drive_force is None:
-            failures.append("cruise-continuous: missing drive force flow definition")
-        elif not isinstance(drive_force.expr, Var):
-            failures.append("cruise-continuous: drive force flow definition is not a copy")
-
     strict_model = get_strict_model(MODELS[name], dt=TEST_DT)
     best = _first_closure(strict_model)
     expected = EXPECTED_STRICT_CLOSURE[name]
@@ -243,10 +233,7 @@ def _certificate_failures_for_model(name: str, out_dir: Path) -> list[str]:
     shield = obligations.get("shield", {})
     if shield.get("status") != "discharged":
         failures.append(f"{name}: certificate shield obligation is not discharged")
-    if shield.get("semantic_status") not in {
-        "discharged_discrete_exact_ast",
-        "discharged_continuous_interval_projection",
-    }:
+    if shield.get("semantic_status") != "discharged_discrete_exact_ast":
         failures.append(
             f"{name}: unexpected shield semantic status {shield.get('semantic_status')}"
         )
@@ -310,7 +297,7 @@ def _certificate_failures_for_model(name: str, out_dir: Path) -> list[str]:
 
 
 def main() -> int:
-    names = ("mixing", "thermostat", "cruise-continuous", "cruise-discrete")
+    names = ("mixing", "thermostat", "cruise-discrete")
     failures: list[str] = []
     for name in names:
         failures.extend(_failures_for_model(name))

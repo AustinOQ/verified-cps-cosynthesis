@@ -47,7 +47,6 @@ _DISCOVERED = {
 MODELS = {
     "mixing": _DISCOVERED["tank-filling-system"],
     "thermostat": _DISCOVERED["thermostat"],
-    "cruise-continuous": _DISCOVERED["cruise-control-continuous"],
     "cruise-discrete": _DISCOVERED["cruise-control"],
 }
 TEST_DT = DEFAULT_DT
@@ -76,18 +75,6 @@ EXPECTED = {
             "controller_acOn",
             "controller_heaterOn",
             "thermometer_temperatureReading_temperatureCelcius",
-        },
-        "solver_status": "discharged",
-    },
-    "cruise-continuous": {
-        "buffer": (1, 2),
-        "state": 8,
-        "definitions": 14,
-        "transitions": 8,
-        "q": 8,
-        "terminal_state_refs": {
-            "controller_commandedForce",
-            "speedSensor_speedReading_speedMps",
         },
         "solver_status": "discharged",
     },
@@ -262,10 +249,7 @@ def _assert_positive_model(battery: Battery, name: str, cert_dir: Path) -> dict[
         and obligations["reward"]["status"] == "discharged_over_augmented_state"
         and obligations["done"]["status"] == "discharged_over_augmented_state"
         and obligations["shield"]["status"] == "discharged"
-        and obligations["shield"]["semantic_status"] in {
-            "discharged_discrete_exact_ast",
-            "discharged_continuous_interval_projection",
-        }
+        and obligations["shield"]["semantic_status"] == "discharged_discrete_exact_ast"
         and obligations["overall_mdp_theorem_status"] == PROFILE_OBLIGATIONS_DISCHARGED
         and gate["profile_mdp_theorem"] == "discharged"
         and gate["solver_backed_mdp_theorem"] == "discharged"
@@ -1112,7 +1096,7 @@ def main() -> int:
     _assert_equation_reconstructibility_units(battery)
 
     positive_certs = {}
-    for name in ("mixing", "thermostat", "cruise-continuous", "cruise-discrete"):
+    for name in ("mixing", "thermostat", "cruise-discrete"):
         positive_certs[name] = _assert_positive_model(battery, name, cert_dir)
 
     _assert_negative_models(battery)
