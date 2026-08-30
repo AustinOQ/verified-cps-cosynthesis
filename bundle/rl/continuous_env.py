@@ -13,7 +13,7 @@ Reuses everything from SysMLEnv except the action plumbing:
 import sys
 import os
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "sysml-models"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
 from env import SysMLEnv
 

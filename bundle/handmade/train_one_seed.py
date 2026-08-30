@@ -26,12 +26,12 @@ import numpy as np
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _REPO_ROOT = os.path.dirname(_HERE)
 _RL_DIR = os.path.join(_REPO_ROOT, "rl")
-_MODELS_DIR = os.path.join(_REPO_ROOT, "sysml-models")
-for _path in (_RL_DIR, _MODELS_DIR):
+_SRC_DIR = os.path.join(os.path.dirname(_REPO_ROOT), "src")
+for _path in (_RL_DIR, _SRC_DIR):
     if _path not in sys.path:
         sys.path.insert(0, _path)
 
-from runtime_settings import validate_dt
+from clarity.sysml.runtime_settings import validate_dt
 
 from .composite import Composite
 from .episode import collect_episode, evaluate

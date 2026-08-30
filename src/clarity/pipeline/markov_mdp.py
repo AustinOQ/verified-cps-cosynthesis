@@ -22,20 +22,20 @@ ARTIFACT = THIS.parents[3]
 ARCH = (ARTIFACT / "bundle" / "architecture-fit").resolve()
 REPO = ARCH.parent
 
-for path in (ARCH, REPO / "sysml-models", REPO / "rl"):
+for path in (ARTIFACT / "src", ARCH, REPO / "rl"):
     sys.path.insert(0, str(path))
 
-from certification.certificate import (  # noqa: E402
+from clarity.certification.certificate import (  # noqa: E402
     build_certificate_for_path,
     check_certificate,
     write_certificate,
 )
-from certification.reduced_mdp_spec import (  # noqa: E402
+from clarity.certification.reduced_mdp_spec import (  # noqa: E402
     build_reduced_mdp_spec,
     write_reduced_mdp_spec,
 )
-from sysml_inputs import discover_sysml  # noqa: E402
-from runtime_settings import DEFAULT_DT, validate_dt  # noqa: E402
+from clarity.sysml.inputs import discover_sysml  # noqa: E402
+from clarity.sysml.runtime_settings import DEFAULT_DT, validate_dt  # noqa: E402
 
 
 def summarize_certificate(
@@ -214,7 +214,7 @@ def main() -> int:
     parser.add_argument("models", nargs="*", help="SysML file paths")
     parser.add_argument(
         "--models-root",
-        default=str(REPO / "sysml-models"),
+        default=str(ARTIFACT / "models"),
         help="directory searched recursively when no file paths are supplied",
     )
     parser.add_argument("--out-json", required=True)

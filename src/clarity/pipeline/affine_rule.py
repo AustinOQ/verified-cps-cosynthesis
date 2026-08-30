@@ -16,14 +16,14 @@ THIS = Path(__file__).resolve()
 ARTIFACT = THIS.parents[3]
 ARCH = (ARTIFACT / "bundle" / "architecture-fit").resolve()
 REPO = ARCH.parent
-for path in (ARCH, REPO / "rl", REPO / "sysml-models"):
+for path in (ARTIFACT / "src", ARCH, REPO / "rl"):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
 from env import SysMLEnv  # noqa: E402
 from oracle import extract_interface, spec_oracle  # noqa: E402
-from runtime_settings import DEFAULT_DT, validate_dt  # noqa: E402
-from sysml_inputs import inspect_sysml  # noqa: E402
+from clarity.sysml.runtime_settings import DEFAULT_DT, validate_dt  # noqa: E402
+from clarity.sysml.inputs import inspect_sysml  # noqa: E402
 
 
 def _observation(raw: dict[str, Any], names: list[str]) -> dict[str, float | bool]:

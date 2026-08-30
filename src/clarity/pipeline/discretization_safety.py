@@ -17,16 +17,16 @@ THIS = Path(__file__).resolve()
 ARTIFACT = THIS.parents[3]
 ARCH = (ARTIFACT / "bundle" / "architecture-fit").resolve()
 REPO = ARCH.parent
-for path in (ARCH, REPO / "sysml-models", REPO / "rl"):
+for path in (ARTIFACT / "src", ARCH, REPO / "rl"):
     sys.path.insert(0, str(path))
 
-from discretization.certificate import (  # noqa: E402
+from clarity.discretization.certificate import (  # noqa: E402
     build_certificate,
     check_certificate,
     write_certificate,
 )
-from runtime_settings import DEFAULT_DT, validate_dt  # noqa: E402
-from sysml_inputs import discover_sysml  # noqa: E402
+from clarity.sysml.runtime_settings import DEFAULT_DT, validate_dt  # noqa: E402
+from clarity.sysml.inputs import discover_sysml  # noqa: E402
 
 
 def write_json(path: Path, value: Any) -> None:
@@ -42,7 +42,7 @@ def main() -> int:
     parser.add_argument("models", nargs="*", help="SysML file paths")
     parser.add_argument(
         "--models-root",
-        default=str(REPO / "sysml-models"),
+        default=str(ARTIFACT / "models"),
         help="directory searched recursively when no paths are supplied",
     )
     parser.add_argument("--mdp-dir", required=True)

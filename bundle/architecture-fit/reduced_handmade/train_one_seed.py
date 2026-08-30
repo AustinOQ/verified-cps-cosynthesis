@@ -31,31 +31,31 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 ARCH = HERE.parent
 REPO = ARCH.parent
-for path in (REPO, ARCH, REPO / "rl", REPO / "sysml-models"):
+for path in (REPO.parent / "src", REPO, ARCH, REPO / "rl"):
     text = str(path)
     if text not in sys.path:
         sys.path.insert(0, text)
 
-from certification.certificate import (
+from clarity.certification.certificate import (
     build_certificate_for_path,
     check_certificate,
     load_certificate,
     write_certificate,
 )
-from certification.reduced_mdp_spec import (
+from clarity.certification.reduced_mdp_spec import (
     build_reduced_mdp_spec,
     check_reduced_mdp_spec,
     load_reduced_mdp_spec,
     spec_hash,
     write_reduced_mdp_spec,
 )
-from reconstruct_closure import get_strict_model, reconstruct
+from clarity.certification.reconstruct import get_strict_model, reconstruct
 from handmade.io import save_policy
 from handmade.optim import Adam
 from handmade.ppo_update import ppo_update
 from handmade.train_oracle import train_oracle
 from oracle import extract_interface
-from runtime_settings import DEFAULT_DT, validate_dt
+from clarity.sysml.runtime_settings import DEFAULT_DT, validate_dt
 
 from reduced_handmade.buffered_env import BufferedDiscreteEnv
 from reduced_handmade.collection import (

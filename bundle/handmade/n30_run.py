@@ -34,9 +34,9 @@ from typing import List
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _REPO_ROOT = os.path.dirname(_HERE)
-sys.path.insert(0, os.path.join(_REPO_ROOT, "sysml-models"))
+sys.path.insert(0, os.path.join(os.path.dirname(_REPO_ROOT), "src"))
 
-from runtime_settings import DEFAULT_DT, validate_dt
+from clarity.sysml.runtime_settings import DEFAULT_DT, validate_dt
 
 
 def _train_worker(args_tuple):

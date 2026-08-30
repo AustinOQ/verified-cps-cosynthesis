@@ -28,13 +28,13 @@ from torch.distributions import Normal
 
 sys.stdout.reconfigure(line_buffering=True)
 sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "sysml-models"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
 from ppo import compute_gae
 from continuous_env import SysMLContinuousEnv
 from continuous_model import (GaussianRecurrentActorCritic,
                               build_continuous_composite)
-from runtime_settings import DEFAULT_DT, validate_dt
+from clarity.sysml.runtime_settings import DEFAULT_DT, validate_dt
 
 
 # =====================================================================

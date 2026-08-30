@@ -27,12 +27,12 @@ ARTIFACT = THIS.parents[3]
 DEFAULT_ARCH = ARTIFACT / "bundle" / "architecture-fit"
 ARCH = DEFAULT_ARCH.resolve()
 REPO = ARCH.parent
-for import_path in (ARCH, REPO / "sysml-models", REPO / "rl"):
+for import_path in (ARTIFACT / "src", ARCH, REPO / "rl"):
     if str(import_path) not in sys.path:
         sys.path.insert(0, str(import_path))
 
-from sysml_inputs import SysMLInput, discover_sysml
-from runtime_settings import DEFAULT_DT, validate_dt
+from clarity.sysml.inputs import SysMLInput, discover_sysml
+from clarity.sysml.runtime_settings import DEFAULT_DT, validate_dt
 from shield import SpecShield, _collect_refs
 
 
@@ -90,9 +90,9 @@ def display_command(cmd: list[str]) -> str:
 def run_command(cmd: list[str], log_path: Path, out_dir: Path) -> tuple[dict[str, Any], str]:
     env = dict(os.environ)
     python_paths = [
+        str(ARTIFACT / "src"),
         str(REPO),
         str(ARCH),
-        str(REPO / "sysml-models"),
         str(REPO / "rl"),
     ]
     if env.get("PYTHONPATH"):
@@ -369,7 +369,8 @@ def stage_strict(
     generation_log = log_dir / "03_markov_mdp_z3_generation.txt"
     cmd = [
         py,
-        "reconstruct_closure.py",
+        "-m",
+        "clarity.certification.reconstruct",
         "--max-obs",
         "2",
         "--max-act",
@@ -1162,7 +1163,7 @@ def main() -> int:
     parser.add_argument("models", nargs="*", help="SysML file paths")
     parser.add_argument(
         "--models-root",
-        default=str(REPO / "sysml-models"),
+        default=str(ARTIFACT / "models"),
         help="directory searched recursively when no file paths are supplied",
     )
     parser.add_argument("--out-dir", default=str(ARTIFACT / "outputs" / "latest"))

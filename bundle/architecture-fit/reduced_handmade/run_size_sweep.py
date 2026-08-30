@@ -21,11 +21,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 ARCH = ROOT.parent
 REPO = ARCH.parent
+SRC = REPO.parent / "src"
 PY = Path(sys.executable)
-if str(ARCH) not in sys.path:
-    sys.path.insert(0, str(ARCH))
+for path in (SRC, ARCH):
+    if str(path) not in sys.path:
+        sys.path.insert(0, str(path))
 
-from sysml_inputs import inspect_sysml
+from clarity.sysml.inputs import inspect_sysml
 
 FIELDNAMES = [
     "run_id",
@@ -70,7 +72,7 @@ def _env() -> dict[str, str]:
     env["PYTHONPATH"] = ":".join([
         str(REPO),
         str(ARCH),
-        str(REPO / "sysml-models"),
+        str(SRC),
         str(REPO / "rl"),
     ])
     return env

@@ -20,18 +20,18 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 ARCH = HERE.parent
 REPO = ARCH.parent
-for path in (REPO, ARCH, REPO / "rl", REPO / "sysml-models"):
+for path in (REPO.parent / "src", REPO, ARCH, REPO / "rl"):
     text = str(path)
     if text not in sys.path:
         sys.path.insert(0, text)
 
-from certification.certificate import (
+from clarity.certification.certificate import (
     build_certificate_for_path,
     check_certificate,
     write_certificate,
 )
-from certification.feedforward_architecture import derive_feedforward_architecture
-from certification.reduced_mdp_spec import (
+from clarity.certification.feedforward_architecture import derive_feedforward_architecture
+from clarity.certification.reduced_mdp_spec import (
     build_reduced_mdp_spec,
     check_reduced_mdp_spec,
     load_reduced_mdp_spec,
@@ -42,7 +42,7 @@ from handmade.io import load_policy, save_policy
 from handmade.losses import ppo_update_grads
 from mlp_buffer import BufferedContinuousEnv
 from oracle import extract_interface
-from runtime_settings import DEFAULT_DT
+from clarity.sysml.runtime_settings import DEFAULT_DT
 
 from reduced_handmade.buffered_env import BufferedDiscreteEnv
 from reduced_handmade.collection import (
@@ -55,12 +55,12 @@ from reduced_handmade.collection import (
 from reduced_handmade.composite import ProgramShieldComposite
 from reduced_handmade.policy import MLPActorCritic
 from reduced_handmade.train_one_seed import train_one_seed
-from sysml_inputs import discover_sysml
+from clarity.sysml.inputs import discover_sysml
 
 
 _DISCOVERED = {
     item.key: item.path
-    for item in discover_sysml([], models_root=REPO / "sysml-models")
+    for item in discover_sysml([], models_root=REPO.parent / "models")
 }
 MODELS = {
     "cruise": _DISCOVERED["cruise-control"],

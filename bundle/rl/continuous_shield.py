@@ -29,10 +29,10 @@ constants, and `threshold` is constant-evaluable for the given observation.
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "sysml-models"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
 from shield import SpecShield, _evaluate, _flatten_and, _collect_refs
-from sysml_parser import BinaryExpr, RefExpr, LiteralExpr, UnaryExpr
+from clarity.sysml.parser import BinaryExpr, RefExpr, LiteralExpr, UnaryExpr
 
 
 _NEG = {">": "<=", ">=": "<", "<": ">=", "<=": ">"}

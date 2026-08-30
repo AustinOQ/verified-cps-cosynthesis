@@ -13,9 +13,9 @@ At runtime, ShieldNet makes all decisions via tensor math.
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "sysml-models"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
-from sysml_parser import (
+from clarity.sysml.parser import (
     SysMLParser, ExpressionParser, BinaryExpr, RefExpr, LiteralExpr,
     UnaryExpr, TernaryExpr, Expr,
 )
@@ -298,7 +298,7 @@ class SpecShield:
             req_refs.discard(self.subject_var)
             missing = req_refs - in_set - out_set - set(self.unchanging.keys())
             if missing:
-                from simulator import SimulationEngine, BindRef
+                from clarity.sysml.simulator import SimulationEngine, BindRef
                 eng = SimulationEngine(parser)
                 eng.initialize()
                 for key, val in eng.state.items():

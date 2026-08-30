@@ -14,9 +14,9 @@ import sys
 
 import numpy as np
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "sysml-models"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
-from sysml_parser import (
+from clarity.sysml.parser import (
     SysMLParser,
     IfStmt,
     InputBindingStmt,

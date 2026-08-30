@@ -21,7 +21,8 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _ARCH = os.path.dirname(_HERE)
 _REPO = os.path.dirname(_ARCH)
 _RL = os.path.join(_REPO, "rl")
-for _path in (_RL, os.path.join(_REPO, "sysml-models")):
+_SRC = os.path.join(os.path.dirname(_REPO), "src")
+for _path in (_RL, _SRC):
     if _path not in sys.path:
         sys.path.insert(0, _path)
 

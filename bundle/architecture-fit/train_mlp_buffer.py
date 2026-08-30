@@ -15,20 +15,20 @@ import torch
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _RL = os.path.join(_HERE, "..", "rl")
-_MODELS = os.path.join(_HERE, "..", "sysml-models")
+_SRC = os.path.join(_HERE, "..", "..", "src")
 sys.path.insert(0, _RL)
 sys.path.insert(0, _HERE)
-sys.path.insert(0, _MODELS)
+sys.path.insert(0, _SRC)
 
 from train_continuous import (ContinuousEpisodeBuffer, ppo_update,
                               collect_episode, evaluate)
 from continuous_model import build_continuous_composite
 from mlp_buffer import GaussianMLPActorCritic, BufferedContinuousEnv
-from certification.reduced_mdp_spec import (
+from clarity.certification.reduced_mdp_spec import (
     check_reduced_mdp_spec,
     load_reduced_mdp_spec,
 )
-from runtime_settings import DEFAULT_DT, validate_dt
+from clarity.sysml.runtime_settings import DEFAULT_DT, validate_dt
 
 
 def main():

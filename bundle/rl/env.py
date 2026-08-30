@@ -13,10 +13,10 @@ import sys
 import os
 import numpy as np
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "sysml-models"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
-from sysml_parser import SysMLParser, BinaryExpr, RefExpr, LiteralExpr, UnaryExpr
-from simulator_adapter import SimulatorTwin
+from clarity.sysml.parser import SysMLParser, BinaryExpr, RefExpr, LiteralExpr, UnaryExpr
+from clarity.sysml.simulator_adapter import SimulatorTwin
 
 class SysMLEnv:
     """RL environment derived from any SysML model with a #Neural action.
