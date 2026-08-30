@@ -13,7 +13,7 @@ def collect_oracle_episode(iface, env, *, max_steps: int = 5000,
                            include_terminal: bool = False
                            ) -> tuple[np.ndarray, np.ndarray]:
     """Collect one full rule-labeled episode from a seeded environment."""
-    from oracle import spec_oracle
+    from clarity.runtime.oracle import spec_oracle
 
     spec_shield = iface["spec_shield"]
     obs_names = iface["obs_names"]

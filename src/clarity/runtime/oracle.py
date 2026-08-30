@@ -9,12 +9,7 @@ Also extracts observation names, action names, and the input marked
 `#Completion` from the SysML model.
 """
 
-import os
-import sys
-
 import numpy as np
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
 from clarity.sysml.parser import (
     SysMLParser,
@@ -23,7 +18,7 @@ from clarity.sysml.parser import (
     PerformStmt,
     SubactionCallStmt,
 )
-from shield import SpecShield
+from clarity.runtime.shield import SpecShield
 
 
 # ---------------------------------------------------------------------------

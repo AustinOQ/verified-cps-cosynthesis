@@ -18,7 +18,7 @@ def generate_oracle_data(iface, env, n_samples: int, max_steps: int = 1000,
     sampling until every observed action class has at least min_class_count
     examples (or hard_cap is hit). Mirrors rl/train.py exactly.
     """
-    from oracle import spec_oracle   # injected via sys.path by caller
+    from clarity.runtime.oracle import spec_oracle
 
     spec_shield = iface["spec_shield"]
     obs_names = iface["obs_names"]

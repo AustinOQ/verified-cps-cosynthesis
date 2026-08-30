@@ -9,7 +9,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-from model import RecurrentActorCritic
+from clarity.runtime.model import RecurrentActorCritic
 
 
 def compute_gae(rewards: list[float], values: list[float], dones: list[bool],

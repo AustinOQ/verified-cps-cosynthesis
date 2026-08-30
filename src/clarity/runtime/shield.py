@@ -10,11 +10,6 @@ Used only at construction time by ShieldNet in composite_model.py.
 At runtime, ShieldNet makes all decisions via tensor math.
 """
 
-import os
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
-
 from clarity.sysml.parser import (
     SysMLParser, ExpressionParser, BinaryExpr, RefExpr, LiteralExpr,
     UnaryExpr, TernaryExpr, Expr,

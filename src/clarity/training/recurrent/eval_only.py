@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import resource
 import sys
 import time
@@ -20,18 +19,14 @@ from dataclasses import asdict
 
 import numpy as np
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
-_REPO_ROOT = os.path.dirname(_HERE)
-sys.path.insert(0, _REPO_ROOT)
-sys.path.insert(0, os.path.join(_REPO_ROOT, "rl"))
-sys.path.insert(0, os.path.join(os.path.dirname(_REPO_ROOT), "src"))
-
+from clarity.runtime.env import SysMLEnv
+from clarity.runtime.oracle import extract_interface
 from clarity.sysml.runtime_settings import DEFAULT_DT, validate_dt
 
-from handmade.composite import Composite
-from handmade.episode import evaluate
-from handmade.io import load_policy
-from handmade.policy import RecurrentActorCritic
+from clarity.training.recurrent.composite import Composite
+from clarity.training.recurrent.episode import evaluate
+from clarity.training.recurrent.io import load_policy
+from clarity.training.recurrent.policy import RecurrentActorCritic
 
 
 def main(argv=None):
@@ -46,9 +41,6 @@ def main(argv=None):
     p.add_argument("--test-episodes", type=int, default=200)
     p.add_argument("--out", required=True)
     args = p.parse_args(argv)
-
-    from env import SysMLEnv
-    from oracle import extract_interface
 
     # Probe env for dims
     probe = SysMLEnv(args.model_path, dt=args.dt, max_steps=args.max_steps,

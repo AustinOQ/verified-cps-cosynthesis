@@ -26,15 +26,8 @@ from pathlib import Path
 from typing import Any
 
 
-HERE = Path(__file__).resolve().parent
-ARTIFACT = HERE.parents[2]
-for path in (ARTIFACT / "src", ARTIFACT / "bundle", ARTIFACT / "bundle" / "rl"):
-    text = str(path)
-    if text not in sys.path:
-        sys.path.insert(0, text)
-
-from env import SysMLEnv
-from oracle import extract_interface
+from clarity.runtime.env import SysMLEnv
+from clarity.runtime.oracle import extract_interface
 from clarity.sysml.runtime_settings import DEFAULT_DT, validate_dt
 
 from .certificate import (
@@ -263,7 +256,7 @@ def build_reduced_mdp_spec(
         shield_info = {
             "type": DISCRETE_SHIELD_TYPE,
             "runtime_class": "SpecShield",
-            "source": "SysML #NeuralRequirement AST via rl/shield.py::SpecShield",
+            "source": "SysML #NeuralRequirement AST via clarity.runtime.shield.SpecShield",
             "obs_names": list(iface["obs_names"]),
             "in_params": list(shield.in_params),
             "out_params": list(shield.out_params),

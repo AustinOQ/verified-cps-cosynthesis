@@ -12,7 +12,7 @@ We print loss/accuracy each epoch and assert that:
   * loss falls from log(n_actions) baseline (~random) to below ~0.05
   * accuracy reaches ≥ 95% on the training set within a few hundred steps
 
-Run: python -m handmade.train_demo
+Run: python -m clarity.training.recurrent.train_demo
 """
 
 from __future__ import annotations

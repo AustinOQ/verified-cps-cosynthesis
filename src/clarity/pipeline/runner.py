@@ -12,6 +12,7 @@ import csv
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -21,19 +22,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-
-THIS = Path(__file__).resolve()
-ARTIFACT = THIS.parents[3]
-DEFAULT_ARCH = ARTIFACT / "bundle" / "architecture-fit"
-ARCH = DEFAULT_ARCH.resolve()
-REPO = ARCH.parent
-for import_path in (ARTIFACT / "src", ARCH, REPO / "rl"):
-    if str(import_path) not in sys.path:
-        sys.path.insert(0, str(import_path))
-
+from clarity.models import models_root
+from clarity.runtime.shield import SpecShield, _collect_refs
 from clarity.sysml.inputs import SysMLInput, discover_sysml
 from clarity.sysml.runtime_settings import DEFAULT_DT, validate_dt
-from shield import SpecShield, _collect_refs
+
+SOURCE_ROOT = Path(__file__).resolve().parents[2]
 
 
 def read_json(path: Path) -> Any:
@@ -71,37 +65,15 @@ def markdown_table(rows: list[dict[str, Any]], fieldnames: list[str]) -> str:
 
 
 def display_command(cmd: list[str]) -> str:
-    labels = [
-        (str(ARTIFACT), "$ARTIFACT"),
-        (str(ARCH), "$ARCH"),
-        (str(REPO), "$REPO"),
-    ]
-    parts = []
-    for part in cmd:
-        shown = part
-        for prefix, label in labels:
-            if shown.startswith(prefix):
-                shown = label + shown[len(prefix):]
-                break
-        parts.append(shown)
-    return " ".join(parts)
+    return shlex.join(cmd)
 
 
 def run_command(cmd: list[str], log_path: Path, out_dir: Path) -> tuple[dict[str, Any], str]:
     env = dict(os.environ)
-    python_paths = [
-        str(ARTIFACT / "src"),
-        str(REPO),
-        str(ARCH),
-        str(REPO / "rl"),
-    ]
-    if env.get("PYTHONPATH"):
-        python_paths.append(env["PYTHONPATH"])
-    env["PYTHONPATH"] = os.pathsep.join(python_paths)
     env.setdefault("CUDA_VISIBLE_DEVICES", "")
     proc = subprocess.run(
         cmd,
-        cwd=ARCH,
+        cwd=SOURCE_ROOT,
         env=env,
         text=True,
         stdout=subprocess.PIPE,
@@ -214,7 +186,8 @@ def stage_affine(
         log_path = log_dir / f"01_rule_{model.key}.txt"
         cmd = [
             py,
-            str(ARTIFACT / "src" / "clarity" / "pipeline" / "affine_rule.py"),
+            "-m",
+            "clarity.pipeline.affine_rule",
             str(model.path),
             "--episodes",
             "20",
@@ -393,7 +366,8 @@ def stage_strict(
     generation_json = stage_dir / "markov_mdp_generation.json"
     generation_cmd = [
         py,
-        str(ARTIFACT / "src" / "clarity" / "pipeline" / "markov_mdp.py"),
+        "-m",
+        "clarity.pipeline.markov_mdp",
         "--out-json",
         str(generation_json),
         "--artifact-dir",
@@ -509,7 +483,8 @@ def stage_discretization(
     summary_path = stage_dir / "generation.json"
     cmd = [
         py,
-        str(ARTIFACT / "src" / "clarity" / "pipeline" / "discretization_safety.py"),
+        "-m",
+        "clarity.pipeline.discretization_safety",
         "--out-json",
         str(summary_path),
         "--artifact-dir",
@@ -656,7 +631,7 @@ def _run_training_job(job: dict[str, Any], py: str, out_dir: Path) -> dict[str, 
         cmd = [
             py,
             "-m",
-            "reduced_handmade.train_one_seed",
+            "clarity.training.reduced.train_one_seed",
             str(job["model_path"]),
             "--out-dir",
             str(run_dir),
@@ -1163,10 +1138,10 @@ def main() -> int:
     parser.add_argument("models", nargs="*", help="SysML file paths")
     parser.add_argument(
         "--models-root",
-        default=str(ARTIFACT / "models"),
+        default=str(models_root()),
         help="directory searched recursively when no file paths are supplied",
     )
-    parser.add_argument("--out-dir", default=str(ARTIFACT / "outputs" / "latest"))
+    parser.add_argument("--out-dir", default=str(Path.cwd() / "outputs" / "latest"))
     parser.add_argument("--python-bin", default=sys.executable)
     parser.add_argument(
         "--dt",
@@ -1229,7 +1204,6 @@ def main() -> int:
 
     summary = {
         "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
-        "architecture_fit_root": str(ARCH),
         "python_bin": args.python_bin,
         "settings": {"dt": args.dt, "dt_input": dt_text},
         "sysml_inputs": [model.to_dict() for model in models],

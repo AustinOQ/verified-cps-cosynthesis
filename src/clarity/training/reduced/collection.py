@@ -18,11 +18,11 @@ from typing import Sequence
 
 import numpy as np
 
-from oracle import extract_interface
+from clarity.runtime.oracle import extract_interface
 
-from reduced_handmade.buffered_env import BufferedDiscreteEnv
-from reduced_handmade.composite import ProgramShieldComposite
-from reduced_handmade.episode import (
+from clarity.training.reduced.buffered_env import BufferedDiscreteEnv
+from clarity.training.reduced.composite import ProgramShieldComposite
+from clarity.training.reduced.episode import (
     Episode,
     RolloutSummary,
     collect_episode,
@@ -30,8 +30,8 @@ from reduced_handmade.episode import (
     merge_measurements,
     summarize_measurements,
 )
-from reduced_handmade.oracle_data import collect_oracle_episode
-from reduced_handmade.policy import MLPActorCritic
+from clarity.training.reduced.oracle_data import collect_oracle_episode
+from clarity.training.reduced.policy import MLPActorCritic
 
 
 SEED_SCHEME = "numpy_seedsequence_v1_per_episode"

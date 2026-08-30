@@ -16,21 +16,13 @@ import json
 import os
 import random
 import resource
-import sys
 import time
 from dataclasses import asdict
 
 import numpy as np
 
-# Path setup so we can import rl.env / rl.oracle (torch-free pieces only)
-_HERE = os.path.dirname(os.path.abspath(__file__))
-_REPO_ROOT = os.path.dirname(_HERE)
-_RL_DIR = os.path.join(_REPO_ROOT, "rl")
-_SRC_DIR = os.path.join(os.path.dirname(_REPO_ROOT), "src")
-for _path in (_RL_DIR, _SRC_DIR):
-    if _path not in sys.path:
-        sys.path.insert(0, _path)
-
+from clarity.runtime.env import SysMLEnv
+from clarity.runtime.oracle import extract_interface
 from clarity.sysml.runtime_settings import validate_dt
 
 from .composite import Composite
@@ -109,9 +101,6 @@ def train_one_seed(model_path: str, seed: int, seed_dir: str,
     if config:
         cfg.update(config)
     os.makedirs(seed_dir, exist_ok=True)
-
-    from env import SysMLEnv
-    from oracle import extract_interface
 
     _seed_everything(seed)
 

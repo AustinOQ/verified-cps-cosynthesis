@@ -11,22 +11,9 @@ The SysML requirement check still reads the simulator's current raw
 
 from __future__ import annotations
 
-import os
-import sys
-
 import numpy as np
 
-
-_HERE = os.path.dirname(os.path.abspath(__file__))
-_ARCH = os.path.dirname(_HERE)
-_REPO = os.path.dirname(_ARCH)
-_RL = os.path.join(_REPO, "rl")
-_SRC = os.path.join(os.path.dirname(_REPO), "src")
-for _path in (_RL, _SRC):
-    if _path not in sys.path:
-        sys.path.insert(0, _path)
-
-from env import SysMLEnv
+from clarity.runtime.env import SysMLEnv
 
 
 class BufferedDiscreteEnv(SysMLEnv):

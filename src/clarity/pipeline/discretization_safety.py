@@ -6,27 +6,19 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
-import sys
 import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-
-THIS = Path(__file__).resolve()
-ARTIFACT = THIS.parents[3]
-ARCH = (ARTIFACT / "bundle" / "architecture-fit").resolve()
-REPO = ARCH.parent
-for path in (ARTIFACT / "src", ARCH, REPO / "rl"):
-    sys.path.insert(0, str(path))
-
-from clarity.discretization.certificate import (  # noqa: E402
+from clarity.discretization.certificate import (
     build_certificate,
     check_certificate,
     write_certificate,
 )
-from clarity.sysml.runtime_settings import DEFAULT_DT, validate_dt  # noqa: E402
-from clarity.sysml.inputs import discover_sysml  # noqa: E402
+from clarity.models import models_root
+from clarity.sysml.inputs import discover_sysml
+from clarity.sysml.runtime_settings import DEFAULT_DT, validate_dt
 
 
 def write_json(path: Path, value: Any) -> None:
@@ -42,7 +34,7 @@ def main() -> int:
     parser.add_argument("models", nargs="*", help="SysML file paths")
     parser.add_argument(
         "--models-root",
-        default=str(ARTIFACT / "models"),
+        default=str(models_root()),
         help="directory searched recursively when no paths are supplied",
     )
     parser.add_argument("--mdp-dir", required=True)

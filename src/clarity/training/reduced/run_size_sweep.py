@@ -18,14 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parent
-ARCH = ROOT.parent
-REPO = ARCH.parent
-SRC = REPO.parent / "src"
 PY = Path(sys.executable)
-for path in (SRC, ARCH):
-    if str(path) not in sys.path:
-        sys.path.insert(0, str(path))
 
 from clarity.sysml.inputs import inspect_sysml
 
@@ -69,12 +62,6 @@ def _env() -> dict[str, str]:
     env["OMP_NUM_THREADS"] = "1"
     env["MKL_NUM_THREADS"] = "1"
     env["OPENBLAS_NUM_THREADS"] = "1"
-    env["PYTHONPATH"] = ":".join([
-        str(REPO),
-        str(ARCH),
-        str(SRC),
-        str(REPO / "rl"),
-    ])
     return env
 
 
@@ -85,7 +72,7 @@ def _run_job(job: Job) -> dict[str, str]:
     cmd = [
         str(PY),
         "-m",
-        "reduced_handmade.train_one_seed",
+        "clarity.training.reduced.train_one_seed",
         str(job.model_path),
         "--out-dir",
         str(run_dir),
@@ -96,7 +83,6 @@ def _run_job(job: Job) -> dict[str, str]:
     start = time.time()
     proc = subprocess.run(
         cmd,
-        cwd=str(ARCH),
         env=_env(),
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -164,7 +150,7 @@ def main() -> int:
         raise SystemExit("SysML package names must be unique")
 
     out_dir = Path(args.out_dir or (
-        ARCH / "results" / f"handmade_reduced_size_sweep_{time.strftime('%Y%m%d-%H%M%S')}"
+        Path.cwd() / "outputs" / f"reduced_size_sweep_{time.strftime('%Y%m%d-%H%M%S')}"
     ))
     out_dir.mkdir(parents=True, exist_ok=True)
     overrides: list[str] = []

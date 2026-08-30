@@ -11,31 +11,22 @@ import argparse
 import json
 import os
 import shutil
-import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-
-THIS = Path(__file__).resolve()
-ARTIFACT = THIS.parents[3]
-ARCH = (ARTIFACT / "bundle" / "architecture-fit").resolve()
-REPO = ARCH.parent
-
-for path in (ARTIFACT / "src", ARCH, REPO / "rl"):
-    sys.path.insert(0, str(path))
-
-from clarity.certification.certificate import (  # noqa: E402
+from clarity.certification.certificate import (
     build_certificate_for_path,
     check_certificate,
     write_certificate,
 )
-from clarity.certification.reduced_mdp_spec import (  # noqa: E402
+from clarity.certification.reduced_mdp_spec import (
     build_reduced_mdp_spec,
     write_reduced_mdp_spec,
 )
-from clarity.sysml.inputs import discover_sysml  # noqa: E402
-from clarity.sysml.runtime_settings import DEFAULT_DT, validate_dt  # noqa: E402
+from clarity.models import models_root
+from clarity.sysml.inputs import discover_sysml
+from clarity.sysml.runtime_settings import DEFAULT_DT, validate_dt
 
 
 def summarize_certificate(
@@ -214,7 +205,7 @@ def main() -> int:
     parser.add_argument("models", nargs="*", help="SysML file paths")
     parser.add_argument(
         "--models-root",
-        default=str(ARTIFACT / "models"),
+        default=str(models_root()),
         help="directory searched recursively when no file paths are supplied",
     )
     parser.add_argument("--out-json", required=True)
@@ -300,7 +291,6 @@ def main() -> int:
 
     summary = {
         "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
-        "architecture_fit_root": str(ARCH),
         "models": [model.to_dict() for model in models],
         "settings": {
             "max_obs": args.max_obs,

@@ -21,6 +21,7 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 
+from clarity.models import models_root
 from clarity.sysml.inputs import discover_sysml
 from .certificate import (
     PROFILE_OBLIGATIONS_DISCHARGED,
@@ -41,7 +42,7 @@ from clarity.sysml.runtime_settings import DEFAULT_DT
 _DISCOVERED = {
     item.key: item.path
     for item in discover_sysml(
-        [], models_root=Path(__file__).resolve().parents[3] / "models"
+        [], models_root=models_root()
     )
 }
 MODELS = {

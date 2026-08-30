@@ -400,7 +400,7 @@ def _shield_semantics_summary(
         }
 
     try:
-        from shield import SpecShield, _collect_refs, _flatten_and  # type: ignore
+        from clarity.runtime.shield import SpecShield, _collect_refs, _flatten_and
     except Exception as exc:  # pragma: no cover - environment/configuration failure
         return {
             "status": "not_discharged",

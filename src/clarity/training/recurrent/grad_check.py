@@ -9,7 +9,7 @@ Tolerance: |a - n| < atol + rtol * max(|a|, |n|).  Defaults atol=1e-6,
 rtol=1e-4 are tight enough to catch real bugs (sign errors, transposes,
 wrong gate ordering) without firing on legitimate fp64 rounding.
 
-Run: python -m handmade.grad_check
+Run: python -m clarity.training.recurrent.grad_check
 """
 
 from __future__ import annotations

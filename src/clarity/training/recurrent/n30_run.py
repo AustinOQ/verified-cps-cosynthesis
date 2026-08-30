@@ -7,7 +7,7 @@ Two phases:
     summary with training metrics + training peak RSS.
 
   Phase 2 (sequential, one process at a time):
-    For each seed, spawn handmade.eval_only as a fresh subprocess. The
+    For each seed, spawn the packaged evaluation program as a fresh subprocess. The
     subprocess loads best.npz, runs eval + test rollouts, and records
     *contention-free* per-step latencies (policy/shield/total in µs)
     plus inference peak RSS. Sequential to keep timing clean.
@@ -32,11 +32,9 @@ import sys
 import time
 from typing import List
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
-_REPO_ROOT = os.path.dirname(_HERE)
-sys.path.insert(0, os.path.join(os.path.dirname(_REPO_ROOT), "src"))
-
+from clarity.models import model_path
 from clarity.sysml.runtime_settings import DEFAULT_DT, validate_dt
+from clarity.training.recurrent.train_one_seed import train_one_seed
 
 
 def _train_worker(args_tuple):
@@ -46,14 +44,7 @@ def _train_worker(args_tuple):
      oracle_samples, oracle_epochs, ppo_episodes,
      minibatch_size, bptt_chunk_size, bc_aux_coeff) = args_tuple
 
-    sys.path.insert(0, _REPO_ROOT)
-    sys.path.insert(0, os.path.join(_REPO_ROOT, "rl"))
-
-    from experiments.shielded_experiment import registry
-    from handmade.train_one_seed import train_one_seed
-
-    spec = registry.get(model_name)
-    model_path = spec.abs_sysml_path(_REPO_ROOT)
+    sysml_path = model_path(model_name)
     seed_dir = os.path.join(run_dir, f"seed_{seed}")
     os.makedirs(seed_dir, exist_ok=True)
 
@@ -68,7 +59,7 @@ def _train_worker(args_tuple):
 
     try:
         train_summary = train_one_seed(
-            model_path=model_path, seed=seed, seed_dir=seed_dir,
+            model_path=str(sysml_path), seed=seed, seed_dir=seed_dir,
             dt=dt, max_steps=max_steps,
             ensure_class_coverage=ensure_class_coverage,
             balance_oracle_classes=balance_oracle_classes,
@@ -91,7 +82,7 @@ def _run_inference(seed: int, model_path: str, dt: float, max_steps: int,
     ckpt = os.path.join(seed_dir, "best.npz")
     out_json = os.path.join(seed_dir, "inference_summary.json")
     cmd = [
-        sys.executable, "-m", "handmade.eval_only",
+        sys.executable, "-m", "clarity.training.recurrent.eval_only",
         "--model-path", model_path,
         "--ckpt", ckpt,
         "--seed", str(seed),
@@ -101,8 +92,7 @@ def _run_inference(seed: int, model_path: str, dt: float, max_steps: int,
         "--test-episodes", str(test_episodes),
         "--out", out_json,
     ]
-    proc = subprocess.run(cmd, cwd=_REPO_ROOT, capture_output=True,
-                          text=True)
+    proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode == 0 and os.path.exists(out_json):
         with open(out_json) as f:
             return json.load(f)
@@ -165,10 +155,7 @@ def main(argv=None) -> int:
               args.minibatch_size, args.bptt_chunk_size, args.bc_aux_coeff)
              for s in seeds]
 
-    sys.path.insert(0, _REPO_ROOT)
-    from experiments.shielded_experiment import registry
-    spec = registry.get(args.model)
-    model_path = spec.abs_sysml_path(_REPO_ROOT)
+    sysml_path = str(model_path(args.model))
 
     train_results: List[dict] = []
     errors: List[dict] = []
@@ -203,7 +190,7 @@ def main(argv=None) -> int:
           f"(clean latency) for {len(train_results)} seeds", flush=True)
     for seed in sorted(train_by_seed):
         seed_dir = os.path.join(args.run_dir, f"seed_{seed}")
-        inf = _run_inference(seed, model_path, args.dt, args.max_steps,
+        inf = _run_inference(seed, sysml_path, args.dt, args.max_steps,
                               args.eval_episodes, args.test_episodes,
                               seed_dir)
         inf_results.append((seed, inf))

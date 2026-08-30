@@ -9,11 +9,7 @@ Fully general — all structure derived from SysML extraction:
     - Reward: requirement_statuses from the engine
 """
 
-import sys
-import os
 import numpy as np
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
 from clarity.sysml.parser import SysMLParser, BinaryExpr, RefExpr, LiteralExpr, UnaryExpr
 from clarity.sysml.simulator_adapter import SimulatorTwin

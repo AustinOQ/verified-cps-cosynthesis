@@ -8,35 +8,26 @@ import gc
 import json
 import os
 import resource
-import sys
 import time
 from pathlib import Path
 
 import numpy as np
 
 
-HERE = Path(__file__).resolve().parent
-ARCH = HERE.parent
-REPO = ARCH.parent
-for path in (REPO.parent / "src", REPO, ARCH, REPO / "rl"):
-    text = str(path)
-    if text not in sys.path:
-        sys.path.insert(0, text)
-
 from clarity.certification.certificate import build_certificate_for_path, check_certificate
 from clarity.certification.reduced_mdp_spec import build_reduced_mdp_spec
-from handmade.optim import Adam
-from handmade.ppo_update import ppo_update
-from handmade.train_oracle import train_oracle
-from oracle import extract_interface
+from clarity.runtime.oracle import extract_interface
 from clarity.sysml.runtime_settings import DEFAULT_DT, validate_dt
+from clarity.training.recurrent.optim import Adam
+from clarity.training.recurrent.ppo_update import ppo_update
+from clarity.training.recurrent.train_oracle import train_oracle
 
-from reduced_handmade.buffered_env import BufferedDiscreteEnv
-from reduced_handmade.composite import ProgramShieldComposite
-from reduced_handmade.episode import collect_episode
-from reduced_handmade.oracle_data import generate_oracle_data
-from reduced_handmade.policy import MLPActorCritic
-from reduced_handmade.train_one_seed import certify_minimal_buffer
+from clarity.training.reduced.buffered_env import BufferedDiscreteEnv
+from clarity.training.reduced.composite import ProgramShieldComposite
+from clarity.training.reduced.episode import collect_episode
+from clarity.training.reduced.oracle_data import generate_oracle_data
+from clarity.training.reduced.policy import MLPActorCritic
+from clarity.training.reduced.train_one_seed import certify_minimal_buffer
 from clarity.sysml.inputs import inspect_sysml
 
 
@@ -207,7 +198,7 @@ def main() -> int:
     args = ap.parse_args()
 
     out_dir = Path(args.out_dir or (
-        ARCH / "results" / f"handmade_reduced_memory_profile_{time.strftime('%Y%m%d-%H%M%S')}"
+        Path.cwd() / "outputs" / f"reduced_memory_profile_{time.strftime('%Y%m%d-%H%M%S')}"
     ))
     out_dir.mkdir(parents=True, exist_ok=True)
 

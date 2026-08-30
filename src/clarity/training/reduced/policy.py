@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from handmade.nn import Linear
+from clarity.training.recurrent.nn import Linear
 
 
 def _tanh_forward(x: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -108,4 +108,3 @@ class MLPActorCritic:
         logits = h2 @ self.actor.W.T + self.actor.b
         value = h2 @ self.value.W.T + self.value.b
         return logits, value[..., 0], self.initial_hidden(obs.shape[0])
-

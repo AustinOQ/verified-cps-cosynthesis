@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Single-seed handmade reduced-MDP trainer.
 
-This is the numpy analogue of ``architecture-fit/fit_and_train.py`` for
+This is the NumPy implementation of the reduced feedforward training stage for
 discrete models:
 
   1. certify strict-Q buffer reconstructibility and write/check a certificate;
@@ -20,21 +20,12 @@ import json
 import os
 import random
 import resource
-import sys
 import time
 from dataclasses import asdict, replace
 from pathlib import Path
 
 import numpy as np
 
-
-HERE = Path(__file__).resolve().parent
-ARCH = HERE.parent
-REPO = ARCH.parent
-for path in (REPO.parent / "src", REPO, ARCH, REPO / "rl"):
-    text = str(path)
-    if text not in sys.path:
-        sys.path.insert(0, text)
 
 from clarity.certification.certificate import (
     build_certificate_for_path,
@@ -50,26 +41,26 @@ from clarity.certification.reduced_mdp_spec import (
     write_reduced_mdp_spec,
 )
 from clarity.certification.reconstruct import get_strict_model, reconstruct
-from handmade.io import save_policy
-from handmade.optim import Adam
-from handmade.ppo_update import ppo_update
-from handmade.train_oracle import train_oracle
-from oracle import extract_interface
+from clarity.runtime.oracle import extract_interface
 from clarity.sysml.runtime_settings import DEFAULT_DT, validate_dt
+from clarity.training.recurrent.io import save_policy
+from clarity.training.recurrent.optim import Adam
+from clarity.training.recurrent.ppo_update import ppo_update
+from clarity.training.recurrent.train_oracle import train_oracle
 
-from reduced_handmade.buffered_env import BufferedDiscreteEnv
-from reduced_handmade.collection import (
+from clarity.training.reduced.buffered_env import BufferedDiscreteEnv
+from clarity.training.reduced.collection import (
     CollectionSettings,
     DiscreteRuntime,
     build_episode_collector,
     generate_oracle_data_with_backend,
     make_episode_jobs,
 )
-from reduced_handmade.composite import ProgramShieldComposite
-from reduced_handmade.oracle_data import (
+from clarity.training.reduced.composite import ProgramShieldComposite
+from clarity.training.reduced.oracle_data import (
     balance_classes,
 )
-from reduced_handmade.policy import MLPActorCritic
+from clarity.training.reduced.policy import MLPActorCritic
 
 
 DEFAULT_CONFIG = {

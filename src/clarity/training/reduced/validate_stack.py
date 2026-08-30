@@ -8,7 +8,6 @@ import copy
 import json
 import math
 import os
-import sys
 import tempfile
 import time
 from dataclasses import replace
@@ -16,14 +15,6 @@ from pathlib import Path
 
 import numpy as np
 
-
-HERE = Path(__file__).resolve().parent
-ARCH = HERE.parent
-REPO = ARCH.parent
-for path in (REPO.parent / "src", REPO, ARCH, REPO / "rl"):
-    text = str(path)
-    if text not in sys.path:
-        sys.path.insert(0, text)
 
 from clarity.certification.certificate import (
     build_certificate_for_path,
@@ -38,28 +29,29 @@ from clarity.certification.reduced_mdp_spec import (
     spec_hash,
     write_reduced_mdp_spec,
 )
-from handmade.io import load_policy, save_policy
-from handmade.losses import ppo_update_grads
-from oracle import extract_interface
+from clarity.models import models_root
+from clarity.runtime.oracle import extract_interface
 from clarity.sysml.runtime_settings import DEFAULT_DT
+from clarity.training.recurrent.io import load_policy, save_policy
+from clarity.training.recurrent.losses import ppo_update_grads
 
-from reduced_handmade.buffered_env import BufferedDiscreteEnv
-from reduced_handmade.collection import (
+from clarity.training.reduced.buffered_env import BufferedDiscreteEnv
+from clarity.training.reduced.collection import (
     CollectionSettings,
     DiscreteRuntime,
     build_episode_collector,
     generate_oracle_data_with_backend,
     make_episode_jobs,
 )
-from reduced_handmade.composite import ProgramShieldComposite
-from reduced_handmade.policy import MLPActorCritic
-from reduced_handmade.train_one_seed import train_one_seed
+from clarity.training.reduced.composite import ProgramShieldComposite
+from clarity.training.reduced.policy import MLPActorCritic
+from clarity.training.reduced.train_one_seed import train_one_seed
 from clarity.sysml.inputs import discover_sysml
 
 
 _DISCOVERED = {
     item.key: item.path
-    for item in discover_sysml([], models_root=REPO.parent / "models")
+    for item in discover_sysml([], models_root=models_root())
 }
 MODELS = {
     "cruise": _DISCOVERED["cruise-control"],
@@ -672,7 +664,7 @@ def main() -> int:
     args = ap.parse_args()
 
     out_dir = Path(args.out_dir or (
-        ARCH / "results" / f"handmade_reduced_validation_{time.strftime('%Y%m%d-%H%M%S')}"
+        Path.cwd() / "outputs" / f"reduced_validation_{time.strftime('%Y%m%d-%H%M%S')}"
     ))
     out_dir.mkdir(parents=True, exist_ok=True)
 

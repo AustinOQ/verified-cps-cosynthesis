@@ -6,7 +6,7 @@ import time
 
 import numpy as np
 
-from handmade.nn import softmax
+from clarity.training.recurrent.nn import softmax
 
 
 class ProgramShieldComposite:
